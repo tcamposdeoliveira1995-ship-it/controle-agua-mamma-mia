@@ -1259,9 +1259,17 @@ async function carregarOS() {
 
     const linhas = csv.split('\n');
 
-    const abertas = linhas.filter(l =>
-      l.toUpperCase().includes('ABERTA')
-    ).length;
+   const abertas = linhas.filter(l =>
+  l.toUpperCase().includes('ABERTO')
+).length;
+
+    const aguardando = linhas.filter(l =>
+  l.toUpperCase().includes('AGUARDANDO PEÇA')
+).length;
+
+const concluidas = linhas.filter(l =>
+  l.toUpperCase().includes('CONCLUÍDO')
+).length;
 
     const concluidas = linhas.filter(l =>
       l.toUpperCase().includes('CONCLUÍDO')
