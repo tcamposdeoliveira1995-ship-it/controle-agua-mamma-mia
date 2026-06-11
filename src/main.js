@@ -204,15 +204,21 @@ function refreshApp() {
   }
 
   // Renderiza conforme a aba ativa para economizar recursos e evitar erros
-  if (state.currentTab === 'dashboard') {
-    renderDashboardTab(stats, prevStats);
-  } else if (state.currentTab === 'diretoria') {
-    renderDiretoriaTab(stats, prevStats);
-  } else if (state.currentTab === 'ciclos') {
-    renderCyclesTab(availableCycles);
-  } else if (state.currentTab === 'configuracoes') {
-    renderConfiguracoesTab();
-  }
+if (state.currentTab === 'dashboard') {
+  renderDashboardTab(stats, prevStats);
+
+} else if (state.currentTab === 'os') {
+  carregarOS();
+
+} else if (state.currentTab === 'perdas') {
+  // futuro módulo perdas
+
+} else if (state.currentTab === 'requisicoes') {
+  // futuro módulo requisições
+
+} else if (state.currentTab === 'configuracoes') {
+  renderConfiguracoesTab();
+}
 
   if (typeof lucide !== 'undefined') {
     lucide.createIcons();
