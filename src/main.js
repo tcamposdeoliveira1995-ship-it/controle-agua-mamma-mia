@@ -1268,10 +1268,6 @@ async function carregarOS() {
 ).length;
 
     const concluidas = linhas.filter(l =>
-  l.toUpperCase().includes('CONCLUÍDO')
-).length;
-
-    const concluidas = linhas.filter(l =>
       l.toUpperCase().includes('CONCLUÍDO')
     ).length;
 
