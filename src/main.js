@@ -1255,11 +1255,20 @@ async function carregarOS() {
   try {
 
     const response = await fetch(OS_CSV_URL);
-
     const csv = await response.text();
 
-    console.log('CSV carregado!');
-    console.log(csv.substring(0, 500));
+    const linhas = csv.split('\n');
+
+    const abertas = linhas.filter(l =>
+      l.toUpperCase().includes('ABERTA')
+    ).length;
+
+    const concluidas = linhas.filter(l =>
+      l.toUpperCase().includes('CONCLUÍDO')
+    ).length;
+
+    document.getElementById('os-open-count').textContent = abertas;
+    document.getElementById('os-closed-count').textContent = concluidas;
 
   } catch (error) {
 
