@@ -7,7 +7,7 @@
   "theme_color": "#050816",
   "icons": [
     {
-      "src": "logo-mamma-mia.jpg",
+      "src": "icon-512.jpg",
       "sizes": "512x512",
       "type": "image/jpeg"
     }
