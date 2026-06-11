@@ -263,16 +263,85 @@
 
       </div>
 
-<!-- ================= ABA 2: OS ================= -->
+<!-- ---------------- ABA 2: OS ---------------- -->
 <div id="tab-content-os" class="tab-panel">
+
   <section class="panel-card">
+
     <div class="panel-header">
       <h2>🔧 Ordens de Serviço</h2>
-    </div>
-    <p>Módulo em desenvolvimento.</p>
-  </section>
-</div>
 
+      <button id="btn-refresh-os" class="btn btn-primary">
+        Atualizar OS
+      </button>
+    </div>
+
+    <div class="dashboard-grid">
+
+      <div class="kpi-card">
+        <span class="kpi-label">OS Abertas</span>
+        <div class="kpi-value" id="os-open-count">0</div>
+      </div>
+
+      <div class="kpi-card">
+        <span class="kpi-label">Em Andamento</span>
+        <div class="kpi-value" id="os-progress-count">0</div>
+      </div>
+
+      <div class="kpi-card">
+        <span class="kpi-label">Aguardando Peça</span>
+        <div class="kpi-value" id="os-parts-count">0</div>
+      </div>
+
+      <div class="kpi-card">
+        <span class="kpi-label">Concluídas</span>
+        <div class="kpi-value" id="os-closed-count">0</div>
+      </div>
+
+    </div>
+
+  </section>
+
+  <section class="panel-card">
+
+    <div class="panel-header">
+      <h2>🚨 Pendências Críticas</h2>
+    </div>
+
+    <div id="os-critical-list">
+      Nenhuma pendência crítica encontrada.
+    </div>
+
+  </section>
+
+  <section class="panel-card">
+
+    <div class="panel-header">
+      <h2>📋 Últimas Ordens de Serviço</h2>
+    </div>
+
+    <table class="modern-table">
+
+      <thead>
+        <tr>
+          <th>OS</th>
+          <th>Status</th>
+          <th>Prioridade</th>
+          <th>Unidade</th>
+          <th>Equipamento</th>
+          <th>PDF</th>
+        </tr>
+      </thead>
+
+      <tbody id="os-table-body">
+
+      </tbody>
+
+    </table>
+
+  </section>
+
+</div>
 <!-- ================= ABA 3: PERDAS ================= -->
 <div id="tab-content-perdas" class="tab-panel">
   <section class="panel-card">
