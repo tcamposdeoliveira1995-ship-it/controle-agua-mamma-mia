@@ -1,0 +1,576 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Mamma Mia - Controle de Consumo de Água (v2.0)</title>
+  <meta name="description" content="Sistema web de alta fidelidade para controle, análise e auditoria do consumo de água do restaurante Mamma Mia.">
+  <link rel="stylesheet" href="style.css">
+  <!-- Chart.js para os gráficos interativos -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js" defer></script>
+  <!-- Lucide Icons para ícones vetorizados -->
+  <script src="https://unpkg.com/lucide@latest" defer></script>
+  <!-- SheetJS para exportação nativa Excel (.xlsx) -->
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js" defer></script>
+  <!-- html2pdf.js para exportação nativa PDF -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js" defer></script>
+</head>
+<body>
+  <div class="app-container">
+    
+    <!-- HEADER -->
+    <header class="no-print">
+      <div class="logo-section">
+<img
+    src="logo-mamma-mia.jpg"
+    alt="Mamma Mia Salgados"
+    class="logo-real">
+        <div>
+          <div style="display: flex; align-items: baseline; gap: 0.5rem;">
+            <h1>Mamma Mia</h1>
+            <span style="font-size: 0.75rem; background: rgba(59, 130, 246, 0.15); color: var(--color-blue); padding: 0.15rem 0.4rem; border-radius: 4px; font-weight: 700; border: 1px solid rgba(59,130,246,0.25);">v2.0</span>
+          </div>
+          <p class="logo-subtitle">Mamma Mia Control - Gestão Inteligente do Consumo de Água</p>
+        </div>
+      </div>
+      <div class="cycle-selector-wrapper">
+        <label for="cycle-select" class="form-label" style="margin-bottom: 0; font-size: 0.8rem; color: var(--text-muted);">Visualizar Ciclo:</label>
+        <select id="cycle-select" class="cycle-dropdown">
+          <!-- Populado dinamicamente -->
+        </select>
+      </div>
+    </header>
+
+    <!-- NAVEGAÇÃO DE ABAS (SPA) -->
+    <nav class="navigation-tabs no-print" aria-label="Abas do Sistema">
+      <button class="tab-btn active" data-tab="dashboard">
+        <i data-lucide="layout-dashboard"></i>Painel Operacional
+      </button>
+      <button class="tab-btn" data-tab="diretoria">
+        <i data-lucide="presentation"></i>Modo Diretoria
+      </button>
+      <button class="tab-btn" data-tab="ciclos">
+        <i data-lucide="calendar-days"></i>Histórico de Ciclos
+      </button>
+      <button class="tab-btn" data-tab="configuracoes">
+        <i data-lucide="settings-2"></i>Configurações
+      </button>
+    </nav>
+
+    <!-- CONTEÚDO PRINCIPAL DAS ABAS -->
+    <main id="app-main-content">
+      
+      <!-- ================= ABA 1: PAINEL OPERACIONAL ================= -->
+      <div id="tab-content-dashboard" class="tab-panel active">
+        
+        <!-- CARD EXECUTIVO PRINCIPAL DE METAS (TOPO) -->
+        <section class="main-executive-card" aria-label="Meta do Ciclo Atual">
+          <div class="main-exec-header">
+            <h3><span style="font-size: 1.25rem; vertical-align: middle;">🚰</span> META DO CICLO</h3>
+            <span class="main-exec-period" id="main-exec-period-label">07/06/2026 a 06/07/2026</span>
+          </div>
+          <div class="main-exec-body">
+            <div class="exec-metric">
+              <span class="exec-label">Meta Total</span>
+              <span class="exec-val" id="main-exec-meta">80.00 <span class="exec-unit">m³</span></span>
+            </div>
+            <div class="exec-metric">
+              <span class="exec-label">Consumido</span>
+              <span class="exec-val" id="main-exec-consumed">0.00 <span class="exec-unit">m³</span></span>
+            </div>
+            <div class="exec-metric highlight-success">
+              <span class="exec-label">Saldo para Meta</span>
+              <span class="exec-val text-glow-green" id="main-exec-balance">0.00 <span class="exec-unit">m³</span></span>
+            </div>
+            <div class="exec-metric">
+              <span class="exec-label">% Utilizado</span>
+              <span class="exec-val" id="main-exec-percent">0.0<span class="exec-unit">%</span></span>
+            </div>
+            <div class="exec-metric highlight-info">
+              <span class="exec-label">Dias Restantes</span>
+              <span class="exec-val" id="main-exec-days-left">0 <span class="exec-unit">dias</span></span>
+            </div>
+          </div>
+          <div class="main-exec-progress-track">
+            <div class="main-exec-progress-bar" id="main-exec-progress-bar" style="width: 0%;"></div>
+          </div>
+        </section>
+
+        <!-- DASHBOARD EXECUTIVO EXPANDIDO (KPIS ADICIONAIS) -->
+        <section class="kpi-grid" style="margin-bottom: 2rem;" aria-label="Indicadores de Gestão">
+          <div class="kpi-card" id="kpi-alerts-v2">
+            <div class="kpi-label">Hidrômetros em Alerta</div>
+            <div class="kpi-value" id="val-alerts-v2">0</div>
+            <div class="kpi-subtext" id="val-alerts-subtext-v2">Nenhum hidrômetro crítico</div>
+          </div>
+          <div class="kpi-card">
+            <div class="kpi-label">Consumo Médio Geral</div>
+            <div class="kpi-value" id="val-avg-general">0.00 <span class="unit">m³/d</span></div>
+            <div class="kpi-subtext">Média somada diária</div>
+          </div>
+          <div class="kpi-card">
+            <div class="kpi-label">Maior Consumidor</div>
+            <div class="kpi-value" id="val-highest-consumer" style="font-size: 1.4rem; padding-top: 0.15rem; color: var(--color-orange);">--</div>
+            <div class="kpi-subtext" id="val-highest-consumer-sub">Consumo máximo registrado</div>
+          </div>
+          <div class="kpi-card">
+            <div class="kpi-label">Menor Consumidor</div>
+            <div class="kpi-value" id="val-lowest-consumer" style="font-size: 1.4rem; padding-top: 0.15rem; color: var(--color-green);">--</div>
+            <div class="kpi-subtext" id="val-lowest-consumer-sub">Consumo mínimo registrado</div>
+          </div>
+          <div class="kpi-card">
+            <div class="kpi-label">Projeção Final Global</div>
+            <div class="kpi-value" id="val-proj-global">0.00 <span class="unit">m³</span></div>
+            <div class="kpi-subtext" id="val-proj-global-sub">Estima consumo até dia 06</div>
+          </div>
+          <div class="kpi-card">
+            <div class="kpi-label">Economia Projetada</div>
+            <div class="kpi-value" id="val-economy-projected">0.00 <span class="unit">m³</span></div>
+            <div class="kpi-subtext" id="val-economy-projected-sub">Economia estimada do ciclo</div>
+          </div>
+        </section>
+
+        <!-- COMPARATIVO E ALERTAS GERAIS -->
+        <div class="double-panel-row">
+          <!-- Comparativo Rápido -->
+          <div class="comparador-secao-v2" id="comparador-ciclos-v2">
+            <div class="comparador-info">
+              <div class="comparador-icon"><i data-lucide="arrow-left-right"></i></div>
+              <div class="comparador-text">
+                <h3>Balanço vs. Ciclo Anterior</h3>
+                <p id="comparador-details-v2">Consumo Atual: -- m³ | Anterior: -- m³</p>
+              </div>
+            </div>
+            <div id="comparador-badge-v2" class="comparador-resultado economia">
+              <span>Carregando dados...</span>
+            </div>
+          </div>
+
+          <!-- Alerta de Vazamento Global -->
+          <div class="leak-alert-card" id="leak-alert-banner" style="display: none;">
+            <div class="leak-alert-icon"><i data-lucide="droplet-off"></i></div>
+            <div class="leak-alert-text">
+              <h3>🔴 Possível Vazamento Detectado</h3>
+              <p id="leak-alert-desc">Verifique o hidrômetro com pico anômalo.</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- PAINEL DE ALERTAS OPERACIONAIS -->
+        <section class="panel-card no-print" id="operational-alerts-panel" style="margin-bottom: 2rem; display: none;">
+          <div class="panel-header" style="margin-bottom: 1rem;">
+            <h2 style="color: var(--color-red);"><i data-lucide="alert-octagon"></i> Alertas Operacionais Ativos</h2>
+          </div>
+          <div class="alerts-list-wrapper" id="operational-alerts-list">
+            <!-- Gerado dinamicamente -->
+          </div>
+        </section>
+
+        <!-- GRID DE CARDS DOS HIDRÔMETROS -->
+        <section class="hidrometros-grid" id="hidrometros-cards-container-v2" aria-label="Consumo por Hidrômetro">
+          <!-- Cards serão gerados dinamicamente via JS (Fase 1) -->
+        </section>
+
+        <!-- GRÁFICOS & AÇÕES RÁPIDAS -->
+        <div class="layout-panels">
+          <section class="panel-card" aria-label="Evolução Temporal do Consumo">
+            <div class="panel-header">
+              <h2><i data-lucide="bar-chart-3" style="color: var(--color-blue);"></i> Tendência de Consumo</h2>
+              <span style="font-size: 0.8rem; color: var(--text-muted);">Acumulado Diário no Ciclo</span>
+            </div>
+            <div class="chart-wrapper">
+              <canvas id="trendChartV2"></canvas>
+            </div>
+          </section>
+
+          <section class="panel-card" style="display: flex; flex-direction: column; justify-content: space-between;" aria-label="Distribuição de Consumo e Exportação">
+            <div>
+              <div class="panel-header">
+                <h2><i data-lucide="pie-chart" style="color: var(--color-purple);"></i> Divisão por Hidrômetro</h2>
+              </div>
+              <div class="chart-wrapper" style="height: 180px; margin-bottom: 1rem;">
+                <canvas id="comparisonChartV2"></canvas>
+              </div>
+            </div>
+            <div>
+              <div class="panel-header" style="margin-bottom: 0.75rem; margin-top: 1rem; border-top: 1px solid rgba(255,255,255,0.05); padding-top: 1rem;">
+                <h2 style="font-size: 1.1rem;"><i data-lucide="download" style="color: var(--color-blue);"></i> Relatórios e Exportação</h2>
+              </div>
+              <div class="export-actions-grid">
+                <button id="btn-export-pdf" class="btn btn-primary" type="button"><i data-lucide="file-text"></i> PDF Executivo</button>
+                <button id="btn-export-xlsx" class="btn btn-secondary" type="button"><i data-lucide="table"></i> Planilha Excel</button>
+                <button id="btn-export-csv" class="btn btn-secondary" type="button"><i data-lucide="file-spreadsheet"></i> CSV</button>
+                <button id="btn-export-json" class="btn btn-secondary" type="button"><i data-lucide="braces"></i> Backup JSON</button>
+              </div>
+            </div>
+          </section>
+        </div>
+
+        <!-- PAINEL DE AÇÕES E HISTÓRICO DE LEITURAS -->
+        <section class="history-section" aria-label="Histórico de Leituras">
+          <div class="panel-header" style="margin-bottom: 1rem;">
+            <h2><i data-lucide="history" style="color: var(--color-blue);"></i> Lançamentos do Ciclo</h2>
+            <div style="display: flex; gap: 0.5rem;">
+              <button id="btn-google-sheets-import" class="btn btn-secondary" type="button"><i data-lucide="sheets"></i> Importar do Google Sheets</button>
+              <button id="btn-open-reading-modal-v2" class="btn btn-primary" type="button"><i data-lucide="plus"></i> Nova Leitura</button>
+              <button id="btn-open-csv-modal-v2" class="btn btn-secondary" type="button"><i data-lucide="upload-cloud"></i> Importar CSV</button>
+            </div>
+          </div>
+          
+          <div class="filters-row">
+            <div class="filter-group">
+              <i data-lucide="filter" style="width: 14px; color: var(--text-muted);"></i>
+              <select id="filter-meter-v2" class="filter-select">
+                <option value="all">Todos os Hidrômetros</option>
+              </select>
+            </div>
+            <span style="font-size: 0.8rem; color: var(--text-muted); margin-left: auto;" id="table-record-count-v2">0 registros</span>
+          </div>
+
+          <div class="table-responsive">
+            <table>
+              <thead>
+                <tr>
+                  <th>Data / Hora</th>
+                  <th>Hidrômetro (ID / Apelido)</th>
+                  <th>Leitura Acumulada (m³)</th>
+                  <th>Consumo Período (m³)</th>
+                  <th>Ações</th>
+                </tr>
+              </thead>
+              <tbody id="readings-table-body-v2">
+                <!-- Populado dinamicamente -->
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+      </div>
+
+      <!-- ================= ABA 2: MODO DIRETORIA ================= -->
+      <div id="tab-content-diretoria" class="tab-panel">
+        <div class="presentation-header no-print">
+          <h2><i data-lucide="presentation"></i> Apresentação Executiva para Diretoria</h2>
+          <button id="btn-print-presentation" class="btn btn-primary" type="button"><i data-lucide="printer"></i> Imprimir / Salvar PDF</button>
+        </div>
+
+        <!-- Layout otimizado para Reunião -->
+        <div class="diretoria-print-wrapper" id="diretoria-print-content">
+          <!-- Cabeçalho de impressão (oculto na tela, visível na impressão/PDF) -->
+          <div class="print-header-logo">
+            <div style="display: flex; align-items: center; gap: 10px;">
+              <span style="font-size: 32px;">🇮🇹</span>
+              <div>
+                <h2>Mamma Mia</h2>
+                <p>Projeto Água - Gestão Inteligente do Consumo</p>
+              </div>
+            </div>
+            <div style="text-align: right; font-size: 0.85rem; color: #4b5563;">
+              <p>Emitido em: <span id="dir-emission-date">--</span></p>
+              <p>Ciclo analisado: <strong id="dir-cycle-label">--</strong></p>
+            </div>
+          </div>
+
+          <div class="main-executive-card diretoria-card-bg">
+            <div class="main-exec-header">
+              <h3>🚰 RELATÓRIO OPERACIONAL DA DIRETORIA</h3>
+              <span class="main-exec-period" id="dir-exec-period">--</span>
+            </div>
+            <div class="main-exec-body" style="grid-template-columns: repeat(3, 1fr);">
+              <div class="exec-metric">
+                <span class="exec-label">Consumo Acumulado Geral</span>
+                <span class="exec-val" id="dir-exec-consumed">0.00 m³</span>
+                <span class="dir-exec-sub">Meta Limite: <strong id="dir-exec-meta-val">80.00</strong> m³</span>
+              </div>
+              <div class="exec-metric highlight-success">
+                <span class="exec-label">Saldo de Economia Global</span>
+                <span class="exec-val text-glow-green" id="dir-exec-balance" style="color: #10b981;">0.00 m³</span>
+                <span class="dir-exec-sub" id="dir-exec-balance-sub">Dentro do limite global</span>
+              </div>
+              <div class="exec-metric">
+                <span class="exec-label">Projeção Final de Fechamento</span>
+                <span class="exec-val" id="dir-exec-projection">0.00 m³</span>
+                <span class="dir-exec-sub" id="dir-exec-projection-sub">Com base na média móvel</span>
+              </div>
+            </div>
+            <div class="main-exec-progress-track">
+              <div class="main-exec-progress-bar" id="dir-exec-progress-bar" style="width: 0%;"></div>
+            </div>
+          </div>
+
+          <!-- Outros KPIs da diretoria -->
+          <div class="kpi-grid" style="margin-bottom: 2rem;">
+            <div class="kpi-card">
+              <div class="kpi-label">Economia Gerada</div>
+              <div class="kpi-value" id="dir-kpi-economy" style="color: var(--color-green);">0.00 <span class="unit">m³</span></div>
+              <div class="kpi-subtext" id="dir-kpi-economy-sub">Em relação ao ciclo anterior</div>
+            </div>
+            <div class="kpi-card">
+              <div class="kpi-label">Hidrômetros em Alerta</div>
+              <div class="kpi-value" id="dir-kpi-alerts">0 <span class="unit">/ 4</span></div>
+              <div class="kpi-subtext">Pontos de consumo crítico</div>
+            </div>
+            <div class="kpi-card">
+              <div class="kpi-label">Média Geral Diária</div>
+              <div class="kpi-value" id="dir-kpi-avg-general">0.00 <span class="unit">m³/d</span></div>
+              <div class="kpi-subtext">Meta diária geral de 2.66 m³/d</div>
+            </div>
+          </div>
+
+          <!-- Divisão de Gráficos e Ranking para impressão -->
+          <div class="print-charts-row">
+            <div class="panel-card">
+              <div class="panel-header">
+                <h2>🏆 RANKING DE DESEMPENHO E ECONOMIA</h2>
+              </div>
+              <div class="ranking-list" id="dir-ranking-list">
+                <!-- Populado dinamicamente -->
+              </div>
+            </div>
+            <div class="panel-card">
+              <div class="panel-header">
+                <h2>📊 DISTRIBUIÇÃO E HISTÓRICO NO PERÍODO</h2>
+              </div>
+              <!-- Tabela compacta de hidrômetros para diretoria -->
+              <div class="table-responsive">
+                <table style="font-size: 0.8rem;">
+                  <thead>
+                    <tr>
+                      <th>Hidrômetro</th>
+                      <th>Apelido</th>
+                      <th>Consumo</th>
+                      <th>Meta</th>
+                      <th>Status</th>
+                    </tr>
+                  </thead>
+                  <tbody id="dir-table-summary">
+                    <!-- Populado dinamicamente -->
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- ================= ABA 3: HISTÓRICO DE CICLOS ================= -->
+      <div id="tab-content-ciclos" class="tab-panel">
+        <section class="panel-card" style="margin-bottom: 2rem;">
+          <div class="panel-header">
+            <h2><i data-lucide="history" style="color: var(--color-blue);"></i> Registro Histórico de Ciclos Fechados</h2>
+          </div>
+          
+          <div class="table-responsive">
+            <table>
+              <thead>
+                <tr>
+                  <th>Ciclo</th>
+                  <th>Consumo Total (m³)</th>
+                  <th>Meta Global (m³)</th>
+                  <th>Economia vs. Anterior (m³)</th>
+                  <th>Alertas Ativos</th>
+                  <th>Status Meta</th>
+                </tr>
+              </thead>
+              <tbody id="history-cycles-tbody">
+                <!-- Populado dinamicamente -->
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <!-- MÓDULO DE COMPARAÇÃO DE PERÍODOS -->
+        <section class="panel-card">
+          <div class="panel-header">
+            <h2><i data-lucide="arrow-left-right" style="color: var(--color-purple);"></i> Comparador de Ciclos Históricos</h2>
+          </div>
+          <div class="filters-row" style="margin-bottom: 1.5rem;">
+            <div class="filter-group">
+              <label for="comp-cycle-1" class="form-label" style="margin-bottom: 0;">Ciclo A (Principal):</label>
+              <select id="comp-cycle-1" class="filter-select"></select>
+            </div>
+            <div class="filter-group">
+              <label for="comp-cycle-2" class="form-label" style="margin-bottom: 0;">Ciclo B (Comparativo):</label>
+              <select id="comp-cycle-2" class="filter-select"></select>
+            </div>
+            <button id="btn-run-cycles-comparison" class="btn btn-primary" type="button">Comparar Períodos</button>
+          </div>
+
+          <div id="cycles-comparison-results" style="display: none;">
+            <div class="comparador-secao-v2" style="background: rgba(255,255,255,0.02); margin-bottom: 1.5rem;">
+              <div class="comparador-info">
+                <div class="comparador-icon"><i data-lucide="info"></i></div>
+                <div class="comparador-text">
+                  <h3 id="comp-results-title">Balanço do Ciclo A vs. Ciclo B</h3>
+                  <p id="comp-results-sub">Carregando comparação...</p>
+                </div>
+              </div>
+              <div id="comp-results-badge" class="comparador-resultado economia"><span>--</span></div>
+            </div>
+
+            <!-- Tabela detalhada de comparação de hidrômetros -->
+            <div class="table-responsive">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Hidrômetro</th>
+                    <th>Apelido</th>
+                    <th>Consumo no Ciclo A (m³)</th>
+                    <th>Consumo no Ciclo B (m³)</th>
+                    <th>Diferença (m³)</th>
+                    <th>Status Comparativo</th>
+                  </tr>
+                </thead>
+                <tbody id="comp-results-tbody">
+                  <!-- Populado dinamicamente -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <!-- ================= ABA 4: CONFIGURAÇÕES ADMINISTRATIVAS ================= -->
+      <div id="tab-content-configuracoes" class="tab-panel">
+        <section class="panel-card">
+          <div class="panel-header" style="border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 1rem; margin-bottom: 1.5rem;">
+            <h2><i data-lucide="settings" style="color: var(--color-blue);"></i> Painel Administrativo de Controle</h2>
+            <button id="btn-save-admin-settings" class="btn btn-primary" type="button"><i data-lucide="save"></i> Salvar Configurações</button>
+          </div>
+
+          <form id="form-admin-settings">
+            <!-- Grid de Metas -->
+            <div class="admin-settings-grid">
+              <div class="form-group">
+                <label for="admin-meta-global" class="form-label">Meta Global do Ciclo (m³)</label>
+                <input type="number" id="admin-meta-global" class="form-control" step="1" required>
+                <span class="form-help">Consumo máximo somado dos 4 hidrômetros (Padrão: 80 m³).</span>
+              </div>
+              <div class="form-group">
+                <label for="admin-meta-individual" class="form-label">Meta Individual do Hidrômetro (m³)</label>
+                <input type="number" id="admin-meta-individual" class="form-control" step="1" required>
+                <span class="form-help">Consumo máximo permitido para cada hidrômetro (Padrão: 20 m³).</span>
+              </div>
+              <div class="form-group">
+                <label for="admin-alert-threshold" class="form-label">Limite de Alerta de Atenção (%)</label>
+                <input type="number" id="admin-alert-threshold" class="form-control" step="1" max="100" min="50" required>
+                <span class="form-help">Percentual de uso da meta individual para alertar o painel (Padrão: 75%).</span>
+              </div>
+              <div class="form-group">
+                <label for="admin-leak-threshold" class="form-label">Limiar de Vazamento Diário (m³)</label>
+                <input type="number" id="admin-leak-threshold" class="form-control" step="0.1" required>
+                <span class="form-help">Consumo diário máximo aceitável antes de alertar possível vazamento (Padrão: 3 m³).</span>
+              </div>
+            </div>
+
+            <!-- Cadastro de Hidrômetros / Apelidos / Cores -->
+            <h3 style="font-size: 1.1rem; font-weight: 700; color: white; margin-top: 2rem; margin-bottom: 1rem; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 0.5rem;">Cadastro de Dispositivos (Hidrômetros)</h3>
+            
+            <div class="hydrometer-settings-list" id="admin-meters-list">
+              <!-- Cards dinâmicos de configuração por hidrômetro -->
+            </div>
+            
+            <!-- Preparação para expansão / Multi-Unidade -->
+            <h3 style="font-size: 1.1rem; font-weight: 700; color: white; margin-top: 2.5rem; margin-bottom: 1rem; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 0.5rem;">Estrutura e Multi-Unidade (Preparação Futura)</h3>
+            <div class="admin-settings-grid">
+              <div class="form-group">
+                <label class="form-label">Unidade Ativa</label>
+                <select class="form-control" disabled style="background: rgba(255,255,255,0.02); cursor: not allowed;">
+                  <option>YUKA (Ativo)</option>
+                </select>
+                <span class="form-help">Outras unidades como 'TC' ou 'Unidade 3' estão preparadas no banco e serão liberadas na interface operacional assim que novos hidrômetros físicos forem instalados.</span>
+              </div>
+            </div>
+          </form>
+        </section>
+      </div>
+
+    </main>
+
+    <!-- FOOTER -->
+<footer class="system-footer">
+    <p>
+        Mamma Mia Control • Versão 2.0 - Gestão Inteligente do Consumo de Água
+    </p>
+
+    <p>
+        © 2026 Mamma Mia Salgados - By Thalita Campos - Processos e Automações
+    </p>
+</footer>
+
+  <!-- MODAL: NOVA LEITURA -->
+  <div id="modal-reading-v2" class="modal-overlay" aria-hidden="true" role="dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3>Lançar Nova Leitura</h3>
+        <button id="btn-close-reading-modal-v2" class="modal-close" type="button">&times;</button>
+      </div>
+      <form id="form-reading-v2">
+        <div class="form-group">
+          <label for="input-meter-v2" class="form-label">Selecione o Hidrômetro</label>
+          <select id="input-meter-v2" class="form-control" required>
+            <!-- Populado dinamicamente -->
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="input-index-v2" class="form-label">Leitura Acumulada Atual (m³)</label>
+          <input type="number" id="input-index-v2" class="form-control" step="0.001" min="0" placeholder="Ex: 1254.450" required>
+          <span class="form-help" id="last-reading-help-v2">Última leitura registrada: --</span>
+        </div>
+        <div class="form-group">
+          <label for="input-date-v2" class="form-label">Data e Hora do Registro</label>
+          <input type="datetime-local" id="input-date-v2" class="form-control" required>
+        </div>
+        <div class="modal-footer">
+          <button type="button" id="btn-cancel-reading-v2" class="btn btn-secondary">Cancelar</button>
+          <button type="submit" class="btn btn-primary">Salvar Leitura</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL: IMPORTAR CSV -->
+  <div id="modal-csv-v2" class="modal-overlay" aria-hidden="true" role="dialog">
+    <div class="modal-content" style="max-width: 550px;">
+      <div class="modal-header">
+        <h3>Importar do Google Sheets (CSV)</h3>
+        <button id="btn-close-csv-modal-v2" class="modal-close" type="button">&times;</button>
+      </div>
+      
+      <div class="drag-drop-zone" id="csv-drag-zone-v2">
+        <i data-lucide="upload-cloud" class="drag-drop-icon"></i>
+        <div class="drag-drop-text">
+          <h4>Arraste o arquivo CSV aqui</h4>
+          <p>ou clique para selecionar do seu dispositivo</p>
+        </div>
+        <input type="file" id="csv-file-input-v2" accept=".csv" style="display: none;">
+      </div>
+
+      <div style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 1.5rem; background: rgba(255,255,255,0.02); padding: 0.75rem; border-radius: var(--border-radius-md); border: 1px solid var(--card-border);">
+        <h4 style="color: var(--color-blue); margin-bottom: 0.25rem; font-weight: 600;">Formatos de CSV Suportados:</h4>
+        <p>1. <strong>Tabela de Colunas (Recomendado Sheets):</strong></p>
+        <p style="font-family: monospace; font-size: 0.7rem; background: rgba(0,0,0,0.2); padding: 0.25rem; border-radius: 4px; margin: 0.25rem 0;">Data/Hora; Y21T156506; A25LM0975882; A25LM0975883; A25LM0975884</p>
+        <p>2. <strong>Histórico Linha a Linha:</strong></p>
+        <p style="font-family: monospace; font-size: 0.7rem; background: rgba(0,0,0,0.2); padding: 0.25rem; border-radius: 4px; margin: 0.25rem 0;">Data; Hidrômetro; Leitura Acumulada</p>
+      </div>
+
+      <!-- Erros de Importação -->
+      <div id="csv-errors-container-v2" class="import-errors" style="display: none;">
+        <h5>Alguns registros continham problemas:</h5>
+        <ul id="csv-errors-list-v2" style="margin-left: 1rem;"></ul>
+      </div>
+
+      <div class="modal-footer" style="margin-top: 1.5rem;">
+        <button type="button" id="btn-close-csv-modal-footer-v2" class="btn btn-secondary">Fechar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- CONTAINER DE TOASTS -->
+  <div class="toast-container" id="toast-container-v2"></div>
+
+  <!-- SCRIPT CENTRAL -->
+  <script type="module" src="src/main.js"></script>
+</body>
+</html>
