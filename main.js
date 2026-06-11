@@ -1258,7 +1258,8 @@ async function carregarOS() {
 
     const csv = await response.text();
 
-    console.log(csv);
+    console.log('CSV carregado!');
+console.log(csv.substring(0, 500));
 
   } catch (error) {
 
