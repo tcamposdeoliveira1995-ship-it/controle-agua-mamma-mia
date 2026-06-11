@@ -49,20 +49,29 @@
     </header>
 
     <!-- NAVEGAÇÃO DE ABAS (SPA) -->
-    <nav class="navigation-tabs no-print" aria-label="Abas do Sistema">
-      <button class="tab-btn active" data-tab="dashboard">
-        <i data-lucide="layout-dashboard"></i>Painel Operacional
-      </button>
-      <button class="tab-btn" data-tab="diretoria">
-        <i data-lucide="presentation"></i>Modo Diretoria
-      </button>
-      <button class="tab-btn" data-tab="ciclos">
-        <i data-lucide="calendar-days"></i>Histórico de Ciclos
-      </button>
-      <button class="tab-btn" data-tab="configuracoes">
-        <i data-lucide="settings-2"></i>Configurações
-      </button>
-    </nav>
+   <nav class="navigation-tabs no-print" aria-label="Abas do Sistema">
+
+  <button class="tab-btn active" data-tab="dashboard">
+    <i data-lucide="droplets"></i>Água
+  </button>
+
+  <button class="tab-btn" data-tab="os">
+    <i data-lucide="wrench"></i>OS
+  </button>
+
+  <button class="tab-btn" data-tab="perdas">
+    <i data-lucide="trending-down"></i>Perdas
+  </button>
+
+  <button class="tab-btn" data-tab="requisicoes">
+    <i data-lucide="package"></i>Requisições
+  </button>
+
+  <button class="tab-btn" data-tab="configuracoes">
+    <i data-lucide="settings-2"></i>Configurações
+  </button>
+
+</nav>
 
     <!-- CONTEÚDO PRINCIPAL DAS ABAS -->
     <main id="app-main-content">
@@ -218,7 +227,7 @@
           <div class="panel-header" style="margin-bottom: 1rem;">
             <h2><i data-lucide="history" style="color: var(--color-blue);"></i> Lançamentos do Ciclo</h2>
             <div style="display: flex; gap: 0.5rem;">
-              <button id="btn-google-sheets-import" class="btn btn-secondary" type="button"><i data-lucide="sheets"></i> Importar do Google Sheets</button>
+              <button id="btn-google-sheets-import" class="btn btn-secondary" type="button"><i data-lucide="table"></i> Importar do Google Sheets</button>
               <button id="btn-open-reading-modal-v2" class="btn btn-primary" type="button"><i data-lucide="plus"></i> Nova Leitura</button>
               <button id="btn-open-csv-modal-v2" class="btn btn-secondary" type="button"><i data-lucide="upload-cloud"></i> Importar CSV</button>
             </div>
@@ -254,6 +263,35 @@
 
       </div>
 
+<!-- ================= ABA 2: OS ================= -->
+<div id="tab-content-os" class="tab-panel">
+  <section class="panel-card">
+    <div class="panel-header">
+      <h2>🔧 Ordens de Serviço</h2>
+    </div>
+    <p>Módulo em desenvolvimento.</p>
+  </section>
+</div>
+
+<!-- ================= ABA 3: PERDAS ================= -->
+<div id="tab-content-perdas" class="tab-panel">
+  <section class="panel-card">
+    <div class="panel-header">
+      <h2>📉 Controle de Perdas</h2>
+    </div>
+    <p>Módulo em desenvolvimento.</p>
+  </section>
+</div>
+
+<!-- ================= ABA 4: REQUISIÇÕES ================= -->
+<div id="tab-content-requisicoes" class="tab-panel">
+  <section class="panel-card">
+    <div class="panel-header">
+      <h2>📦 Requisições</h2>
+    </div>
+    <p>Módulo em desenvolvimento.</p>
+  </section>
+</div>
       <!-- ================= ABA 2: MODO DIRETORIA ================= -->
       <div id="tab-content-diretoria" class="tab-panel">
         <div class="presentation-header no-print">
