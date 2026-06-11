@@ -1245,6 +1245,29 @@ function submitAdminSettings() {
   showToast('Configurações salvas e aplicadas com sucesso!', 'success');
 }
 
+// ================= MÓDULO OS =================
+
+const OS_CSV_URL =
+'https://docs.google.com/spreadsheets/d/e/2PACX-1vSyKnl6d4trSwtVru3JQIcoqb_h2gTHKBqn-3zXM1JW7MTzm_Xj01UJh62eDPDNEOYjisMWrGrWfFJt/pub?output=csv';
+
+async function carregarOS() {
+
+  try {
+
+    const response = await fetch(OS_CSV_URL);
+
+    const csv = await response.text();
+
+    console.log('CSV carregado!');
+    console.log(csv.substring(0, 500));
+
+  } catch (error) {
+
+    console.error('Erro ao carregar OS:', error);
+
+  }
+
+}
 // ================= NOTIFICAÇÕES TOAST (V2.0) =================
 
 function showToast(message, type = 'info') {
