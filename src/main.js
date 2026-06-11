@@ -1267,7 +1267,7 @@ async function carregarOS() {
   l.toUpperCase().includes('AGUARDANDO PEÇA')
 ).length;
 
-const concluidas = linhas.filter(l =>
+    const concluidas = linhas.filter(l =>
   l.toUpperCase().includes('CONCLUÍDO')
 ).length;
 
