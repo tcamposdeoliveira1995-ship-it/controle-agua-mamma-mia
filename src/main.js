@@ -235,17 +235,39 @@ function carregarRequisicoes() {
 
   if (!conteudo) return;
 
-  if (btnLimpeza) {
+if (btnLimpeza) {
 
   btnLimpeza.onclick = async () => {
 
-    conteudo.innerHTML = `
-      <div class="panel-header">
-        <h2>🧹 Limpeza e EPI</h2>
-      </div>
+    try {
 
-      <p>Carregando requisições...</p>
-    `;
+      conteudo.innerHTML = `
+        <div class="panel-header">
+          <h2>🧹 Limpeza e EPI</h2>
+        </div>
+
+        <p>Carregando requisições...</p>
+      `;
+
+      const response = await fetch(LIMPEZA_CSV_URL);
+
+      const csv = await response.text();
+
+      console.log(csv);
+
+    } catch (erro) {
+
+      console.error(erro);
+
+      conteudo.innerHTML = `
+        <div class="panel-header">
+          <h2>🧹 Limpeza e EPI</h2>
+        </div>
+
+        <p>Erro ao carregar requisições.</p>
+      `;
+
+    }
 
   };
 
