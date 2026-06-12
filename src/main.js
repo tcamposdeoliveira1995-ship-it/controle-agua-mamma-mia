@@ -1407,7 +1407,10 @@ async function carregarPerdas() {
     const cabecalho = linhas[0].split(',');
 
   console.log('CABECALHO PERDAS');
-  console.log(cabecalho);
+
+cabecalho.forEach((coluna, indice) => {
+  console.log(indice, coluna);
+});
 
   console.log('LINHA 1');
   console.log(linhas[1]);
