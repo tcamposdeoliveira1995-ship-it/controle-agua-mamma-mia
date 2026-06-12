@@ -237,25 +237,19 @@ function carregarRequisicoes() {
 
   if (btnLimpeza) {
 
-    btnLimpeza.onclick = () => {
+  btnLimpeza.onclick = async () => {
 
-      conteudo.innerHTML = `
-        <div class="panel-header">
-          <h2>🧹 Limpeza e EPI</h2>
-        </div>
+    conteudo.innerHTML = `
+      <div class="panel-header">
+        <h2>🧹 Limpeza e EPI</h2>
+      </div>
 
-        <p>
-          Em breve:
-          requisições,
-          PDF,
-          status
-          e filtros.
-        </p>
-      `;
+      <p>Carregando requisições...</p>
+    `;
 
-    };
+  };
 
-  }
+}
 
   if (btnMP) {
 
@@ -1299,6 +1293,9 @@ function submitAdminSettings() {
   
   showToast('Configurações salvas e aplicadas com sucesso!', 'success');
 }
+
+const LIMPEZA_CSV_URL =
+'https://docs.google.com/spreadsheets/d/e/2PACX-1vRt3TOjpSYFl40nUJcPeL82B8SqmBpbomHDbPVK2rXcdPpuJ8M5QZgOlDQV1WFJl7371U7Ox7heooiv/pub?output=csv';
 
 // ================= MÓDULO OS =================
 
