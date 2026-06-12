@@ -1437,6 +1437,40 @@ const dataRegistro = primeiraLinha[0] || '-';
 const responsavel = primeiraLinha[2] || '-';
 const setor = primeiraLinha[4] || '-';
 const empresa = primeiraLinha[18] || 'YUKA';
+const motivos = {};
+const produtos = {};
+
+for (let i = 1; i < linhas.length; i++) {
+
+  const colunas = linhas[i].split(',');
+
+  const motivo =
+    (colunas[9] || 'OUTRO').trim();
+
+  const produto =
+    (colunas[10] || 'SEM PRODUTO').trim();
+
+  motivos[motivo] =
+    (motivos[motivo] || 0) + 1;
+
+  produtos[produto] =
+    (produtos[produto] || 0) + 1;
+
+}
+
+const rankingMotivos =
+  Object.entries(motivos)
+    .sort((a, b) => b[1] - a[1]);
+
+const rankingProdutos =
+  Object.entries(produtos)
+    .sort((a, b) => b[1] - a[1]);
+
+const maiorMotivo =
+  rankingMotivos[0]?.[0] || '-';
+
+const produtoMaisPerdido =
+  rankingProdutos[0]?.[0] || '-';
 
 conteudo.innerHTML = `
   <div class="panel-header">
@@ -1451,14 +1485,14 @@ conteudo.innerHTML = `
     </div>
 
     <div class="kpi-card">
-  <div class="kpi-label">🏢 EMPRESA</div>
-  <div class="kpi-value">${empresa}</div>
+  <div class="kpi-label">⚠️ MAIOR MOTIVO</div>
+  <div class="kpi-value">${maiorMotivo}</div>
 </div>
 
     <div class="kpi-card">
-      <div class="kpi-label">👤 RESPONSÁVEL</div>
-      <div class="kpi-value">${responsavel}</div>
-    </div>
+  <div class="kpi-label">🥟 PRODUTO TOP</div>
+  <div class="kpi-value">${produtoMaisPerdido}</div>
+</div>
 
     <div class="kpi-card">
       <div class="kpi-label">🏭 SETOR</div>
