@@ -1247,6 +1247,10 @@ function submitAdminSettings() {
 }
 
 // ================= MÓDULO OS =================
+
+const OS_CSV_URL =
+'https://docs.google.com/spreadsheets/d/e/2PACX-1vSyKnl6d4trSwtVru3JQIcoqb_h2gTHKBqn-3zXM1JW7MTzm_Xj01UJh62eDPDNEOYjisMWrGrWfFJt/pub?gid=1728678619&single=true&output=csv';
+
 async function carregarOS() {
 
   try {
@@ -1401,41 +1405,7 @@ async function carregarOS() {
 
   }
 
-}    
-
-    // CARDS EXISTENTES
-
-    const openCard = document.getElementById('os-open-count');
-    const waitingCard = document.getElementById('os-parts-count');
-    const closedCard = document.getElementById('os-closed-count');
-
-    if (openCard) openCard.textContent = abertas;
-    if (waitingCard) waitingCard.textContent = aguardando;
-    if (closedCard) closedCard.textContent = concluidas;
-
-    // NOVOS CARDS
-
-    const criticalCard = document.getElementById('os-critical-count');
-    const highCard = document.getElementById('os-high-count');
-    const lowCard = document.getElementById('os-low-count');
-
-    if (criticalCard) criticalCard.textContent = criticas;
-    if (highCard) highCard.textContent = altas;
-    if (lowCard) lowCard.textContent = baixas;
-
-    console.log('OS Abertas:', abertas);
-    console.log('OS Aguardando:', aguardando);
-    console.log('OS Concluídas:', concluidas);
-
-    console.log('OS Críticas:', criticas);
-    console.log('OS Altas:', altas);
-    console.log('OS Baixas:', baixas);
-
-  } catch (error) {
-
-    console.error('Erro ao carregar OS:', error);
-
-  }
+}
 
 }// ================= NOTIFICAÇÕES TOAST (V2.0) =================
 
