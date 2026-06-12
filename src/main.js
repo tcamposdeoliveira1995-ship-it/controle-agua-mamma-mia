@@ -1445,16 +1445,19 @@ for (let i = 1; i < linhas.length; i++) {
   const colunas = linhas[i].split(',');
 
   const motivo =
-    (colunas[9] || 'OUTRO').trim();
+  (colunas[7] || 'OUTRO').trim();
 
-  const produto =
-    (colunas[10] || 'SEM PRODUTO').trim();
+const produto =
+  (colunas[5] || 'SEM PRODUTO').trim();
+
+  const quantidade =
+    parseFloat(colunas[6]) || 0;
 
   motivos[motivo] =
-    (motivos[motivo] || 0) + 1;
+    (motivos[motivo] || 0) + quantidade;
 
   produtos[produto] =
-    (produtos[produto] || 0) + 1;
+    (produtos[produto] || 0) + quantidade;
 
 }
 
