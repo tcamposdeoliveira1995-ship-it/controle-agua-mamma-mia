@@ -71,6 +71,12 @@
 
 body {
   background-color: var(--bg-primary);
+
+  background-image: url('logo-mamma-mia.jpg');
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: 65%;
+
   color: var(--text-primary);
   font-family: var(--font-main);
   min-height: 100vh;
@@ -160,7 +166,7 @@ header {
 }
 
 .cycle-dropdown {
-  background: rgba(14, 19, 38, 0.8);
+  background: rgba(255,255,255,0.95);
   border: 1px solid var(--card-border);
   color: var(--text-primary);
   padding: 0.6rem 2.5rem 0.6rem 1rem;
@@ -187,7 +193,7 @@ header {
 .navigation-tabs {
   display: flex;
   gap: 0.5rem;
-  background: rgba(14, 19, 38, 0.6);
+  background: rgba(248,245,240,0.98);
   border: 1px solid var(--card-border);
   padding: 0.35rem;
   border-radius: var(--border-radius-md);
@@ -212,12 +218,12 @@ header {
 }
 
 .tab-btn:hover {
-  color: white;
+  color: var(--text-primary);
   background: rgba(255, 255, 255, 0.03);
 }
 
 .tab-btn.active {
-  color: white;
+  color: var(--text-primary);
   background: var(--color-blue);
   box-shadow: 0 4px 12px rgba(59, 130, 246, 0.25);
 }
@@ -315,7 +321,7 @@ header {
 .exec-val {
   font-size: 2rem;
   font-weight: 800;
-  color: white;
+  color: var(--text-primary);
   letter-spacing: -0.5px;
   line-height: 1.1;
 }
@@ -395,7 +401,7 @@ header {
 .kpi-value {
   font-size: 1.7rem;
   font-weight: 700;
-  color: white;
+  color: var(--text-primary);
 }
 
 .kpi-value .unit {
@@ -460,7 +466,7 @@ header {
 .comparador-text h3, .leak-alert-text h3 {
   font-size: 0.95rem;
   font-weight: 600;
-  color: white;
+  color: var(--text-primary);
 }
 
 .comparador-text p, .leak-alert-text p {
@@ -576,7 +582,7 @@ header {
   background: rgba(255, 255, 255, 0.06);
   padding: 0.1rem 0.5rem;
   border-radius: 4px;
-  color: white;
+  color: var(--text-primary);
   letter-spacing: 0.5px;
 }
 
@@ -811,7 +817,7 @@ header {
 }
 
 .filter-select {
-  background: rgba(14, 19, 38, 0.8);
+  background: (255,255,255,0.95);
   border: 1px solid var(--card-border);
   color: var(--text-primary);
   padding: 0.45rem 1.8rem 0.45rem 0.75rem;
@@ -847,7 +853,7 @@ header {
 
 .btn-primary {
   background: var(--grad-primary);
-  color: white;
+  color: var(--text-primary);
   box-shadow: 0 4px 15px rgba(59, 130, 246, 0.3);
 }
 
@@ -875,7 +881,7 @@ header {
 
 .btn-danger:hover {
   background: var(--color-red);
-  color: white;
+  color: var(--text-primary);
 }
 
 .btn-icon-only {
@@ -904,11 +910,11 @@ table {
 }
 
 th {
-  background: rgba(14, 19, 38, 0.6);
+  background: rgba(248,245,240,0.98);
   padding: 0.9rem 1rem;
   font-weight: 600;
   color: var(--text-secondary);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  border-bottom: 1px solid rgba(183,155,108,0.15);
 }
 
 td {
@@ -996,7 +1002,7 @@ tr:hover td {
 .modal-header h3 {
   font-size: 1.35rem;
   font-weight: 700;
-  color: white;
+  color: var(--text-primary);
 }
 
 .modal-close {
@@ -1016,7 +1022,7 @@ tr:hover td {
 
 .modal-close:hover {
   background: rgba(255, 255, 255, 0.05);
-  color: white;
+  color: var(--text-primary);
 }
 
 /* Formulários */
@@ -1218,7 +1224,7 @@ footer {
 .meter-config-header h4 {
   font-family: monospace;
   font-size: 1.1rem;
-  color: white;
+  color: var(--text-primary);
 }
 
 .meter-config-header span {
@@ -1232,7 +1238,7 @@ footer {
   justify-content: space-between;
   align-items: center;
   margin-bottom: 2rem;
-  background: rgba(14, 19, 38, 0.4);
+  background: rgba(255,255,255,0.95);
   border: 1px solid var(--card-border);
   padding: 1rem 1.5rem;
   border-radius: var(--border-radius-md);
