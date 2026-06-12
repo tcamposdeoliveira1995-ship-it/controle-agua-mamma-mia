@@ -1442,9 +1442,9 @@ conteudo.innerHTML = `
     </div>
 
     <div class="kpi-card">
-      <div class="kpi-label">📅 DATA</div>
-      <div class="kpi-value">${dataRegistro}</div>
-    </div>
+  <div class="kpi-label">🏢 EMPRESA</div>
+  <div class="kpi-value">${empresa}</div>
+</div>
 
     <div class="kpi-card">
       <div class="kpi-label">👤 RESPONSÁVEL</div>
