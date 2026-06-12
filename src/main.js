@@ -333,10 +333,6 @@ console.log(cabecalho);
 let yuka = 0;
 let tc = 0;
 
-let abertas = 0;
-let concluidas = 0;
-let parciais = 0;
-
 for (let i = 1; i < linhas.length; i++) {
 
           const linha = linhas[i].toUpperCase();
@@ -344,9 +340,7 @@ for (let i = 1; i < linhas.length; i++) {
           if (linha.includes(',YUKA,')) yuka++;
           if (linha.includes(',TC,')) tc++;
 
-          if (linha.includes('ABERTO')) abertas++;
-          if (linha.includes('CONCLU')) concluidas++;
-          if (linha.includes('PARCIAL')) parciais++;
+         
 
         }
 
@@ -360,13 +354,7 @@ for (let i = 1; i < linhas.length; i++) {
           <p>🏢 YUKA: <strong>${yuka}</strong></p>
           <p>🏢 TC: <strong>${tc}</strong></p>
 
-          <hr>
-
-          <p>🟢 Concluídas: <strong>${concluidas}</strong></p>
-          <p>🟡 Parciais: <strong>${parciais}</strong></p>
-          <p>🔴 Abertas: <strong>${abertas}</strong></p>
-        `;
-
+         
       } catch (erro) {
 
         console.error(erro);
