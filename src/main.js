@@ -1342,7 +1342,7 @@ const indicePDF = cabecalho.findIndex(col =>
     // CARDS EXISTENTES
 
     const openCard = document.getElementById('os-open-count');
-    const waitingCard = document.getElementById('os-waiting-count');
+    const waitingCard = document.getElementById('os-parts-count');
     const closedCard = document.getElementById('os-closed-count');
 
     if (openCard) openCard.textContent = abertas;
