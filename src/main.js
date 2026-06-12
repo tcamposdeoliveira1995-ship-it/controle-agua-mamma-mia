@@ -253,7 +253,18 @@ if (btnLimpeza) {
 
       const csv = await response.text();
 
-      console.log(csv);
+      const linhas = csv.split('\n');
+
+conteudo.innerHTML = `
+  <div class="panel-header">
+    <h2>🧹 Limpeza e EPI</h2>
+  </div>
+
+  <p>
+    Total de registros:
+    <strong>${linhas.length - 1}</strong>
+  </p>
+`;
 
     } catch (erro) {
 
