@@ -323,18 +323,21 @@ function carregarRequisicoes() {
 const response = await fetch(MP_CSV_URL);
 
         const csv = await response.text();
-        const linhas = csv.split('\n');
-        console.log('CABECALHO MP');
-        console.log(linhas[0]);
+const linhas = csv.split('\n');
 
-        let yuka = 0;
-        let tc = 0;
+const cabecalho = linhas[0].split(',');
 
-        let abertas = 0;
-        let concluidas = 0;
-        let parciais = 0;
+console.log('CABECALHO MP');
+console.log(cabecalho);
 
-        for (let i = 1; i < linhas.length; i++) {
+let yuka = 0;
+let tc = 0;
+
+let abertas = 0;
+let concluidas = 0;
+let parciais = 0;
+
+for (let i = 1; i < linhas.length; i++) {
 
           const linha = linhas[i].toUpperCase();
 
