@@ -354,7 +354,7 @@ for (let i = 1; i < linhas.length; i++) {
           <p>🏢 YUKA: <strong>${yuka}</strong></p>
           <p>🏢 TC: <strong>${tc}</strong></p>
 
-         
+         `;
       } catch (erro) {
 
         console.error(erro);
