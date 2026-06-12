@@ -1423,11 +1423,41 @@ cabecalho.forEach((coluna, indice) => {
     if (!conteudo) return;
 
     conteudo.innerHTML = `
-      <div class="panel-header">
-        <h2>📉 Gestão de Perdas YUKA</h2>
-      </div>
+     const primeiraLinha = linhas[1].split(',');
 
-      <p><strong>Registros encontrados:</strong> ${totalPerdas}</p>
+const dataRegistro = primeiraLinha[0] || '-';
+const responsavel = primeiraLinha[2] || '-';
+const setor = primeiraLinha[4] || '-';
+
+conteudo.innerHTML = `
+  <div class="panel-header">
+    <h2>📉 Gestão de Perdas YUKA</h2>
+  </div>
+
+  <div class="dashboard-grid">
+
+    <div class="kpi-card">
+      <div class="kpi-label">📦 REGISTROS</div>
+      <div class="kpi-value">${totalPerdas}</div>
+    </div>
+
+    <div class="kpi-card">
+      <div class="kpi-label">📅 DATA</div>
+      <div class="kpi-value">${dataRegistro}</div>
+    </div>
+
+    <div class="kpi-card">
+      <div class="kpi-label">👤 RESPONSÁVEL</div>
+      <div class="kpi-value">${responsavel}</div>
+    </div>
+
+    <div class="kpi-card">
+      <div class="kpi-label">🏭 SETOR</div>
+      <div class="kpi-value">${setor}</div>
+    </div>
+
+  </div>
+`;
     `;
 
   } catch (erro) {
