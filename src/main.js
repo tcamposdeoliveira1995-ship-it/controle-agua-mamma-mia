@@ -1244,7 +1244,6 @@ function submitAdminSettings() {
   
   showToast('Configurações salvas e aplicadas com sucesso!', 'success');
 }
-}
 
 // ================= MÓDULO OS =================
 
