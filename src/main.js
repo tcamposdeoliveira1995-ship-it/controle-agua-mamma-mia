@@ -251,22 +251,39 @@ if (btnLimpeza) {
 
       const response = await fetch(LIMPEZA_CSV_URL);
 
-      const csv = await response.text();
+const csv = await response.text();
 
-      const linhas = csv.split('\n');
+const linhas = csv.split('\n');
+
+let yuka = 0;
+let tc = 0;
+let cd = 0;
+
+for (let i = 1; i < linhas.length; i++) {
+
+  const linha = linhas[i].toUpperCase();
+
+  if (linha.includes(',YUKA,')) yuka++;
+  if (linha.includes(',TC,')) tc++;
+  if (linha.includes(',CD,')) cd++;
+
+}
 
 conteudo.innerHTML = `
   <div class="panel-header">
     <h2>🧹 Limpeza e EPI</h2>
   </div>
 
-  <p>
-    Total de registros:
-    <strong>${linhas.length - 1}</strong>
-  </p>
+  <p><strong>Total:</strong> ${linhas.length - 1}</p>
+
+  <p>🏢 YUKA: <strong>${yuka}</strong></p>
+
+  <p>🏢 TC: <strong>${tc}</strong></p>
+
+  <p>🏢 CD: <strong>${cd}</strong></p>
 `;
 
-    } catch (erro) {
+        } catch (erro) {
 
       console.error(erro);
 
