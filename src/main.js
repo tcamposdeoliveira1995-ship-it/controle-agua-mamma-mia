@@ -1264,9 +1264,10 @@ async function carregarOS() {
     console.log(cabecalho);
 
     const indiceStatus = cabecalho.findIndex(col =>
-      col.trim().toUpperCase() === 'STATUS'
+      col.trim().replace(/"/g, '').toUpperCase() === 'STATUS'
+    );
 
-    console.log('Indice STATUS:', indiceStatus);                                        
+    console.log('Indice STATUS:', indiceStatus);
 
     let abertas = 0;
     let aguardando = 0;
@@ -1278,7 +1279,7 @@ async function carregarOS() {
 
       const status = (
         colunas[indiceStatus] || ''
-      ).trim().toUpperCase();
+      ).trim().replace(/"/g, '').toUpperCase();
 
       if (status === 'ABERTO') {
         abertas++;
@@ -1317,6 +1318,8 @@ async function carregarOS() {
     console.error('Erro ao carregar OS:', error);
 
   }
+
+}
 
 }// ================= NOTIFICAÇÕES TOAST (V2.0) =================
 
