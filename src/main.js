@@ -329,6 +329,8 @@ const cabecalho = linhas[0].split(',');
 
 console.log('CABECALHO MP');
 console.log(cabecalho);
+console.log('PRIMEIRA LINHA');
+console.log(linhas[1]);
 
 let yuka = 0;
 let tc = 0;
