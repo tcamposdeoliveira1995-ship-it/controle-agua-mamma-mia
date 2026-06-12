@@ -1309,8 +1309,6 @@ async function carregarOS() {
 
   }
 
-}
-
 }// ================= NOTIFICAÇÕES TOAST (V2.0) =================
 
 function showToast(message, type = 'info') {
