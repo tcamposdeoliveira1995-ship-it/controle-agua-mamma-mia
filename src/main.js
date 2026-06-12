@@ -301,29 +301,126 @@ conteudo.innerHTML = `
 
 }
 
-  if (btnMP) {
+ if (btnMP) {
 
-    btnMP.onclick = () => {
+  btnMP.onclick = async () => {
+
+    try {
 
       conteudo.innerHTML = `
         <div class="panel-header">
           <h2>🥩 MP e Recheios</h2>
         </div>
 
-        <p>
-          Em breve:
-          controle de solicitações,
-          recebimento
-          e saldo.
-        </p>
+        <p>Carregando...</p>
       `;
 
-    };
+      const response = await fetch(MP_CSV_URL);
+      const csv = await response.text();
 
-  }
+      const linhas = csv.split('\n');
+
+      const cabecalho = linhas[0].split(',');
+
+      const idxUnidade =
+        cabecalho.findIndex(c =>
+          c.toUpperCase().includes('UNIDADE')
+        );
+
+      const idxStatus =
+        cabecalho.findIndex(c =>
+          c.toUpperCase().includes('STATUS')
+        );
+
+      let yuka = 0;
+      let tc = 0;
+
+      let abertas = 0;
+      let concluidas = 0;
+      let parciais = 0;
+
+      for (let i = 1; i < linhas.length; i++) {
+
+        const colunas = linhas[i].split(',');
+
+        const unidade =
+          (colunas[idxUnidade] || '')
+          .toUpperCase();
+
+        const status =
+          (colunas[idxStatus] || '')
+          .toUpperCase();
+
+        if (unidade.includes('YUKA')) yuka++;
+        if (unidade.includes('TC')) tc++;
+
+        if (status.includes('ABERTO')) abertas++;
+
+        if (status.includes('CONCLU')) concluidas++;
+
+        if (status.includes('PARCIAL'))
+          parciais++;
+
+      }
+
+      conteudo.innerHTML = `
+        <div class="panel-header">
+          <h2>🥩 MP e Recheios</h2>
+        </div>
+
+        <div class="kpi-grid">
+
+          <div class="kpi-card">
+            <h3>📦 Total</h3>
+            <span>${linhas.length - 1}</span>
+          </div>
+
+          <div class="kpi-card">
+            <h3>🏢 YUKA</h3>
+            <span>${yuka}</span>
+          </div>
+
+          <div class="kpi-card">
+            <h3>🏢 TC</h3>
+            <span>${tc}</span>
+          </div>
+
+          <div class="kpi-card">
+            <h3>🟢 Concluídas</h3>
+            <span>${concluidas}</span>
+          </div>
+
+          <div class="kpi-card">
+            <h3>🟡 Parciais</h3>
+            <span>${parciais}</span>
+          </div>
+
+          <div class="kpi-card">
+            <h3>🔴 Abertas</h3>
+            <span>${abertas}</span>
+          </div>
+
+        </div>
+      `;
+
+    } catch (erro) {
+
+      console.error(erro);
+
+      conteudo.innerHTML = `
+        <div class="panel-header">
+          <h2>🥩 MP e Recheios</h2>
+        </div>
+
+        <p>Erro ao carregar dados.</p>
+      `;
+
+    }
+
+  };
 
 }
-/**
+  /**
  * Atualiza dropdowns de ciclo do header e histórico
  */
   
