@@ -1269,6 +1269,22 @@ async function carregarOS() {
       col.trim().replace(/"/g, '').toUpperCase() === 'PRIORIDADE'
     );
 
+    const indiceOS = cabecalho.findIndex(col =>
+  col.trim().replace(/"/g, '').toUpperCase() === 'OS'
+);
+
+const indiceUnidade = cabecalho.findIndex(col =>
+  col.trim().replace(/"/g, '').toUpperCase() === 'UNIDADE'
+);
+
+const indiceEquipamento = cabecalho.findIndex(col =>
+  col.trim().replace(/"/g, '').toUpperCase() === 'EQUIPAMENTO OU LOCAL AFETADO'
+);
+
+const indicePDF = cabecalho.findIndex(col =>
+  col.trim().replace(/"/g, '').toUpperCase() === 'PDF_OS'
+);
+
     let abertas = 0;
     let aguardando = 0;
     let concluidas = 0;
