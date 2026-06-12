@@ -1422,8 +1422,7 @@ cabecalho.forEach((coluna, indice) => {
 
     if (!conteudo) return;
 
-    conteudo.innerHTML = `
-     const primeiraLinha = linhas[1].split(',');
+         const primeiraLinha = linhas[1].split(',');
 
 const dataRegistro = primeiraLinha[0] || '-';
 const responsavel = primeiraLinha[2] || '-';
@@ -1458,8 +1457,7 @@ conteudo.innerHTML = `
 
   </div>
 `;
-    `;
-
+  
   } catch (erro) {
 
     console.error(erro);
