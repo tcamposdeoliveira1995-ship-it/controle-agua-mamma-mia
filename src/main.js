@@ -235,220 +235,150 @@ function carregarRequisicoes() {
 
   if (!conteudo) return;
 
-if (btnLimpeza) {
+  // ================= LIMPEZA =================
 
-  btnLimpeza.onclick = async () => {
+  if (btnLimpeza) {
 
-    try {
+    btnLimpeza.onclick = async () => {
 
-      conteudo.innerHTML = `
-        <div class="panel-header">
-          <h2>🧹 Limpeza e EPI</h2>
-        </div>
+      try {
 
-        <p>Carregando requisições...</p>
-      `;
+        conteudo.innerHTML = `
+          <div class="panel-header">
+            <h2>🧹 Limpeza e EPI</h2>
+          </div>
 
-      const response = await fetch(LIMPEZA_CSV_URL);
+          <p>Carregando requisições...</p>
+        `;
 
-const csv = await response.text();
+        const response = await fetch(LIMPEZA_CSV_URL);
+        const csv = await response.text();
 
-const linhas = csv.split('\n');
+        const linhas = csv.split('\n');
 
-let yuka = 0;
-let tc = 0;
-let cd = 0;
+        let yuka = 0;
+        let tc = 0;
+        let cd = 0;
 
-for (let i = 1; i < linhas.length; i++) {
+        for (let i = 1; i < linhas.length; i++) {
 
-  const linha = linhas[i].toUpperCase();
+          const linha = linhas[i].toUpperCase();
 
-  if (linha.includes(',YUKA,')) yuka++;
-  if (linha.includes(',TC,')) tc++;
-  if (linha.includes(',CD,')) cd++;
+          if (linha.includes(',YUKA,')) yuka++;
+          if (linha.includes(',TC,')) tc++;
+          if (linha.includes(',CD,')) cd++;
 
-}
+        }
 
-conteudo.innerHTML = `
-  <div class="panel-header">
-    <h2>🧹 Limpeza e EPI</h2>
-  </div>
+        conteudo.innerHTML = `
+          <div class="panel-header">
+            <h2>🧹 Limpeza e EPI</h2>
+          </div>
 
-  <p><strong>Total:</strong> ${linhas.length - 1}</p>
+          <p><strong>Total:</strong> ${linhas.length - 1}</p>
 
-  <p>🏢 YUKA: <strong>${yuka}</strong></p>
+          <p>🏢 YUKA: <strong>${yuka}</strong></p>
+          <p>🏢 TC: <strong>${tc}</strong></p>
+          <p>🏢 CD: <strong>${cd}</strong></p>
+        `;
 
-  <p>🏢 TC: <strong>${tc}</strong></p>
+      } catch (erro) {
 
-  <p>🏢 CD: <strong>${cd}</strong></p>
-`;
+        console.error(erro);
 
-        } catch (erro) {
+        conteudo.innerHTML = `
+          <div class="panel-header">
+            <h2>🧹 Limpeza e EPI</h2>
+          </div>
 
-      console.error(erro);
-
-      conteudo.innerHTML = `
-        <div class="panel-header">
-          <h2>🧹 Limpeza e EPI</h2>
-        </div>
-
-        <p>Erro ao carregar requisições.</p>
-      `;
-
-    }
-
-  };
-
- if (btnMP) {
-
-  btnMP.onclick = async () => {
-
-    try {
-
-      conteudo.innerHTML = `
-        <div class="panel-header">
-          <h2>🥩 MP e Recheios</h2>
-        </div>
-
-        <p>Carregando...</p>
-      `;
-
-      const response = await fetch(MP_CSV_URL);
-      const csv = await response.text();
-
-      const linhas = csv.split('\n');
-
-      const cabecalho = linhas[0].split(',');
-
-      const idxUnidade =
-        cabecalho.findIndex(c =>
-          c.toUpperCase().includes('UNIDADE')
-        );
-
-      const idxStatus =
-        cabecalho.findIndex(c =>
-          c.toUpperCase().includes('STATUS')
-        );
-
-      let yuka = 0;
-      let tc = 0;
-
-      let abertas = 0;
-      let concluidas = 0;
-      let parciais = 0;
-
-      for (let i = 1; i < linhas.length; i++) {
-
-        const colunas = linhas[i].split(',');
-
-        const unidade =
-          (colunas[idxUnidade] || '')
-          .toUpperCase();
-
-        const status =
-          (colunas[idxStatus] || '')
-          .toUpperCase();
-
-        if (unidade.includes('YUKA')) yuka++;
-        if (unidade.includes('TC')) tc++;
-
-        if (status.includes('ABERTO')) abertas++;
-
-        if (status.includes('CONCLU')) concluidas++;
-
-        if (status.includes('PARCIAL'))
-          parciais++;
+          <p>Erro ao carregar requisições.</p>
+        `;
 
       }
 
-      conteudo.innerHTML = `
-        <div class="panel-header">
-          <h2>🥩 MP e Recheios</h2>
-        </div>
+    };
 
-        <div class="kpi-grid">
-
-          <div class="kpi-card">
-            <h3>📦 Total</h3>
-            <span>${linhas.length - 1}</span>
-          </div>
-
-          <div class="kpi-card">
-            <h3>🏢 YUKA</h3>
-            <span>${yuka}</span>
-          </div>
-
-          <div class="kpi-card">
-            <h3>🏢 TC</h3>
-            <span>${tc}</span>
-          </div>
-
-          <div class="kpi-card">
-            <h3>🟢 Concluídas</h3>
-            <span>${concluidas}</span>
-          </div>
-
-          <div class="kpi-card">
-            <h3>🟡 Parciais</h3>
-            <span>${parciais}</span>
-          </div>
-
-          <div class="kpi-card">
-            <h3>🔴 Abertas</h3>
-            <span>${abertas}</span>
-          </div>
-
-        </div>
-      `;
-
-    } catch (erro) {
-
-      console.error(erro);
-
-      conteudo.innerHTML = `
-        <div class="panel-header">
-          <h2>🥩 MP e Recheios</h2>
-        </div>
-
-        <p>Erro ao carregar dados.</p>
-      `;
-
-    }
-
-  };
-
-}
-  /**
- * Atualiza dropdowns de ciclo do header e histórico
- */
-  
-function updateAppSelectors() {
-  const cycles = getAvailableCycles(state.readings);
-  
-  DOM.cycleSelect.innerHTML = '';
-  cycles.forEach(c => {
-    const option = document.createElement('option');
-    option.value = c;
-    const stats = getCycleStats(state.readings, c);
-    option.textContent = stats.label;
-    DOM.cycleSelect.appendChild(option);
-  });
-
-  DOM.filterMeter.innerHTML = '<option value="all">Todos os Hidrômetros</option>';
-  const settings = getAppSettings();
-  Object.keys(settings.hydrometers).forEach(id => {
-    const h = settings.hydrometers[id];
-    const option = document.createElement('option');
-    option.value = id;
-    option.textContent = `${id} (${h.alias})`;
-    DOM.filterMeter.appendChild(option);
-  });
-
-  if (state.selectedCycleKey) {
-    DOM.cycleSelect.value = state.selectedCycleKey;
   }
-}
 
+  // ================= MP E RECHEIOS =================
+
+  if (btnMP) {
+
+    btnMP.onclick = async () => {
+
+      try {
+
+        conteudo.innerHTML = `
+          <div class="panel-header">
+            <h2>🥩 MP e Recheios</h2>
+          </div>
+
+          <p>Carregando...</p>
+        `;
+
+        // TEMPORÁRIO
+        // Depois trocamos para o CSV definitivo
+        const response = await fetch(LIMPEZA_CSV_URL);
+
+        const csv = await response.text();
+        const linhas = csv.split('\n');
+
+        let yuka = 0;
+        let tc = 0;
+
+        let abertas = 0;
+        let concluidas = 0;
+        let parciais = 0;
+
+        for (let i = 1; i < linhas.length; i++) {
+
+          const linha = linhas[i].toUpperCase();
+
+          if (linha.includes(',YUKA,')) yuka++;
+          if (linha.includes(',TC,')) tc++;
+
+          if (linha.includes('ABERTO')) abertas++;
+          if (linha.includes('CONCLU')) concluidas++;
+          if (linha.includes('PARCIAL')) parciais++;
+
+        }
+
+        conteudo.innerHTML = `
+          <div class="panel-header">
+            <h2>🥩 MP e Recheios</h2>
+          </div>
+
+          <p><strong>Total:</strong> ${linhas.length - 1}</p>
+
+          <p>🏢 YUKA: <strong>${yuka}</strong></p>
+          <p>🏢 TC: <strong>${tc}</strong></p>
+
+          <hr>
+
+          <p>🟢 Concluídas: <strong>${concluidas}</strong></p>
+          <p>🟡 Parciais: <strong>${parciais}</strong></p>
+          <p>🔴 Abertas: <strong>${abertas}</strong></p>
+        `;
+
+      } catch (erro) {
+
+        console.error(erro);
+
+        conteudo.innerHTML = `
+          <div class="panel-header">
+            <h2>🥩 MP e Recheios</h2>
+          </div>
+
+          <p>Erro ao carregar dados.</p>
+        `;
+
+      }
+
+    };
+
+  }
+
+}
 // ================= RENDERIZADORES DE ABAS =================
 
 /**
