@@ -1414,6 +1414,15 @@ cabecalho.forEach((coluna, indice) => {
 
   console.log('LINHA 1');
   console.log(linhas[1]);
+    
+  console.log('LINHA 2');
+  console.log(linhas[2]);
+
+  console.log('LINHA 3');
+  console.log(linhas[3]);
+
+  console.log('LINHA 4');
+  console.log(linhas[4]);
 
     let totalPerdas = linhas.length - 1;
 
