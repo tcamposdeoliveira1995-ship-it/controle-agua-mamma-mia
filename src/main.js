@@ -1244,7 +1244,9 @@ function submitAdminSettings() {
   
   showToast('Configurações salvas e aplicadas com sucesso!', 'success');
 }
+}
 
+// ================= MÓDULO OS =================
 async function carregarOS() {
 
   try {
