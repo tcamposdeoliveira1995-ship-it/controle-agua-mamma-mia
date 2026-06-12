@@ -318,7 +318,9 @@ function carregarRequisicoes() {
 
         // TEMPORÁRIO
         // Depois trocamos para o CSV definitivo
-        const response = await fetch(LIMPEZA_CSV_URL);
+       // TEMPORÁRIO
+// Depois trocamos para o CSV definitivo
+const response = await fetch(MP_CSV_URL);
 
         const csv = await response.text();
         const linhas = csv.split('\n');
@@ -1374,6 +1376,9 @@ function submitAdminSettings() {
 
 const LIMPEZA_CSV_URL =
 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRt3TOjpSYFl40nUJcPeL82B8SqmBpbomHDbPVK2rXcdPpuJ8M5QZgOlDQV1WFJl7371U7Ox7heooiv/pub?output=csv';
+
+const MP_CSV_URL =
+'https://docs.google.com/spreadsheets/d/e/2PACX-1vTFEg4Bpk7evJs7NDYRCMBVWm5ZB6hQRD8SS_RwowjbNS_hI2kmtzH5ovhjYRpRssk0YH00yiCgoyCC/pub?output=csv';
 
 // ================= MÓDULO OS =================
 
