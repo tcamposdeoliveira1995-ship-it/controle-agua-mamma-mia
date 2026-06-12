@@ -1248,7 +1248,7 @@ function submitAdminSettings() {
 // ================= MÓDULO OS =================
 
 const OS_CSV_URL =
-'https://docs.google.com/spreadsheets/d/e/2PACX-1vSyKnl6d4trSwtVru3JQIcoqb_h2gTHKBqn-3zXM1JW7MTzm_Xj01UJh62eDPDNEOYjisMWrGrWfFJt/pub?output=csv';
+'https://docs.google.com/spreadsheets/d/e/2PACX-1vSyKnI6d4trSwtVru3JQIcoqb_h2gTHKBqn-3zXM1JW7MTzm_Xj01UJh62eDPDNEOYjisMWrGrWfFJt/pub?output=csv';
 
 async function carregarOS() {
 
@@ -1259,20 +1259,55 @@ async function carregarOS() {
 
     const linhas = csv.split('\n');
 
-   const abertas = linhas.filter(l =>
-  l.toUpperCase().includes('ABERTO')
-).length;
+    const cabecalho = linhas[0].split(',');
 
-    const aguardando = linhas.filter(l =>
-  l.toUpperCase().includes('AGUARDANDO PEÇA')
-).length;
+    const indiceStatus = cabecalho.findIndex(col =>
+      col.trim().toUpperCase() === 'STATUS'
+    );
 
-    const concluidas = linhas.filter(l =>
-      l.toUpperCase().includes('CONCLUÍDO')
-    ).length;
+    let abertas = 0;
+    let aguardando = 0;
+    let concluidas = 0;
+
+    for (let i = 1; i < linhas.length; i++) {
+
+      const colunas = linhas[i].split(',');
+
+      const status = (
+        colunas[indiceStatus] || ''
+      ).trim().toUpperCase();
+
+      if (status === 'ABERTO') {
+        abertas++;
+      }
+
+      if (status === 'AGUARDANDO PEÇA') {
+        aguardando++;
+      }
+
+      if (
+        status === 'CONCLUÍDO' ||
+        status === 'CONCLUIDO'
+      ) {
+        concluidas++;
+      }
+
+    }
 
     document.getElementById('os-open-count').textContent = abertas;
+
+    const waitingCard =
+      document.getElementById('os-waiting-count');
+
+    if (waitingCard) {
+      waitingCard.textContent = aguardando;
+    }
+
     document.getElementById('os-closed-count').textContent = concluidas;
+
+    console.log('OS Abertas:', abertas);
+    console.log('OS Aguardando Peça:', aguardando);
+    console.log('OS Concluídas:', concluidas);
 
   } catch (error) {
 
@@ -1280,8 +1315,7 @@ async function carregarOS() {
 
   }
 
-}
-// ================= NOTIFICAÇÕES TOAST (V2.0) =================
+}// ================= NOTIFICAÇÕES TOAST (V2.0) =================
 
 function showToast(message, type = 'info') {
   const toast = document.createElement('div');
