@@ -223,6 +223,8 @@ if (state.currentTab === 'dashboard') {
   if (typeof lucide !== 'undefined') {
     lucide.createIcons();
   }
+
+}
 // ================= MÓDULO REQUISIÇÕES =================
 
 function carregarRequisicoes() {
@@ -280,7 +282,7 @@ function carregarRequisicoes() {
 /**
  * Atualiza dropdowns de ciclo do header e histórico
  */
-}
+  
 function updateAppSelectors() {
   const cycles = getAvailableCycles(state.readings);
   
