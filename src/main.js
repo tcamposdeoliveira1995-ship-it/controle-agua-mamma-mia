@@ -213,20 +213,30 @@ if (state.currentTab === 'dashboard') {
 } else if (state.currentTab === 'perdas') {
   // futuro módulo perdas
 
+// ================= MÓDULO OS =================
+else if (state.currentTab === 'requisicoes') {
+  carregarRequisicoes();
+}
+
+} else if (state.currentTab === 'configuracoes') {
+  renderConfiguracoesTab();
+}
+
+  if (typeof lucide !== 'undefined') {
+    lucide.createIcons();
+  }
+}
 // ================= MÓDULO REQUISIÇÕES =================
 
 function carregarRequisicoes() {
 
-  const btnLimpeza =
-  document.getElementById('btn-limpeza');
+  const btnLimpeza = document.getElementById('btn-limpeza');
+  const btnMP = document.getElementById('btn-mp');
+  const conteudo = document.getElementById('requisicoes-conteudo');
 
-  const btnMP =
-  document.getElementById('btn-mp');
+  if (!conteudo) return;
 
-  const conteudo =
-  document.getElementById('requisicoes-conteudo');
-
-  if(btnLimpeza){
+  if (btnLimpeza) {
 
     btnLimpeza.onclick = () => {
 
@@ -248,7 +258,7 @@ function carregarRequisicoes() {
 
   }
 
-  if(btnMP){
+  if (btnMP) {
 
     btnMP.onclick = () => {
 
@@ -269,22 +279,7 @@ function carregarRequisicoes() {
 
   }
 
-}  
-  
-// ================= MÓDULO OS =================
-else if (state.currentTab === 'requisicoes') {
-  carregarRequisicoes();
 }
-
-} else if (state.currentTab === 'configuracoes') {
-  renderConfiguracoesTab();
-}
-
-  if (typeof lucide !== 'undefined') {
-    lucide.createIcons();
-  }
-}
-
 /**
  * Atualiza dropdowns de ciclo do header e histórico
  */
