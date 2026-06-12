@@ -214,8 +214,6 @@ if (state.currentTab === 'dashboard') {
 
   carregarPerdas();
 
-}
-
 } else if (state.currentTab === 'requisicoes') {
   carregarRequisicoes();
 
