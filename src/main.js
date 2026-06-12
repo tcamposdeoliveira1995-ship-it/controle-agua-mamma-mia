@@ -1466,8 +1466,73 @@ conteudo.innerHTML = `
     </div>
 
   </div>
+    </div>
+
+  <div class="panel-card">
+    <h3>🚨 Perdas por Motivo</h3>
+    <canvas id="graficoMotivos"></canvas>
+  </div>
+
+  <div class="panel-card">
+    <h3>🏆 Ranking de Produtos Perdidos</h3>
+    <canvas id="graficoProdutos"></canvas>
+  </div>
+
 `;
-  
+`;
+  `;
+    
+const ctxMotivos = document.getElementById('graficoMotivos');
+
+if (ctxMotivos) {
+
+  new Chart(ctxMotivos, {
+    type: 'bar',
+    data: {
+      labels: [
+        'Embalagem',
+        'Produção',
+        'Expedição',
+        'Outro'
+      ],
+      datasets: [{
+        label: 'Perdas',
+        data: [2015, 833, 312, 132]
+      }]
+    },
+    options: {
+      indexAxis: 'y',
+      responsive: true
+    }
+  });
+
+}
+
+const ctxProdutos = document.getElementById('graficoProdutos');
+
+if (ctxProdutos) {
+
+  new Chart(ctxProdutos, {
+    type: 'bar',
+    data: {
+      labels: [
+        'Pão de Queijo',
+        'Pizza Vencida',
+        'Quadradinho 4 Queijos',
+        'Esfiha'
+      ],
+      datasets: [{
+        label: 'Perdas',
+        data: [2000, 260, 150, 30]
+      }]
+    },
+    options: {
+      indexAxis: 'y',
+      responsive: true
+    }
+  });
+
+}
   } catch (erro) {
 
     console.error(erro);
