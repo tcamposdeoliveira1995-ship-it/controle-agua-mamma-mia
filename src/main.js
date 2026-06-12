@@ -213,8 +213,68 @@ if (state.currentTab === 'dashboard') {
 } else if (state.currentTab === 'perdas') {
   // futuro módulo perdas
 
-} else if (state.currentTab === 'requisicoes') {
-  // futuro módulo requisições
+// ================= MÓDULO REQUISIÇÕES =================
+
+function carregarRequisicoes() {
+
+  const btnLimpeza =
+  document.getElementById('btn-limpeza');
+
+  const btnMP =
+  document.getElementById('btn-mp');
+
+  const conteudo =
+  document.getElementById('requisicoes-conteudo');
+
+  if(btnLimpeza){
+
+    btnLimpeza.onclick = () => {
+
+      conteudo.innerHTML = `
+        <div class="panel-header">
+          <h2>🧹 Limpeza e EPI</h2>
+        </div>
+
+        <p>
+          Em breve:
+          requisições,
+          PDF,
+          status
+          e filtros.
+        </p>
+      `;
+
+    };
+
+  }
+
+  if(btnMP){
+
+    btnMP.onclick = () => {
+
+      conteudo.innerHTML = `
+        <div class="panel-header">
+          <h2>🥩 MP e Recheios</h2>
+        </div>
+
+        <p>
+          Em breve:
+          controle de solicitações,
+          recebimento
+          e saldo.
+        </p>
+      `;
+
+    };
+
+  }
+
+}  
+  
+// ================= MÓDULO OS =================
+else if (state.currentTab === 'requisicoes') {
+  carregarRequisicoes();
+}
 
 } else if (state.currentTab === 'configuracoes') {
   renderConfiguracoesTab();
