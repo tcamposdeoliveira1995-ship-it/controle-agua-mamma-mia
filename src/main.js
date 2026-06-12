@@ -1242,7 +1242,7 @@ function runCyclesComparison() {
     lucide.createIcons();
   }
 }
-}
+
 // ================= ABA 4: CONFIGURAÇÕES ADMINISTRATIVAS =================
 
 function submitAdminSettings() {
