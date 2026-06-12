@@ -211,7 +211,10 @@ if (state.currentTab === 'dashboard') {
   carregarOS();
 
 } else if (state.currentTab === 'perdas') {
-  // futuro módulo perdas
+
+  carregarPerdas();
+
+}
 
 } else if (state.currentTab === 'requisicoes') {
   carregarRequisicoes();
@@ -1389,6 +1392,43 @@ const LIMPEZA_CSV_URL =
 
 const MP_CSV_URL =
 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTFEg4Bpk7evJs7NDYRCMBVWm5ZB6hQRD8SS_RwowjbNS_hI2kmtzH5ovhjYRpRssk0YH00yiCgoyCC/pub?output=csv';
+
+const PERDAS_CSV_URL =
+'https://docs.google.com/spreadsheets/d/e/2PACX-1vQ0QXaxvuAAaF7XzQWayifLZIflDtS1psT3gNJTmkQ0BvPWbuKPttlJ6EAcE8Zv8IG_UlAbScrhD4Nb/pub?output=csv';
+
+// ================= MÓDULO PERDAS =================
+
+async function carregarPerdas() {
+
+  try {
+
+    const response = await fetch(PERDAS_CSV_URL);
+    const csv = await response.text();
+
+    const linhas = csv.split('\n');
+
+    let totalPerdas = linhas.length - 1;
+
+    const conteudo =
+      document.getElementById('perdas-conteudo');
+
+    if (!conteudo) return;
+
+    conteudo.innerHTML = `
+      <div class="panel-header">
+        <h2>📉 Gestão de Perdas YUKA</h2>
+      </div>
+
+      <p><strong>Registros encontrados:</strong> ${totalPerdas}</p>
+    `;
+
+  } catch (erro) {
+
+    console.error(erro);
+
+  }
+
+}
 
 // ================= MÓDULO OS =================
 
