@@ -1395,6 +1395,7 @@ async function carregarOS() {
     const linhas = csv.split('\n');
 
     const cabecalho = linhas[0].split(',');
+    console.log(cabecalho);
 
     const indiceStatus = cabecalho.findIndex(col =>
       col.trim().replace(/"/g, '').toUpperCase() === 'STATUS'
