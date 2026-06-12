@@ -1427,6 +1427,7 @@ cabecalho.forEach((coluna, indice) => {
 const dataRegistro = primeiraLinha[0] || '-';
 const responsavel = primeiraLinha[2] || '-';
 const setor = primeiraLinha[4] || '-';
+const empresa = primeiraLinha[18] || 'YUKA';
 
 conteudo.innerHTML = `
   <div class="panel-header">
