@@ -1267,7 +1267,6 @@ async function carregarOS() {
       col.trim().toUpperCase() === 'STATUS'
 
     console.log('Indice STATUS:', indiceStatus);                                        
-    );
 
     let abertas = 0;
     let aguardando = 0;
