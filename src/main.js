@@ -324,6 +324,8 @@ const response = await fetch(MP_CSV_URL);
 
         const csv = await response.text();
         const linhas = csv.split('\n');
+        console.log('CABECALHO MP');
+        console.log(linhas[0]);
 
         let yuka = 0;
         let tc = 0;
