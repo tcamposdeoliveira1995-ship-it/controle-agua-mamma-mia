@@ -215,7 +215,6 @@ if (state.currentTab === 'dashboard') {
 
 } else if (state.currentTab === 'requisicoes') {
   carregarRequisicoes();
-}
 
 } else if (state.currentTab === 'configuracoes') {
   renderConfiguracoesTab();
