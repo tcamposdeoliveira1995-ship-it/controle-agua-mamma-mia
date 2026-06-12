@@ -379,6 +379,9 @@ function carregarRequisicoes() {
   }
 
 }
+function updateAppSelectors() {
+  console.log('updateAppSelectors executado');
+}
 // ================= RENDERIZADORES DE ABAS =================
 
 /**
