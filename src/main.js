@@ -213,8 +213,7 @@ if (state.currentTab === 'dashboard') {
 } else if (state.currentTab === 'perdas') {
   // futuro módulo perdas
 
-// ================= MÓDULO OS =================
-else if (state.currentTab === 'requisicoes') {
+} else if (state.currentTab === 'requisicoes') {
   carregarRequisicoes();
 }
 
