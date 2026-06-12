@@ -1265,11 +1265,17 @@ async function carregarOS() {
       col.trim().replace(/"/g, '').toUpperCase() === 'STATUS'
     );
 
-    console.log('Indice STATUS:', indiceStatus);
+    const indicePrioridade = cabecalho.findIndex(col =>
+      col.trim().replace(/"/g, '').toUpperCase() === 'PRIORIDADE'
+    );
 
     let abertas = 0;
     let aguardando = 0;
     let concluidas = 0;
+
+    let criticas = 0;
+    let altas = 0;
+    let baixas = 0;
 
     for (let i = 1; i < linhas.length; i++) {
 
@@ -1279,9 +1285,35 @@ async function carregarOS() {
         colunas[indiceStatus] || ''
       ).trim().replace(/"/g, '').toUpperCase();
 
-      if (status === 'ABERTO') abertas++;
+      const prioridade = (
+        colunas[indicePrioridade] || ''
+      ).trim().replace(/"/g, '').toUpperCase();
 
-      if (status === 'AGUARDANDO PEÇA') aguardando++;
+      // STATUS
+
+      if (status === 'ABERTO') {
+
+        abertas++;
+
+        if (
+          prioridade === 'CRÍTICA' ||
+          prioridade === 'CRITICA'
+        ) {
+          criticas++;
+        }
+
+        if (prioridade === 'ALTA') {
+          altas++;
+        }
+
+        if (prioridade === 'BAIXA') {
+          baixas++;
+        }
+      }
+
+      if (status === 'AGUARDANDO PEÇA') {
+        aguardando++;
+      }
 
       if (
         status === 'CONCLUÍDO' ||
@@ -1291,6 +1323,8 @@ async function carregarOS() {
       }
     }
 
+    // CARDS EXISTENTES
+
     const openCard = document.getElementById('os-open-count');
     const waitingCard = document.getElementById('os-waiting-count');
     const closedCard = document.getElementById('os-closed-count');
@@ -1299,9 +1333,23 @@ async function carregarOS() {
     if (waitingCard) waitingCard.textContent = aguardando;
     if (closedCard) closedCard.textContent = concluidas;
 
+    // NOVOS CARDS
+
+    const criticalCard = document.getElementById('os-critical-count');
+    const highCard = document.getElementById('os-high-count');
+    const lowCard = document.getElementById('os-low-count');
+
+    if (criticalCard) criticalCard.textContent = criticas;
+    if (highCard) highCard.textContent = altas;
+    if (lowCard) lowCard.textContent = baixas;
+
     console.log('OS Abertas:', abertas);
     console.log('OS Aguardando:', aguardando);
-    console.log('OS Concluidas:', concluidas);
+    console.log('OS Concluídas:', concluidas);
+
+    console.log('OS Críticas:', criticas);
+    console.log('OS Altas:', altas);
+    console.log('OS Baixas:', baixas);
 
   } catch (error) {
 
