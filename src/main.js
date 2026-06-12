@@ -224,7 +224,6 @@ if (state.currentTab === 'dashboard') {
   if (typeof lucide !== 'undefined') {
     lucide.createIcons();
   }
-}
 // ================= MÓDULO REQUISIÇÕES =================
 
 function carregarRequisicoes() {
