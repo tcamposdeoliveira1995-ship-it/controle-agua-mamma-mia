@@ -6,37 +6,62 @@
 @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap');
 
 :root {
-  --bg-primary: #070a13;
-  --bg-secondary: #0e1326;
-  --card-bg: rgba(18, 25, 47, 0.65);
-  --card-border: rgba(255, 255, 255, 0.06);
-  --card-border-hover: rgba(59, 130, 246, 0.25);
-  
-  --text-primary: #f3f4f6;
-  --text-secondary: #9ca3af;
-  --text-muted: #6b7280;
-  
-  --color-blue: #3b82f6;
-  --color-green: #10b981;
-  --color-orange: #f59e0b;
-  --color-red: #ef4444;
-  --color-purple: #8b5cf6;
-  --color-magenta: #ec4899;
-  
+
+  --bg-primary: #f4efe8;
+  --bg-secondary: #ebe3d7;
+
+  --card-bg: rgba(255, 255, 255, 0.92);
+  --card-border: rgba(183, 155, 108, 0.20);
+  --card-border-hover: rgba(183, 155, 108, 0.45);
+
+  --text-primary: #4b433c;
+  --text-secondary: #7b6f63;
+  --text-muted: #a09284;
+
+  --color-blue: #b79b6c;
+  --color-green: #8f9b72;
+  --color-orange: #d6aa5f;
+  --color-red: #c07a6c;
+  --color-purple: #b79b6c;
+  --color-magenta: #c7a27c;
+
   /* Gradientes */
-  --grad-primary: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%);
-  --grad-success: linear-gradient(135deg, #10b981 0%, #059669 100%);
-  --grad-warning: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
-  --grad-danger: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
-  --grad-card: linear-gradient(135deg, rgba(255, 255, 255, 0.05) 0%, rgba(255, 255, 255, 0.01) 100%);
-  
-  --font-main: 'Outfit', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+
+  --grad-primary:
+  linear-gradient(135deg, #b79b6c 0%, #d8c09a 100%);
+
+  --grad-success:
+  linear-gradient(135deg, #8f9b72 0%, #aeb996 100%);
+
+  --grad-warning:
+  linear-gradient(135deg, #d6aa5f 0%, #e4c889 100%);
+
+  --grad-danger:
+  linear-gradient(135deg, #c07a6c 0%, #d8a095 100%);
+
+  --grad-card:
+  linear-gradient(
+    135deg,
+    rgba(255,255,255,0.95) 0%,
+    rgba(248,245,240,0.90) 100%
+  );
+
+  --font-main:
+  'Outfit',
+  -apple-system,
+  BlinkMacSystemFont,
+  "Segoe UI",
+  Roboto,
+  sans-serif;
+
+  --transition-smooth:
+  all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+
   --border-radius-lg: 16px;
   --border-radius-md: 10px;
   --border-radius-sm: 6px;
-}
 
+}
 /* Reset Geral */
 * {
   box-sizing: border-box;
