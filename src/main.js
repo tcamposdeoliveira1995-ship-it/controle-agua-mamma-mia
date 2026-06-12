@@ -1399,7 +1399,9 @@ async function carregarOS() {
     console.log('OS Altas:', altas);
     console.log('OS Baixas:', baixas);
 
-  } catch (error) {
+  } 
+  
+    catch (error) {
 
     console.error('Erro ao carregar OS:', error);
 
