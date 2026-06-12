@@ -318,9 +318,27 @@
 
   <section class="panel-card">
 
-    <div class="panel-header">
-      <h2>📋 Últimas Ordens de Serviço</h2>
-    </div>
+   <div class="panel-header">
+
+  <h2>📋 Últimas Ordens de Serviço</h2>
+
+  <select id="os-filter-status" class="filter-select">
+
+    <option value="TODOS">Todos</option>
+
+    <option value="ABERTO">Abertos</option>
+
+    <option value="AGUARDANDO PEÇA">
+      Aguardando Peça
+    </option>
+
+    <option value="CONCLUÍDO">
+      Concluídas
+    </option>
+
+  </select>
+
+</div>
 
     <table class="modern-table">
 
@@ -356,12 +374,59 @@
 
 <!-- ================= ABA 4: REQUISIÇÕES ================= -->
 <div id="tab-content-requisicoes" class="tab-panel">
+
   <section class="panel-card">
+
     <div class="panel-header">
-      <h2>📦 Requisições</h2>
+      <h2>📦 Central de Requisições</h2>
     </div>
-    <p>Módulo em desenvolvimento.</p>
+
+    <div class="dashboard-grid">
+
+      <div class="kpi-card requisicao-card" id="btn-limpeza">
+
+        <div class="kpi-value">
+          🧹
+        </div>
+
+        <span class="kpi-label">
+          Limpeza e EPI
+        </span>
+
+        <p style="margin-top:10px;color:var(--text-muted);">
+          Materiais de limpeza, EPIs e utilidades.
+        </p>
+
+      </div>
+
+      <div class="kpi-card requisicao-card" id="btn-mp">
+
+        <div class="kpi-value">
+          🥩
+        </div>
+
+        <span class="kpi-label">
+          MP e Recheios
+        </span>
+
+        <p style="margin-top:10px;color:var(--text-muted);">
+          Matéria-prima e recheios.
+        </p>
+
+      </div>
+
+    </div>
+
   </section>
+
+  <section class="panel-card" id="requisicoes-conteudo">
+
+    <div class="panel-header">
+      <h2>Selecione um módulo</h2>
+    </div>
+
+  </section>
+
 </div>
       <!-- ================= ABA 2: MODO DIRETORIA ================= -->
       <div id="tab-content-diretoria" class="tab-panel">

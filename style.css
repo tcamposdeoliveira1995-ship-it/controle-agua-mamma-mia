@@ -1459,3 +1459,11 @@ footer {
     page-break-inside: avoid;
   }
 }
+.requisicao-card{
+cursor:pointer;
+transition:.3s;
+}
+
+.requisicao-card:hover{
+transform:translateY(-4px);
+}
