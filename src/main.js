@@ -1404,6 +1404,13 @@ async function carregarPerdas() {
     const csv = await response.text();
 
     const linhas = csv.split('\n');
+    const cabecalho = linhas[0].split(',');
+
+  console.log('CABECALHO PERDAS');
+  console.log(cabecalho);
+
+  console.log('LINHA 1');
+  console.log(linhas[1]);
 
     let totalPerdas = linhas.length - 1;
 
