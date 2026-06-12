@@ -1474,7 +1474,17 @@ const maiorMotivo =
 
 const produtoMaisPerdido =
   rankingProdutos[0]?.[0] || '-';
+const labelsMotivos =
+  rankingMotivos.slice(0, 10).map(item => item[0]);
 
+const valoresMotivos =
+  rankingMotivos.slice(0, 10).map(item => item[1]);
+
+const labelsProdutos =
+  rankingProdutos.slice(0, 10).map(item => item[0]);
+
+const valoresProdutos =
+  rankingProdutos.slice(0, 10).map(item => item[1]);
 conteudo.innerHTML = `
   <div class="panel-header">
     <h2>📉 Gestão de Perdas YUKA</h2>
@@ -1526,15 +1536,10 @@ if (ctxMotivos) {
   new Chart(ctxMotivos, {
     type: 'bar',
     data: {
-      labels: [
-        'Embalagem',
-        'Produção',
-        'Expedição',
-        'Outro'
-      ],
+      labels: labelsMotivos,
       datasets: [{
         label: 'Perdas',
-        data: [2015, 833, 312, 132]
+        data: valoresMotivos
       }]
     },
     options: {
@@ -1552,15 +1557,10 @@ if (ctxProdutos) {
   new Chart(ctxProdutos, {
     type: 'bar',
     data: {
-      labels: [
-        'Pão de Queijo',
-        'Pizza Vencida',
-        'Quadradinho 4 Queijos',
-        'Esfiha'
-      ],
+      labels: labelsProdutos,
       datasets: [{
         label: 'Perdas',
-        data: [2000, 260, 150, 30]
+        data: valoresProdutos
       }]
     },
     options: {
