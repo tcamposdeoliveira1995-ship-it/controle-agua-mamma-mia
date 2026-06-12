@@ -1285,11 +1285,16 @@ async function carregarOS() {
       col.trim().replace(/"/g, '').toUpperCase() === 'PDF_OS'
     );
 
-    const tableBody = document.getElementById('os-table-body');
+    const tableBody =
+     document.getElementById('os-table-body');
 
-    if (tableBody) {
-      tableBody.innerHTML = '';
-    }
+  const filtroStatus =
+  document.getElementById('os-filter-status')
+  ?.value || 'TODOS';
+
+  if (tableBody) {
+  tableBody.innerHTML = '';
+}
 
     let abertas = 0;
     let aguardando = 0;
