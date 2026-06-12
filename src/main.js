@@ -1245,11 +1245,6 @@ function submitAdminSettings() {
   showToast('Configurações salvas e aplicadas com sucesso!', 'success');
 }
 
-// ================= MÓDULO OS =================
-
-const OS_CSV_URL =
-'https://docs.google.com/spreadsheets/d/e/2PACX-1vSyKnl6d4trSwtVru3JQIcoqb_h2gTHKBqn-3zXM1JW7MTzm_Xj01UJh62eDPDNEOYjisMWrGrWfFJt/pub?gid=1728678619&single=true&output=csv';
-
 async function carregarOS() {
 
   try {
@@ -1270,20 +1265,26 @@ async function carregarOS() {
     );
 
     const indiceOS = cabecalho.findIndex(col =>
-  col.trim().replace(/"/g, '').toUpperCase() === 'OS'
-);
+      col.trim().replace(/"/g, '').toUpperCase() === 'OS'
+    );
 
-const indiceUnidade = cabecalho.findIndex(col =>
-  col.trim().replace(/"/g, '').toUpperCase() === 'UNIDADE'
-);
+    const indiceUnidade = cabecalho.findIndex(col =>
+      col.trim().replace(/"/g, '').toUpperCase() === 'UNIDADE'
+    );
 
-const indiceEquipamento = cabecalho.findIndex(col =>
-  col.trim().replace(/"/g, '').toUpperCase() === 'EQUIPAMENTO OU LOCAL AFETADO'
-);
+    const indiceEquipamento = cabecalho.findIndex(col =>
+      col.trim().replace(/"/g, '').toUpperCase() === 'EQUIPAMENTO OU LOCAL AFETADO'
+    );
 
-const indicePDF = cabecalho.findIndex(col =>
-  col.trim().replace(/"/g, '').toUpperCase() === 'PDF_OS'
-);
+    const indicePDF = cabecalho.findIndex(col =>
+      col.trim().replace(/"/g, '').toUpperCase() === 'PDF_OS'
+    );
+
+    const tableBody = document.getElementById('os-table-body');
+
+    if (tableBody) {
+      tableBody.innerHTML = '';
+    }
 
     let abertas = 0;
     let aguardando = 0;
@@ -1305,7 +1306,12 @@ const indicePDF = cabecalho.findIndex(col =>
         colunas[indicePrioridade] || ''
       ).trim().replace(/"/g, '').toUpperCase();
 
-      // STATUS
+      const os = (colunas[indiceOS] || '').replace(/"/g, '');
+      const unidade = (colunas[indiceUnidade] || '').replace(/"/g, '');
+      const equipamento = (colunas[indiceEquipamento] || '').replace(/"/g, '');
+      const pdf = (colunas[indicePDF] || '').replace(/"/g, '');
+
+      // CONTADORES
 
       if (status === 'ABERTO') {
 
@@ -1337,7 +1343,63 @@ const indicePDF = cabecalho.findIndex(col =>
       ) {
         concluidas++;
       }
+
+      // TABELA
+
+      if (tableBody) {
+
+        tableBody.innerHTML += `
+          <tr>
+            <td>${os}</td>
+            <td>${status}</td>
+            <td>${prioridade}</td>
+            <td>${unidade}</td>
+            <td>${equipamento}</td>
+            <td>
+              ${
+                pdf
+                  ? `<a href="${pdf}" target="_blank">📄 Abrir</a>`
+                  : '-'
+              }
+            </td>
+          </tr>
+        `;
+      }
+
     }
+
+    // CARDS
+
+    const openCard = document.getElementById('os-open-count');
+    const waitingCard = document.getElementById('os-parts-count');
+    const closedCard = document.getElementById('os-closed-count');
+
+    if (openCard) openCard.textContent = abertas;
+    if (waitingCard) waitingCard.textContent = aguardando;
+    if (closedCard) closedCard.textContent = concluidas;
+
+    const criticalCard = document.getElementById('os-critical-count');
+    const highCard = document.getElementById('os-high-count');
+    const lowCard = document.getElementById('os-low-count');
+
+    if (criticalCard) criticalCard.textContent = criticas;
+    if (highCard) highCard.textContent = altas;
+    if (lowCard) lowCard.textContent = baixas;
+
+    console.log('OS Abertas:', abertas);
+    console.log('OS Aguardando:', aguardando);
+    console.log('OS Concluídas:', concluidas);
+    console.log('OS Críticas:', criticas);
+    console.log('OS Altas:', altas);
+    console.log('OS Baixas:', baixas);
+
+  } catch (error) {
+
+    console.error('Erro ao carregar OS:', error);
+
+  }
+
+}    
 
     // CARDS EXISTENTES
 
