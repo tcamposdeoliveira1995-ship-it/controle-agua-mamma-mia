@@ -299,8 +299,6 @@ conteudo.innerHTML = `
 
   };
 
-}
-
  if (btnMP) {
 
   btnMP.onclick = async () => {
