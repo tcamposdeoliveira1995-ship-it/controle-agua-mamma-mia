@@ -1261,8 +1261,6 @@ async function carregarOS() {
 
     const cabecalho = linhas[0].split(',');
 
-    console.log(cabecalho);
-
     const indiceStatus = cabecalho.findIndex(col =>
       col.trim().replace(/"/g, '').toUpperCase() === 'STATUS'
     );
@@ -1281,13 +1279,9 @@ async function carregarOS() {
         colunas[indiceStatus] || ''
       ).trim().replace(/"/g, '').toUpperCase();
 
-      if (status === 'ABERTO') {
-        abertas++;
-      }
+      if (status === 'ABERTO') abertas++;
 
-      if (status === 'AGUARDANDO PEÇA') {
-        aguardando++;
-      }
+      if (status === 'AGUARDANDO PEÇA') aguardando++;
 
       if (
         status === 'CONCLUÍDO' ||
@@ -1295,23 +1289,19 @@ async function carregarOS() {
       ) {
         concluidas++;
       }
-
     }
 
-    document.getElementById('os-open-count').textContent = abertas;
+    const openCard = document.getElementById('os-open-count');
+    const waitingCard = document.getElementById('os-waiting-count');
+    const closedCard = document.getElementById('os-closed-count');
 
-    const waitingCard =
-      document.getElementById('os-waiting-count');
-
-    if (waitingCard) {
-      waitingCard.textContent = aguardando;
-    }
-
-    document.getElementById('os-closed-count').textContent = concluidas;
+    if (openCard) openCard.textContent = abertas;
+    if (waitingCard) waitingCard.textContent = aguardando;
+    if (closedCard) closedCard.textContent = concluidas;
 
     console.log('OS Abertas:', abertas);
-    console.log('OS Aguardando Peça:', aguardando);
-    console.log('OS Concluídas:', concluidas);
+    console.log('OS Aguardando:', aguardando);
+    console.log('OS Concluidas:', concluidas);
 
   } catch (error) {
 
