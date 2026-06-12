@@ -341,6 +341,12 @@ console.log(linhas[3]);
 console.log('LINHA 4');
 console.log(linhas[4]);
 
+console.log('LINHA 10');
+console.log(linhas[10]);
+
+console.log('LINHA 20');
+console.log(linhas[20]);
+
 let yuka = 0;
 let tc = 0;
 
