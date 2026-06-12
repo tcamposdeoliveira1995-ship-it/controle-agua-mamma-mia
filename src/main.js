@@ -1261,8 +1261,12 @@ async function carregarOS() {
 
     const cabecalho = linhas[0].split(',');
 
+    console.log(cabecalho);
+
     const indiceStatus = cabecalho.findIndex(col =>
       col.trim().toUpperCase() === 'STATUS'
+
+    console.log('Indice STATUS:', indiceStatus);                                        
     );
 
     let abertas = 0;
