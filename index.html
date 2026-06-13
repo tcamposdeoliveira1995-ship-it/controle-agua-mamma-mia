@@ -215,47 +215,7 @@
           </section>
         </div>
 
-        <!-- PAINEL DE AÇÕES E HISTÓRICO DE LEITURAS -->
-        <section class="history-section" aria-label="Histórico de Leituras">
-          <div class="panel-header" style="margin-bottom: 1rem;">
-            <h2><i data-lucide="history" style="color: var(--color-blue);"></i> Lançamentos do Ciclo</h2>
-            <div style="display: flex; gap: 0.5rem;">
-              <button id="btn-google-sheets-import" class="btn btn-secondary" type="button"><i data-lucide="table"></i> Importar do Google Sheets</button>
-              <button id="btn-open-reading-modal-v2" class="btn btn-primary" type="button"><i data-lucide="plus"></i> Nova Leitura</button>
-              <button id="btn-open-csv-modal-v2" class="btn btn-secondary" type="button"><i data-lucide="upload-cloud"></i> Importar CSV</button>
-            </div>
-          </div>
-          
-          <div class="filters-row">
-            <div class="filter-group">
-              <i data-lucide="filter" style="width: 14px; color: var(--text-muted);"></i>
-              <select id="filter-meter-v2" class="filter-select">
-                <option value="all">Todos os Hidrômetros</option>
-              </select>
-            </div>
-            <span style="font-size: 0.8rem; color: var(--text-muted); margin-left: auto;" id="table-record-count-v2">0 registros</span>
-          </div>
-
-          <div class="table-responsive">
-            <table>
-              <thead>
-                <tr>
-                  <th>Data / Hora</th>
-                  <th>Hidrômetro (ID / Apelido)</th>
-                  <th>Leitura Acumulada (m³)</th>
-                  <th>Consumo Período (m³)</th>
-                  <th>Ações</th>
-                </tr>
-              </thead>
-              <tbody id="readings-table-body-v2">
-                <!-- Populado dinamicamente -->
-              </tbody>
-            </table>
-          </div>
-        </section>
-
-      </div>
-
+        
 <!-- ---------------- ABA 2: OS ---------------- -->
 <div id="tab-content-os" class="tab-panel">
 
@@ -616,37 +576,84 @@
       <div id="tab-content-configuracoes" class="tab-panel">
         <section class="panel-card">
           <div class="panel-header" style="border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 1rem; margin-bottom: 1.5rem;">
-            <h2><i data-lucide="settings" style="color: var(--color-blue);"></i> Painel Administrativo de Controle</h2>
+            <h2><i data-lucide="settings" style="color: var(--color-blue);"></i>⚙️ Painel Administrativo de Controle</h2>
             <button id="btn-save-admin-settings" class="btn btn-primary" type="button"><i data-lucide="save"></i> Salvar Configurações</button>
           </div>
 
           <form id="form-admin-settings">
+<!-- Informações Gerais -->
+
+<div class="panel-card" style="margin-bottom:20px;">
+
+  <div class="panel-header">
+    <h3>👤 Informações Gerais</h3>
+  </div>
+
+  <p><strong>Responsável:</strong> Thalita Campos</p>
+
+  <p><strong>Contato:</strong> thalita@mammamiasalgados.com.br</p>
+
+</div>
+
+<!-- Formulários Oficiais -->
+
+<div class="panel-card" style="margin-bottom:20px;">
+
+  <div class="panel-header">
+    <h3>📋 Formulários Oficiais</h3>
+  </div>
+
+  <div class="dashboard-grid">
+
+    <div class="kpi-card">
+      <div class="kpi-value">💧</div>
+      <span class="kpi-label">Controle de Água</span>
+    </div>
+
+    <div class="kpi-card">
+      <div class="kpi-value">🔧</div>
+      <span class="kpi-label">Ordem de Serviço</span>
+    </div>
+
+    <div class="kpi-card">
+      <div class="kpi-value">📉</div>
+      <span class="kpi-label">Controle de Perdas</span>
+    </div>
+
+    <div class="kpi-card">
+      <div class="kpi-value">📦</div>
+      <span class="kpi-label">Requisições</span>
+    </div>
+
+  </div>
+
+</div>
             <!-- Grid de Metas -->
             <div class="admin-settings-grid">
               <div class="form-group">
-                <label for="admin-meta-global" class="form-label">Meta Global do Ciclo (m³)</label>
+                <label for="admin-meta-global" class="form-label">Meta Global</label>
                 <input type="number" id="admin-meta-global" class="form-control" step="1" required>
                 <span class="form-help">Consumo máximo somado dos 4 hidrômetros (Padrão: 80 m³).</span>
               </div>
               <div class="form-group">
-                <label for="admin-meta-individual" class="form-label">Meta Individual do Hidrômetro (m³)</label>
+                <label for="admin-meta-individual" class="form-label">Meta Individual</label>
                 <input type="number" id="admin-meta-individual" class="form-control" step="1" required>
                 <span class="form-help">Consumo máximo permitido para cada hidrômetro (Padrão: 20 m³).</span>
               </div>
               <div class="form-group">
-                <label for="admin-alert-threshold" class="form-label">Limite de Alerta de Atenção (%)</label>
+                <label for="admin-alert-threshold" class="form-label">Limite de Alerta</label>
                 <input type="number" id="admin-alert-threshold" class="form-control" step="1" max="100" min="50" required>
                 <span class="form-help">Percentual de uso da meta individual para alertar o painel (Padrão: 75%).</span>
               </div>
               <div class="form-group">
-                <label for="admin-leak-threshold" class="form-label">Limiar de Vazamento Diário (m³)</label>
+                <label for="admin-leak-threshold" class="form-label">Limite de Vazamento</label>
                 <input type="number" id="admin-leak-threshold" class="form-control" step="0.1" required>
                 <span class="form-help">Consumo diário máximo aceitável antes de alertar possível vazamento (Padrão: 3 m³).</span>
               </div>
             </div>
 
             <!-- Cadastro de Hidrômetros / Apelidos / Cores -->
-            <h3 style="font-size: 1.1rem; font-weight: 700; color: white; margin-top: 2rem; margin-bottom: 1rem; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 0.5rem;">Cadastro de Dispositivos (Hidrômetros)</h3>
+            <h3 style="font-size: 1.1rem; font-weight: 700; color: white; margin-top: 2rem; margin-bottom: 1rem; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 0.5rem;">🚰 Cadastro de Hidrômetros</h3>
             
             <div class="hydrometer-settings-list" id="admin-meters-list">
               <!-- Cards dinâmicos de configuração por hidrômetro -->
