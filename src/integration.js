@@ -383,30 +383,32 @@ export function exportToPDF(cycleStats, comparisonStats, trendChartCanvas, compa
     ${chartsHtml}
   `;
 
-  console.log('CONTEÚDO DO ELEMENT:', element.innerHTML.length, element.innerHTML.substring(0, 500));
-  // IMPORTANTE: precisa estar no DOM para o html2canvas renderizar corretamente
-  element.style.position = 'absolute';
+  // IMPORTANTE: precisa estar no DOM e visível para o html2canvas renderizar corretamente
+  element.style.position = 'fixed';
   element.style.top = '0';
-  element.style.left = '-9999px';
-  element.style.width = '210mm';
+  element.style.left = '0';
+  element.style.width = '794px';
+  element.style.zIndex = '99999';
+  element.style.backgroundColor = '#ffffff';
   document.body.appendChild(element);
-
+  
   // Configurações do html2pdf.js
   const opt = {
     margin: 10,
     filename: `mamma_mia_relatorio_agua_${cycleStats.cycleKey}.pdf`,
     image: { type: 'jpeg', quality: 0.98 },
     html2canvas: { scale: 2, useCORS: true, logging: false },
-    jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
   };
- 
   // Executa e gera o PDF, depois remove o elemento temporário
-  html2pdf().from(element).set(opt).save().then(() => {
-    document.body.removeChild(element);
-  }).catch((err) => {
-    console.error('Erro ao gerar PDF:', err);
-    document.body.removeChild(element);
-  });
+  setTimeout(() => {
+    html2pdf().from(element).set(opt).save().then(() => {
+      document.body.removeChild(element);
+    }).catch((err) => {
+      console.error('Erro ao gerar PDF:', err);
+      document.body.removeChild(element);
+    });
+  }, 300);
 }
 
 /**
