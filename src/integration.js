@@ -382,6 +382,23 @@ export function exportToPDF(cycleStats, comparisonStats, trendChartCanvas, compa
     ${footerHtmlText}
     ${chartsHtml}
   `;
+  element.innerHTML = `
+    ${headerHtml}
+    ${statsHtml}
+    ${tableHtml}
+    ${compHtml}
+    ${footerHtmlText}
+    ${chartsHtml}
+  `;
+
+  // IMPORTANTE: precisa estar no DOM para o html2canvas renderizar corretamente
+  element.style.position = 'fixed';
+  element.style.top = '0';
+  element.style.left = '0';
+  element.style.width = '210mm'; // largura A4
+  element.style.zIndex = '-9999';
+  element.style.opacity = '0';
+  document.body.appendChild(element);
 
   // Configurações do html2pdf.js
   const opt = {
@@ -391,9 +408,15 @@ export function exportToPDF(cycleStats, comparisonStats, trendChartCanvas, compa
     html2canvas: { scale: 2, useCORS: true, logging: false },
     jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
   };
-
-  // Executa e gera o PDF
-  html2pdf().from(element).set(opt).save();
+ 
+  // Executa e gera o PDF, depois remove o elemento temporário
+  html2pdf().from(element).set(opt).save().then(() => {
+    document.body.removeChild(element);
+  }).catch((err) => {
+    console.error('Erro ao gerar PDF:', err);
+    document.body.removeChild(element);
+  });
+}
 }
 
 /**
