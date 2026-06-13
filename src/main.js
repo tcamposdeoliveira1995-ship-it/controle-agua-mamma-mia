@@ -1024,6 +1024,7 @@ if (DOM.btnRunCyclesComparison) {
 if (DOM.btnSaveAdminSettings) {
   DOM.btnSaveAdminSettings.addEventListener('click', submitAdminSettings);
 }
+}
 /**
  * Controla navegação entre abas
  */
@@ -1528,9 +1529,6 @@ conteudo.innerHTML = `
     <h3>🏆 Ranking de Produtos Perdidos</h3>
     <canvas id="graficoProdutos"></canvas>
   </div>
-
-`;
-`;
   `;
     
 const ctxMotivos = document.getElementById('graficoMotivos');
