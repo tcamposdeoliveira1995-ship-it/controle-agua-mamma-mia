@@ -1060,6 +1060,7 @@ if (DOM.btnRunCyclesComparison) {
 if (DOM.btnSaveAdminSettings) {
   DOM.btnSaveAdminSettings.addEventListener('click', submitAdminSettings);
 }
+
 // Toggle do menu de formulários de Requisições
   const reqFormToggle = document.getElementById('formularios-requisicoes-toggle');
   const reqFormMenu = document.getElementById('formularios-requisicoes-menu');
@@ -1076,7 +1077,15 @@ if (DOM.btnSaveAdminSettings) {
       }
     });
   }
-  }
+
+// Filtro de Status das Ordens de Serviço (Aba OS)
+const osFilterStatus = document.getElementById('os-filter-status');
+if (osFilterStatus) {
+  osFilterStatus.addEventListener('change', () => {
+    carregarOS();
+  });
+}
+}
 /**
  * Controla navegação entre abas
  */
@@ -1709,7 +1718,7 @@ async function carregarOS() {
       const equipamento = (colunas[indiceEquipamento] || '').replace(/"/g, '');
       const pdf = (colunas[indicePDF] || '').replace(/"/g, '');
 
-      // CONTADORES
+      // CONTADORES (sempre calculados sobre TODOS os registros, independente do filtro)
 
       if (status === 'ABERTO') {
 
@@ -1740,6 +1749,11 @@ async function carregarOS() {
         status === 'CONCLUIDO'
       ) {
         concluidas++;
+      }
+
+      // FILTRO DE STATUS PARA A TABELA
+      if (filtroStatus !== 'TODOS' && status !== filtroStatus) {
+        continue;
       }
 
       // TABELA
