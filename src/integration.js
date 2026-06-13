@@ -48,35 +48,35 @@ export function exportToJSON(readings) {
 export function exportToCSV(readings) {
   const settings = getAppSettings();
   let csvContent = '\uFEFF'; // BOM para Excel abrir acentos em UTF-8 corretamente
-  
+
   // Cabeçalhos do CSV
   csvContent += 'Data;Hidrômetro;Apelido;Leitura Acumulada (m³);Consumo Período (m³);Inicial\r\n';
-  
+
   // Como as leituras estão ordenadas mais recentes primeiro, recalculamos consumos
   // para garantir consistência no relatório
   const sorted = [...readings].sort((a, b) => new Date(a.date) - new Date(b.date));
   const lastIndices = {};
-  
+
   const rows = sorted.map(r => {
     const meterId = r.meterId;
     const meterInfo = settings.hydrometers[meterId] || { alias: 'N/A' };
     let consumption = 0;
-    
+
     if (r.isInitial) {
       consumption = 0;
     } else if (lastIndices[meterId] !== undefined) {
       consumption = Number((r.index - lastIndices[meterId]).toFixed(3));
     }
-    
+
     lastIndices[meterId] = r.index;
-    
+
     const dateFormatted = formatDate(r.date, true);
-    
+
     return `"${dateFormatted}";"${meterId}";"${meterInfo.alias}";${r.index.toString().replace('.', ',')};${consumption.toString().replace('.', ',')};${r.isInitial ? 'Sim' : 'Não'}`;
   });
-  
+
   csvContent += rows.reverse().join('\r\n'); // Mais recente primeiro
-  
+
   const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
   triggerDownload(blob, `mamma_mia_agua_leituras_${getFormattedDateISO()}.csv`);
 }
@@ -90,15 +90,15 @@ export function exportToExcel(readings) {
   }
 
   const settings = getAppSettings();
-  
+
   // 1. Cria aba de Leituras Individuais
   const sorted = [...readings].sort((a, b) => new Date(b.date) - new Date(a.date)); // Mais recente primeiro
   const lastIndices = {};
-  
+
   // Ordena crescente temporariamente para o cálculo do consumo acumulado
   const sortedAsc = [...readings].sort((a, b) => new Date(a.date) - new Date(b.date));
   const consumptionMap = {};
-  
+
   sortedAsc.forEach(r => {
     const meterId = r.meterId;
     let consumption = 0;
@@ -126,7 +126,7 @@ export function exportToExcel(readings) {
 
   const wb = XLSX.utils.book_new();
   const wsReadings = XLSX.utils.json_to_sheet(wsDataReadings);
-  
+
   // Auto-ajusta largura das colunas
   const wscols = [
     {wch: 20}, // Data
@@ -138,13 +138,13 @@ export function exportToExcel(readings) {
     {wch: 20}  // Tipo
   ];
   wsReadings['!cols'] = wscols;
-  
+
   XLSX.utils.book_append_sheet(wb, wsReadings, 'Histórico de Leituras');
 
   // 2. Cria aba de Resumo Administrativo dos Hidrômetros
   const wsDataSummary = Object.keys(settings.hydrometers).map(id => {
     const info = settings.hydrometers[id];
-    
+
     // Calcula consumo total histórico
     const meterReadings = readings.filter(r => r.meterId === id && !r.isInitial);
     const totalConsumed = meterReadings.reduce((sum, r) => {
@@ -179,19 +179,13 @@ export function exportToExcel(readings) {
 }
 
 /**
- * Exporta um PDF Executivo Formatado contendo Logo, KPIs, Dados dos Hidrômetros e Gráficos ativos
+ * Exporta um Relatório Executivo via impressão nativa do navegador (Salvar como PDF)
  */
 export function exportToPDF(cycleStats, comparisonStats, trendChartCanvas, comparisonChartCanvas) {
-  if (typeof html2pdf === 'undefined') {
-    // Fallback para impressão nativa caso a CDN falhe ou esteja sem internet
-    window.print();
-    return;
-  }
-
   // Captura as imagens dos gráficos em Base64
   let trendImgSrc = '';
   let compImgSrc = '';
-  
+
   try {
     if (trendChartCanvas) {
       trendImgSrc = trendChartCanvas.toDataURL('image/png');
@@ -206,15 +200,6 @@ export function exportToPDF(cycleStats, comparisonStats, trendChartCanvas, compa
   const settings = getAppSettings();
   const emissionDate = formatDate(new Date(), true);
 
-  // Cria um elemento temporário com a estrutura e estilo do PDF
-  const element = document.createElement('div');
-  element.style.padding = '30px';
-  element.style.color = '#111827';
-  element.style.background = '#ffffff';
-  element.style.fontFamily = "'Segoe UI', Roboto, Helvetica, Arial, sans-serif";
-  element.style.fontSize = '12px';
-  element.style.lineHeight = '1.4';
-
   // Cabeçalho da Empresa
   let headerHtml = `
     <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #3b82f6; padding-bottom: 15px; margin-bottom: 20px;">
@@ -226,7 +211,7 @@ export function exportToPDF(cycleStats, comparisonStats, trendChartCanvas, compa
         <p style="font-size: 10px; color: #4b5563; margin: 2px 0 0 0; text-transform: uppercase; letter-spacing: 1.5px; font-weight: 600;">Mamma Mia Control - Gestão de Consumo de Água</p>
       </div>
       <div style="text-align: right;">
-        <h2 style="font-size: 11px; color: #1f2937; margin: 0; font-weight: 700;">RELATÓRIO EXECUATIVO DE CONSUMO</h2>
+        <h2 style="font-size: 11px; color: #1f2937; margin: 0; font-weight: 700;">RELATÓRIO EXECUTIVO DE CONSUMO</h2>
         <p style="font-size: 9px; color: #6b7280; margin: 2px 0 0 0;">Emitido em: ${emissionDate}</p>
         <p style="font-size: 10px; color: #2563eb; margin: 2px 0 0 0; font-weight: 700;">Ciclo Analisado: ${cycleStats.label}</p>
       </div>
@@ -236,7 +221,7 @@ export function exportToPDF(cycleStats, comparisonStats, trendChartCanvas, compa
   // Resumo de Metas do Ciclo (Card Executivo)
   const isEconomy = cycleStats.globalBalance >= 0;
   const saldoColor = isEconomy ? '#10b981' : '#ef4444';
-  
+
   let statsHtml = `
     <h3 style="font-size: 13px; font-weight: 700; color: #1e3a8a; margin-top: 0; margin-bottom: 10px; text-transform: uppercase;">1. Resumo Executivo do Ciclo</h3>
     <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 25px;">
@@ -271,9 +256,8 @@ export function exportToPDF(cycleStats, comparisonStats, trendChartCanvas, compa
     const m = cycleStats.meters[id];
     const indicatorColor = m.status === 'danger' ? '#ef4444' : (m.status === 'warning' ? '#f59e0b' : '#10b981');
     const indicatorText = m.status === 'danger' ? 'Excedido' : (m.status === 'warning' ? 'Alerta' : 'Normal');
-    
-    // Cálculo do indicador Faltam X m³ para Meta
-    const textFaltam = m.balance >= 0 
+
+    const textFaltam = m.balance >= 0
       ? `Faltam ${m.balance.toFixed(2)} m³`
       : `Excedeu em ${Math.abs(m.balance).toFixed(2)} m³`;
 
@@ -317,10 +301,9 @@ export function exportToPDF(cycleStats, comparisonStats, trendChartCanvas, compa
   // Comparação com ciclo anterior
   let compHtml = '';
   if (comparisonStats && comparisonStats.prevLabel !== 'N/A') {
-    const compLabel = comparisonStats.isEconomy ? 'Economia no Ciclo' : 'Aumento no Consumo';
     const compColor = comparisonStats.isEconomy ? '#10b981' : '#ef4444';
     const compSign = comparisonStats.isEconomy ? '-' : '+';
-    
+
     compHtml = `
       <h3 style="font-size: 13px; font-weight: 700; color: #1e3a8a; margin-top: 0; margin-bottom: 10px; text-transform: uppercase;">3. Comparativo de Consumo entre Períodos</h3>
       <div style="display: flex; gap: 15px; border: 1px solid #e5e7eb; border-radius: 6px; padding: 12px; margin-bottom: 25px; background: #fafafa;">
@@ -342,7 +325,7 @@ export function exportToPDF(cycleStats, comparisonStats, trendChartCanvas, compa
     `;
   }
 
-  // Gráficos como Imagem no PDF
+  // Gráficos como Imagem
   let chartsHtml = '';
   if (trendImgSrc || compImgSrc) {
     chartsHtml = `
@@ -366,7 +349,7 @@ export function exportToPDF(cycleStats, comparisonStats, trendChartCanvas, compa
     `;
   }
 
-  // Rodapé do PDF
+  // Rodapé
   let footerHtmlText = `
     <div style="border-top: 1px solid #d1d5db; padding-top: 10px; margin-top: 30px; display: flex; justify-content: space-between; font-size: 8px; color: #9ca3af; font-weight: 500;">
       <span>Mamma Mia Water System v2.0 - Relatório Operacional Automatizado</span>
@@ -374,41 +357,48 @@ export function exportToPDF(cycleStats, comparisonStats, trendChartCanvas, compa
     </div>
   `;
 
-  element.innerHTML = `
-    ${headerHtml}
-    ${statsHtml}
-    ${tableHtml}
-    ${compHtml}
-    ${footerHtmlText}
-    ${chartsHtml}
-  `;
+  // Cria container de impressão
+  const printContainer = document.createElement('div');
+  printContainer.id = 'pdf-print-container';
+  printContainer.style.padding = '30px';
+  printContainer.style.color = '#111827';
+  printContainer.style.background = '#ffffff';
+  printContainer.style.fontFamily = "'Segoe UI', Roboto, Helvetica, Arial, sans-serif";
+  printContainer.style.fontSize = '12px';
+  printContainer.style.lineHeight = '1.4';
+  printContainer.innerHTML = `${headerHtml}${statsHtml}${tableHtml}${compHtml}${footerHtmlText}${chartsHtml}`;
 
-  // IMPORTANTE: precisa estar no DOM e visível para o html2canvas renderizar corretamente
-  element.style.position = 'fixed';
-  element.style.top = '0';
-  element.style.left = '0';
-  element.style.width = '794px';
-  element.style.zIndex = '99999';
-  element.style.backgroundColor = '#ffffff';
-  document.body.appendChild(element);
-  
-  // Configurações do html2pdf.js
-  const opt = {
-    margin: 10,
-    filename: `mamma_mia_relatorio_agua_${cycleStats.cycleKey}.pdf`,
-    image: { type: 'jpeg', quality: 0.98 },
-    html2canvas: { scale: 2, useCORS: true, logging: false },
-        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
-  };
-  // Executa e gera o PDF, depois remove o elemento temporário
+  document.body.appendChild(printContainer);
+
+  // Cria estilo de impressão que oculta tudo, exceto o printContainer
+  const printStyle = document.createElement('style');
+  printStyle.id = 'pdf-print-style';
+  printStyle.innerHTML = `
+    @media print {
+      body * {
+        visibility: hidden !important;
+      }
+      #pdf-print-container, #pdf-print-container * {
+        visibility: visible !important;
+      }
+      #pdf-print-container {
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 100%;
+      }
+    }
+  `;
+  document.head.appendChild(printStyle);
+
+  // Aciona a impressão
+  window.print();
+
+  // Limpeza após a impressão (timeout garante que o diálogo já processou)
   setTimeout(() => {
-    html2pdf().from(element).set(opt).save().then(() => {
-      document.body.removeChild(element);
-    }).catch((err) => {
-      console.error('Erro ao gerar PDF:', err);
-      document.body.removeChild(element);
-    });
-  }, 300);
+    document.body.removeChild(printContainer);
+    document.head.removeChild(printStyle);
+  }, 1000);
 }
 
 /**
