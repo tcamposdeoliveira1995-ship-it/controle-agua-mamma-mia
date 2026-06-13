@@ -916,57 +916,92 @@ function initEventListeners() {
   });
 
   // Header Selector Change
+ if (DOM.cycleSelect) {
   DOM.cycleSelect.addEventListener('change', (e) => {
     state.selectedCycleKey = e.target.value;
     refreshApp();
   });
+}
 
   // Filtros Histórico
-  DOM.filterMeter.addEventListener('change', (e) => {
-    state.filters.meter = e.target.value;
-    renderReadingsTable();
-    if (typeof lucide !== 'undefined') lucide.createIcons();
-  });
+  if (DOM.filterMeter) {
+    DOM.filterMeter.addEventListener('change', (e) => {
+      state.filters.meter = e.target.value;
+      renderReadingsTable();
+      if (typeof lucide !== 'undefined') lucide.createIcons();
+    });
+  }
 
   // Nova Leitura Modal controls
-  DOM.btnOpenReadingModal.addEventListener('click', () => {
-    resetReadingFormDate();
-    updateLastReadingHelp();
-    openModal(DOM.modalReading);
-  });
-  DOM.btnCloseReadingModal.addEventListener('click', () => closeModal(DOM.modalReading));
-  DOM.btnCancelReading.addEventListener('click', () => closeModal(DOM.modalReading));
-  DOM.inputMeter.addEventListener('change', updateLastReadingHelp);
+  if (DOM.btnOpenReadingModal) {
+    DOM.btnOpenReadingModal.addEventListener('click', () => {
+      resetReadingFormDate();
+      updateLastReadingHelp();
+      openModal(DOM.modalReading);
+    });
+  }
 
-  DOM.formReading.addEventListener('submit', (e) => {
-    e.preventDefault();
-    submitReadingForm();
-  });
+  if (DOM.btnCloseReadingModal) {
+    DOM.btnCloseReadingModal.addEventListener('click', () => closeModal(DOM.modalReading));
+  }
+
+  if (DOM.btnCancelReading) {
+    DOM.btnCancelReading.addEventListener('click', () => closeModal(DOM.modalReading));
+  }
+
+  if (DOM.inputMeter) {
+    DOM.inputMeter.addEventListener('change', updateLastReadingHelp);
+  }
+
+  if (DOM.formReading) {
+    DOM.formReading.addEventListener('submit', (e) => {
+      e.preventDefault();
+      submitReadingForm();
+    });
+  }
 
   // CSV Modal controls
-  DOM.btnOpenCsvModal.addEventListener('click', () => {
-    DOM.csvErrorsContainer.style.display = 'none';
-    DOM.csvFileInput.value = '';
-    openModal(DOM.modalCsv);
-  });
-  DOM.btnCloseCsvModal.addEventListener('click', () => closeModal(DOM.modalCsv));
-  DOM.btnCloseCsvModalFooter.addEventListener('click', () => closeModal(DOM.modalCsv));
-  
-  DOM.csvDragZone.addEventListener('click', () => DOM.csvFileInput.click());
-  DOM.csvFileInput.addEventListener('change', handleCsvFileSelect);
-  DOM.csvDragZone.addEventListener('dragover', (e) => {
-    e.preventDefault();
-    DOM.csvDragZone.classList.add('dragover');
-  });
-  DOM.csvDragZone.addEventListener('dragleave', () => DOM.csvDragZone.classList.remove('dragover'));
-  DOM.csvDragZone.addEventListener('drop', (e) => {
-    e.preventDefault();
-    DOM.csvDragZone.classList.remove('dragover');
-    if (e.dataTransfer.files.length > 0) {
-      processCsvFile(e.dataTransfer.files[0]);
-    }
-  });
+  if (DOM.btnOpenCsvModal) {
+    DOM.btnOpenCsvModal.addEventListener('click', () => {
+      DOM.csvErrorsContainer.style.display = 'none';
+      DOM.csvFileInput.value = '';
+      openModal(DOM.modalCsv);
+    });
+  }
 
+  if (DOM.btnCloseCsvModal) {
+    DOM.btnCloseCsvModal.addEventListener('click', () => closeModal(DOM.modalCsv));
+  }
+
+  if (DOM.btnCloseCsvModalFooter) {
+    DOM.btnCloseCsvModalFooter.addEventListener('click', () => closeModal(DOM.modalCsv));
+  }
+
+  if (DOM.csvDragZone && DOM.csvFileInput) {
+
+    DOM.csvDragZone.addEventListener('click', () => DOM.csvFileInput.click());
+
+    DOM.csvFileInput.addEventListener('change', handleCsvFileSelect);
+
+    DOM.csvDragZone.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      DOM.csvDragZone.classList.add('dragover');
+    });
+
+    DOM.csvDragZone.addEventListener('dragleave', () => {
+      DOM.csvDragZone.classList.remove('dragover');
+    });
+
+    DOM.csvDragZone.addEventListener('drop', (e) => {
+      e.preventDefault();
+      DOM.csvDragZone.classList.remove('dragover');
+
+      if (e.dataTransfer.files.length > 0) {
+        processCsvFile(e.dataTransfer.files[0]);
+      }
+    });
+
+  }
   // Integração Google Sheets Mock
   DOM.btnGoogleSheetsImport.addEventListener('click', () => {
     alert('Funcionalidade em desenvolvimento.');
