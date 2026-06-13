@@ -3,27 +3,21 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
 <title>Mamma Mia - Controle de Consumo de Água</title>
-
 <meta name="description" content="Sistema web de alta fidelidade para controle, análise e auditoria do consumo de água do restaurante Mamma Mia.">
-
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="logo-mamma-mia.jpg">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <meta name="theme-color" content="#050816">
-
 <link rel="stylesheet" href="style.css">
-
 <script src="https://cdn.jsdelivr.net/npm/chart.js" defer></script>
 <script src="https://unpkg.com/lucide@latest" defer></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js" defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js" defer></script>
-
 </head>
 
 <body>
-	<!-- TELA DE BLOQUEIO -->
+<!-- TELA DE BLOQUEIO -->
 <div id="lock-screen" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: var(--bg-primary); display: flex; align-items: center; justify-content: center; z-index: 9999;">
   <div style="background: var(--card-bg); border: 1px solid var(--card-border); border-radius: var(--border-radius-lg); padding: 2.5rem; max-width: 360px; width: 90%; text-align: center; box-shadow: 0 20px 50px rgba(0,0,0,0.2);">
     <img src="logo-mamma-mia.jpg" alt="Mamma Mia Salgados" style="max-width: 160px; margin-bottom: 1.5rem;">
@@ -33,7 +27,6 @@
     <p id="lock-screen-error" style="color: var(--color-red); font-size: 0.85rem; margin-top: 0.75rem; display: none;">Senha incorreta. Tente novamente.</p>
   </div>
 </div>
-
 <script>
   (function() {
     const SENHA_CORRETA = '30154';
@@ -41,770 +34,387 @@
     const input = document.getElementById('lock-screen-input');
     const btn = document.getElementById('lock-screen-btn');
     const erro = document.getElementById('lock-screen-error');
-
     function tentarEntrar() {
-      if (input.value === SENHA_CORRETA) {
-        lockScreen.style.display = 'none';
-      } else {
-        erro.style.display = 'block';
-        input.value = '';
-        input.focus();
-      }
+      if (input.value === SENHA_CORRETA) { lockScreen.style.display = 'none'; }
+      else { erro.style.display = 'block'; input.value = ''; input.focus(); }
     }
-
     btn.addEventListener('click', tentarEntrar);
-    input.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') tentarEntrar();
-    });
+    input.addEventListener('keydown', (e) => { if (e.key === 'Enter') tentarEntrar(); });
   })();
 </script>
-  <div class="app-container">
-    
-    <!-- HEADER -->
-    <header class="no-print">
-      <div class="logo-section">
-<img
-    src="logo-mamma-mia.jpg"
-    alt="Mamma Mia Salgados"
-    class="logo-real">
-        <div>
-          <div style="display: flex; align-items: baseline; gap: 0.5rem;">
-            <h1>Mamma Mia</h1>
-            </div>
-          <p class="logo-subtitle">Mamma Mia Control - Gestão Inteligente</p>
+
+<div class="app-container">
+  <!-- HEADER -->
+  <header class="no-print">
+    <div class="logo-section">
+      <img src="logo-mamma-mia.jpg" alt="Mamma Mia Salgados" class="logo-real">
+      <div>
+        <div style="display: flex; align-items: baseline; gap: 0.5rem;"><h1>Mamma Mia</h1></div>
+        <p class="logo-subtitle">Mamma Mia Control - Gestão Inteligente</p>
+      </div>
+    </div>
+  </header>
+
+  <!-- NAVEGAÇÃO -->
+  <nav class="navigation-tabs no-print" aria-label="Abas do Sistema">
+    <button class="tab-btn active" data-tab="dashboard"><i data-lucide="droplets"></i>Água</button>
+    <button class="tab-btn" data-tab="os"><i data-lucide="wrench"></i>OS</button>
+    <button class="tab-btn" data-tab="perdas"><i data-lucide="trending-down"></i>Perdas</button>
+    <button class="tab-btn" data-tab="requisicoes"><i data-lucide="package"></i>Requisições</button>
+    <button class="tab-btn" data-tab="operacao"><i data-lucide="clipboard-check"></i>Operação</button>
+    <button class="tab-btn" data-tab="alertas"><i data-lucide="bell-ring"></i>🚨 Alertas</button>
+    <button class="tab-btn" data-tab="configuracoes"><i data-lucide="settings-2"></i>Configurações</button>
+  </nav>
+
+  <main id="app-main-content">
+
+    <!-- ================= ABA: ÁGUA / DASHBOARD ================= -->
+    <div id="tab-content-dashboard" class="tab-panel active">
+      <section class="main-executive-card" aria-label="Meta do Ciclo Atual">
+        <div class="main-exec-header">
+          <h3><span style="font-size: 1.25rem; vertical-align: middle;">🛰</span> META DO CICLO</h3>
+          <span class="main-exec-period" id="main-exec-period-label">07/06/2026 a 06/07/2026</span>
         </div>
-           </div>
-    </header>
+        <div class="main-exec-body">
+          <div class="exec-metric"><span class="exec-label">Meta Total</span><span class="exec-val" id="main-exec-meta">80.00 <span class="exec-unit">m³</span></span></div>
+          <div class="exec-metric"><span class="exec-label">Consumido</span><span class="exec-val" id="main-exec-consumed">0.00 <span class="exec-unit">m³</span></span></div>
+          <div class="exec-metric highlight-success"><span class="exec-label">Saldo para Meta</span><span class="exec-val text-glow-green" id="main-exec-balance">0.00 <span class="exec-unit">m³</span></span></div>
+          <div class="exec-metric"><span class="exec-label">% Utilizado</span><span class="exec-val" id="main-exec-percent">0.0<span class="exec-unit">%</span></span></div>
+          <div class="exec-metric highlight-info"><span class="exec-label">Dias Restantes</span><span class="exec-val" id="main-exec-days-left">0 <span class="exec-unit">dias</span></span></div>
+        </div>
+        <div class="main-exec-progress-track"><div class="main-exec-progress-bar" id="main-exec-progress-bar" style="width: 0%;"></div></div>
+      </section>
 
-    <!-- NAVEGAÇÃO DE ABAS (SPA) -->
-   <nav class="navigation-tabs no-print" aria-label="Abas do Sistema">
+      <section class="kpi-grid" style="margin-bottom: 2rem;" aria-label="Indicadores de Gestão">
+        <div class="kpi-card" id="kpi-alerts-v2">
+          <div class="kpi-label">Hidrômetros em Alerta</div>
+          <div class="kpi-value" id="val-alerts-v2">0</div>
+          <div class="kpi-subtext" id="val-alerts-subtext-v2">Nenhum hidrômetro crítico</div>
+        </div>
+        <div class="kpi-card"><div class="kpi-label">Consumo Médio Geral</div><div class="kpi-value" id="val-avg-general">0.00 <span class="unit">m³/d</span></div><div class="kpi-subtext">Média somada diária</div></div>
+        <div class="kpi-card"><div class="kpi-label">Maior Consumidor</div><div class="kpi-value" id="val-highest-consumer" style="font-size: 1.4rem; padding-top: 0.15rem; color: var(--color-orange);">--</div><div class="kpi-subtext" id="val-highest-consumer-sub">Consumo máximo registrado</div></div>
+        <div class="kpi-card"><div class="kpi-label">Menor Consumidor</div><div class="kpi-value" id="val-lowest-consumer" style="font-size: 1.4rem; padding-top: 0.15rem; color: var(--color-green);">--</div><div class="kpi-subtext" id="val-lowest-consumer-sub">Consumo mínimo registrado</div></div>
+        <div class="kpi-card"><div class="kpi-label">Projeção Final Global</div><div class="kpi-value" id="val-proj-global">0.00 <span class="unit">m³</span></div><div class="kpi-subtext" id="val-proj-global-sub">Estima consumo até dia 06</div></div>
+        <div class="kpi-card"><div class="kpi-label">Economia Projetada</div><div class="kpi-value" id="val-economy-projected">0.00 <span class="unit">m³</span></div><div class="kpi-subtext" id="val-economy-projected-sub">Economia estimada do ciclo</div></div>
+      </section>
 
-  <button class="tab-btn active" data-tab="dashboard">
-    <i data-lucide="droplets"></i>Água
-  </button>
-
-  <button class="tab-btn" data-tab="os">
-    <i data-lucide="wrench"></i>OS
-  </button>
-
-  <button class="tab-btn" data-tab="perdas">
-    <i data-lucide="trending-down"></i>Perdas
-  </button>
-
-  <button class="tab-btn" data-tab="requisicoes">
-    <i data-lucide="package"></i>Requisições
-  </button>
-
-  <button class="tab-btn" data-tab="operacao">
-    <i data-lucide="clipboard-check"></i>Operação
-  </button>
-
-  <button class="tab-btn" data-tab="configuracoes">
-    <i data-lucide="settings-2"></i>Configurações
-  </button>
-
-</nav>
-
-    <!-- CONTEÚDO PRINCIPAL DAS ABAS -->
-    <main id="app-main-content">
-      
-      <!-- ================= ABA 1: PAINEL OPERACIONAL ================= -->
-      <div id="tab-content-dashboard" class="tab-panel active">
-        
-        <!-- CARD EXECUTIVO PRINCIPAL DE METAS (TOPO) -->
-        <section class="main-executive-card" aria-label="Meta do Ciclo Atual">
-          <div class="main-exec-header">
-            <h3><span style="font-size: 1.25rem; vertical-align: middle;">🚰</span> META DO CICLO</h3>
-            <span class="main-exec-period" id="main-exec-period-label">07/06/2026 a 06/07/2026</span>
+      <div class="double-panel-row">
+        <div class="comparador-secao-v2" id="comparador-ciclos-v2">
+          <div class="comparador-info">
+            <div class="comparador-icon"><i data-lucide="arrow-left-right"></i></div>
+            <div class="comparador-text"><h3>Balanço vs. Ciclo Anterior</h3><p id="comparador-details-v2">Consumo Atual: -- m³ | Anterior: -- m³</p></div>
           </div>
-          <div class="main-exec-body">
-            <div class="exec-metric">
-              <span class="exec-label">Meta Total</span>
-              <span class="exec-val" id="main-exec-meta">80.00 <span class="exec-unit">m³</span></span>
-            </div>
-            <div class="exec-metric">
-              <span class="exec-label">Consumido</span>
-              <span class="exec-val" id="main-exec-consumed">0.00 <span class="exec-unit">m³</span></span>
-            </div>
-            <div class="exec-metric highlight-success">
-              <span class="exec-label">Saldo para Meta</span>
-              <span class="exec-val text-glow-green" id="main-exec-balance">0.00 <span class="exec-unit">m³</span></span>
-            </div>
-            <div class="exec-metric">
-              <span class="exec-label">% Utilizado</span>
-              <span class="exec-val" id="main-exec-percent">0.0<span class="exec-unit">%</span></span>
-            </div>
-            <div class="exec-metric highlight-info">
-              <span class="exec-label">Dias Restantes</span>
-              <span class="exec-val" id="main-exec-days-left">0 <span class="exec-unit">dias</span></span>
-            </div>
+          <div id="comparador-badge-v2" class="comparador-resultado economia"><span>Carregando dados...</span></div>
+        </div>
+        <div class="leak-alert-card" id="leak-alert-banner" style="display: none;">
+          <div class="leak-alert-icon"><i data-lucide="droplet-off"></i></div>
+          <div class="leak-alert-text"><h3>🔴 Possível Vazamento Detectado</h3><p id="leak-alert-desc">Verifique o hidrômetro com pico anômalo.</p></div>
+        </div>
+      </div>
+
+      <section class="panel-card no-print" id="operational-alerts-panel" style="margin-bottom: 2rem; display: none;">
+        <div class="panel-header" style="margin-bottom: 1rem;"><h2 style="color: var(--color-red);"><i data-lucide="alert-octagon"></i> Alertas Operacionais Ativos</h2></div>
+        <div class="alerts-list-wrapper" id="operational-alerts-list"></div>
+      </section>
+
+      <section class="hidrometros-grid" id="hidrometros-cards-container-v2" aria-label="Consumo por Hidrômetro"></section>
+
+      <div class="layout-panels">
+        <section class="panel-card" aria-label="Evolução Temporal do Consumo">
+          <div class="panel-header"><h2><i data-lucide="bar-chart-3" style="color: var(--color-blue);"></i> Tendência de Consumo</h2><span style="font-size: 0.8rem; color: var(--text-muted);">Acumulado Diário no Ciclo</span></div>
+          <div class="chart-wrapper"><canvas id="trendChartV2"></canvas></div>
+        </section>
+        <section class="panel-card" style="display: flex; flex-direction: column; justify-content: space-between;">
+          <div>
+            <div class="panel-header"><h2><i data-lucide="pie-chart" style="color: var(--color-purple);"></i> Divisão por Hidrômetro</h2></div>
+            <div class="chart-wrapper" style="height: 180px; margin-bottom: 1rem;"><canvas id="comparisonChartV2"></canvas></div>
           </div>
-          <div class="main-exec-progress-track">
-            <div class="main-exec-progress-bar" id="main-exec-progress-bar" style="width: 0%;"></div>
+          <div>
+            <div class="panel-header" style="margin-bottom: 0.75rem; margin-top: 1rem; border-top: 1px solid rgba(255,255,255,0.05); padding-top: 1rem;"><h2 style="font-size: 1.1rem;"><i data-lucide="download" style="color: var(--color-blue);"></i> Relatórios e Exportação</h2></div>
+            <div class="export-actions-grid">
+              <button id="btn-export-pdf" class="btn btn-primary" type="button"><i data-lucide="file-text"></i> PDF Executivo</button>
+              <button id="btn-export-xlsx" class="btn btn-secondary" type="button"><i data-lucide="table"></i> Planilha Excel</button>
+              <button id="btn-export-csv" class="btn btn-secondary" type="button"><i data-lucide="file-spreadsheet"></i> CSV</button>
+              <button id="btn-export-json" class="btn btn-secondary" type="button"><i data-lucide="braces"></i> Backup JSON</button>
+            </div>
           </div>
         </section>
+      </div>
+    </div>
 
-        <!-- DASHBOARD EXECUTIVO EXPANDIDO (KPIS ADICIONAIS) -->
-        <section class="kpi-grid" style="margin-bottom: 2rem;" aria-label="Indicadores de Gestão">
-          <div class="kpi-card" id="kpi-alerts-v2">
-            <div class="kpi-label">Hidrômetros em Alerta</div>
-            <div class="kpi-value" id="val-alerts-v2">0</div>
-            <div class="kpi-subtext" id="val-alerts-subtext-v2">Nenhum hidrômetro crítico</div>
-          </div>
-          <div class="kpi-card">
-            <div class="kpi-label">Consumo Médio Geral</div>
-            <div class="kpi-value" id="val-avg-general">0.00 <span class="unit">m³/d</span></div>
-            <div class="kpi-subtext">Média somada diária</div>
-          </div>
-          <div class="kpi-card">
-            <div class="kpi-label">Maior Consumidor</div>
-            <div class="kpi-value" id="val-highest-consumer" style="font-size: 1.4rem; padding-top: 0.15rem; color: var(--color-orange);">--</div>
-            <div class="kpi-subtext" id="val-highest-consumer-sub">Consumo máximo registrado</div>
-          </div>
-          <div class="kpi-card">
-            <div class="kpi-label">Menor Consumidor</div>
-            <div class="kpi-value" id="val-lowest-consumer" style="font-size: 1.4rem; padding-top: 0.15rem; color: var(--color-green);">--</div>
-            <div class="kpi-subtext" id="val-lowest-consumer-sub">Consumo mínimo registrado</div>
-          </div>
-          <div class="kpi-card">
-            <div class="kpi-label">Projeção Final Global</div>
-            <div class="kpi-value" id="val-proj-global">0.00 <span class="unit">m³</span></div>
-            <div class="kpi-subtext" id="val-proj-global-sub">Estima consumo até dia 06</div>
-          </div>
-          <div class="kpi-card">
-            <div class="kpi-label">Economia Projetada</div>
-            <div class="kpi-value" id="val-economy-projected">0.00 <span class="unit">m³</span></div>
-            <div class="kpi-subtext" id="val-economy-projected-sub">Economia estimada do ciclo</div>
-          </div>
-        </section>
-		  
-        <!-- COMPARATIVO E ALERTAS GERAIS -->
-        <div class="double-panel-row">
-          <!-- Comparativo Rápido -->
-          <div class="comparador-secao-v2" id="comparador-ciclos-v2">
-            <div class="comparador-info">
-              <div class="comparador-icon"><i data-lucide="arrow-left-right"></i></div>
-              <div class="comparador-text">
-                <h3>Balanço vs. Ciclo Anterior</h3>
-                <p id="comparador-details-v2">Consumo Atual: -- m³ | Anterior: -- m³</p>
-              </div>
-            </div>
-            <div id="comparador-badge-v2" class="comparador-resultado economia">
-              <span>Carregando dados...</span>
-            </div>
-          </div>
+    <!-- ================= ABA: OS ================= -->
+    <div id="tab-content-os" class="tab-panel">
+      <section class="panel-card">
+        <div class="panel-header"><h2>🔧 Ordens de Serviço</h2><button id="btn-refresh-os" class="btn btn-primary">Atualizar OS</button></div>
+        <div class="dashboard-grid">
+          <div class="kpi-card"><span class="kpi-label">OS Abertas</span><div class="kpi-value" id="os-open-count">0</div></div>
+          <div class="kpi-card"><span class="kpi-label">Em Andamento</span><div class="kpi-value" id="os-progress-count">0</div></div>
+          <div class="kpi-card"><span class="kpi-label">Aguardando Peça</span><div class="kpi-value" id="os-parts-count">0</div></div>
+          <div class="kpi-card"><span class="kpi-label">Concluídas</span><div class="kpi-value" id="os-closed-count">0</div></div>
+        </div>
+        <div class="kpi-card"><span class="kpi-label">🔴 Críticas</span><div class="kpi-value" id="os-critical-count">0</div></div>
+        <div class="kpi-card"><span class="kpi-label">🟡 Altas</span><div class="kpi-value" id="os-high-count">0</div></div>
+        <div class="kpi-card"><span class="kpi-label">🟢 Baixas</span><div class="kpi-value" id="os-low-count">0</div></div>
+      </section>
+      <section class="panel-card">
+        <div class="panel-header">
+          <h2>📋 Últimas Ordens de Serviço</h2>
+          <select id="os-filter-status" class="filter-select">
+            <option value="TODOS">Todos</option>
+            <option value="ABERTO">Abertos</option>
+            <option value="AGUARDANDO PEÇA">Aguardando Peça</option>
+            <option value="CONCLUÍDO">Concluídas</option>
+          </select>
+        </div>
+        <table class="modern-table"><thead><tr><th>OS</th><th>Status</th><th>Prioridade</th><th>Unidade</th><th>Equipamento</th><th>PDF</th></tr></thead><tbody id="os-table-body"></tbody></table>
+      </section>
+    </div>
 
-          <!-- Alerta de Vazamento Global -->
-          <div class="leak-alert-card" id="leak-alert-banner" style="display: none;">
-            <div class="leak-alert-icon"><i data-lucide="droplet-off"></i></div>
-            <div class="leak-alert-text">
-              <h3>🔴 Possível Vazamento Detectado</h3>
-              <p id="leak-alert-desc">Verifique o hidrômetro com pico anômalo.</p>
-            </div>
+    <!-- ================= ABA: PERDAS ================= -->
+    <div id="tab-content-perdas" class="tab-panel">
+      <div id="perdas-conteudo">
+        <section class="panel-card"><div class="panel-header"><h2>📉 Gestão de Perdas YUKA</h2></div><p>Carregando dados...</p></section>
+      </div>
+    </div>
+
+    <!-- ================= ABA: REQUISIÇÕES ================= -->
+    <div id="tab-content-requisicoes" class="tab-panel">
+      <section class="panel-card">
+        <div class="panel-header"><h2>📦 Central de Requisições</h2></div>
+        <div class="dashboard-grid">
+          <div class="kpi-card requisicao-card" id="btn-limpeza">
+            <div class="kpi-value">🧹</div>
+            <span class="kpi-label">Limpeza e EPI</span>
+            <p style="margin-top:10px;color:var(--text-muted);">Materiais de limpeza, EPIs e utilidades.</p>
+          </div>
+          <div class="kpi-card requisicao-card" id="btn-mp">
+            <div class="kpi-value">🥩</div>
+            <span class="kpi-label">MP e Recheios</span>
+            <p style="margin-top:10px;color:var(--text-muted);">Matéria-prima e recheios.</p>
+          </div>
+        </div>
+      </section>
+      <section class="panel-card" id="requisicoes-conteudo"><div class="panel-header"><h2>Selecione um módulo</h2></div></section>
+    </div>
+
+    <!-- ================= ABA: OPERAÇÃO ================= -->
+    <div id="tab-content-operacao" class="tab-panel">
+      <section class="panel-card">
+        <div class="panel-header"><h2>📋 Checklists e Controles Operacionais</h2></div>
+        <div class="dashboard-grid">
+          <div class="kpi-card requisicao-card"><div class="kpi-value">🏭</div><a href="https://docs.google.com/forms/d/e/1FAIpQLScu-Jzfh8CH5tlzUMxTWxWo5VGd0bZRKwgokyRHJadg2C37yA/viewform?usp=header" target="_blank" rel="noopener" class="kpi-label" style="text-decoration: none; color: var(--text-primary);">Abertura de Fábrica - YUKA</a></div>
+          <div class="kpi-card requisicao-card"><div class="kpi-value">🏭</div><a href="https://docs.google.com/forms/d/e/1FAIpQLSczqxdvozpSVsc5eWqTAviPQxyzxaXS4htKwmn2Va-_RSQD3Q/viewform?usp=header" target="_blank" rel="noopener" class="kpi-label" style="text-decoration: none; color: var(--text-primary);">Abertura de Fábrica - TC</a></div>
+          <div class="kpi-card requisicao-card"><div class="kpi-value">🔒</div><a href="https://docs.google.com/forms/d/e/1FAIpQLSdc979u_GeGxfbIB5MyjUuOhz9jdYPdASOhoznP33G1n_Nx5g/viewform?usp=header" target="_blank" rel="noopener" class="kpi-label" style="text-decoration: none; color: var(--text-primary);">Fechamento de Fábrica - YUKA</a></div>
+          <div class="kpi-card requisicao-card"><div class="kpi-value">🔒</div><a href="https://docs.google.com/forms/d/e/1FAIpQLScwOvE4okSQoVn_dALhSOCaK4g9KDcOlFvWJwL2OiPlyrR1Ew/viewform?usp=header" target="_blank" rel="noopener" class="kpi-label" style="text-decoration: none; color: var(--text-primary);">Fechamento de Fábrica - TC</a></div>
+          <div class="kpi-card requisicao-card"><div class="kpi-value">✅</div><a href="https://docs.google.com/forms/d/e/1FAIpQLSdPHVwU5_7iCX-j0jNOp_sb5Y6NtWVe3P3j_ZeC27BLCSbJ3g/viewform?usp=header" target="_blank" rel="noopener" class="kpi-label" style="text-decoration: none; color: var(--text-primary);">Controle de Boas Práticas (BPF)</a></div>
+          <div class="kpi-card requisicao-card"><div class="kpi-value">📦</div><a href="https://docs.google.com/forms/d/e/1FAIpQLSfS0FGuovjr1I8Tk-UxGHwxaIusmHM8XVXM865Bw_gAogQJTQ/viewform?usp=header" target="_blank" rel="noopener" class="kpi-label" style="text-decoration: none; color: var(--text-primary);">Controle de Produção</a></div>
+        </div>
+      </section>
+    </div>
+
+    <!-- ================= ABA: ALERTAS ================= -->
+    <div id="tab-content-alertas" class="tab-panel">
+      <section class="panel-card">
+        <div class="panel-header">
+          <h2><i data-lucide="bell-ring" style="color: var(--color-red);"></i> Central de Alertas Operacionais</h2>
+          <span style="font-size:0.8rem; color:var(--text-muted);">Atualizado a cada acesso à aba</span>
+        </div>
+
+        <!-- KPI Cards de Alertas -->
+        <div class="kpi-grid" style="margin-bottom: 1.5rem;">
+          <div class="kpi-card" style="border-left: 3px solid var(--text-muted);">
+            <div class="kpi-label">📊 Total</div>
+            <div class="kpi-value" id="alerta-kpi-total">--</div>
+            <div class="kpi-subtext">Todos os alertas</div>
+          </div>
+          <div class="kpi-card" style="border-left: 3px solid var(--color-red);">
+            <div class="kpi-label">🔴 Críticos</div>
+            <div class="kpi-value" id="alerta-kpi-critico" style="color: var(--color-red);">--</div>
+            <div class="kpi-subtext">Requerem ação imediata</div>
+          </div>
+          <div class="kpi-card" style="border-left: 3px solid var(--color-orange);">
+            <div class="kpi-label">🟡 Atenção</div>
+            <div class="kpi-value" id="alerta-kpi-atencao" style="color: var(--color-orange);">--</div>
+            <div class="kpi-subtext">Monitorar de perto</div>
+          </div>
+          <div class="kpi-card" style="border-left: 3px solid var(--color-green);">
+            <div class="kpi-label">🟢 Informativos</div>
+            <div class="kpi-value" id="alerta-kpi-info" style="color: var(--color-green);">--</div>
+            <div class="kpi-subtext">Situação normal</div>
           </div>
         </div>
 
-        <!-- PAINEL DE ALERTAS OPERACIONAIS -->
-        <section class="panel-card no-print" id="operational-alerts-panel" style="margin-bottom: 2rem; display: none;">
-          <div class="panel-header" style="margin-bottom: 1rem;">
-            <h2 style="color: var(--color-red);"><i data-lucide="alert-octagon"></i> Alertas Operacionais Ativos</h2>
-          </div>
-          <div class="alerts-list-wrapper" id="operational-alerts-list">
-            <!-- Gerado dinamicamente -->
-          </div>
-        </section>
-
-        <!-- GRID DE CARDS DOS HIDRÔMETROS -->
-        <section class="hidrometros-grid" id="hidrometros-cards-container-v2" aria-label="Consumo por Hidrômetro">
-          <!-- Cards serão gerados dinamicamente via JS (Fase 1) -->
-        </section>
-
-        <!-- GRÁFICOS & AÇÕES RÁPIDAS -->
-        <div class="layout-panels">
-          <section class="panel-card" aria-label="Evolução Temporal do Consumo">
-            <div class="panel-header">
-              <h2><i data-lucide="bar-chart-3" style="color: var(--color-blue);"></i> Tendência de Consumo</h2>
-              <span style="font-size: 0.8rem; color: var(--text-muted);">Acumulado Diário no Ciclo</span>
-            </div>
-            <div class="chart-wrapper">
-              <canvas id="trendChartV2"></canvas>
-            </div>
-          </section>
-
-          <section class="panel-card" style="display: flex; flex-direction: column; justify-content: space-between;" aria-label="Distribuição de Consumo e Exportação">
-            <div>
-              <div class="panel-header">
-                <h2><i data-lucide="pie-chart" style="color: var(--color-purple);"></i> Divisão por Hidrômetro</h2>
-              </div>
-              <div class="chart-wrapper" style="height: 180px; margin-bottom: 1rem;">
-                <canvas id="comparisonChartV2"></canvas>
-              </div>
-            </div>
-            <div>
-              <div class="panel-header" style="margin-bottom: 0.75rem; margin-top: 1rem; border-top: 1px solid rgba(255,255,255,0.05); padding-top: 1rem;">
-                <h2 style="font-size: 1.1rem;"><i data-lucide="download" style="color: var(--color-blue);"></i> Relatórios e Exportação</h2>
-              </div>
-              <div class="export-actions-grid">
-                <button id="btn-export-pdf" class="btn btn-primary" type="button"><i data-lucide="file-text"></i> PDF Executivo</button>
-                <button id="btn-export-xlsx" class="btn btn-secondary" type="button"><i data-lucide="table"></i> Planilha Excel</button>
-                <button id="btn-export-csv" class="btn btn-secondary" type="button"><i data-lucide="file-spreadsheet"></i> CSV</button>
-                <button id="btn-export-json" class="btn btn-secondary" type="button"><i data-lucide="braces"></i> Backup JSON</button>
-              </div>
-            </div>
-          </section>
+        <!-- Conteúdo dinâmico dos alertas -->
+        <div id="alertas-conteudo">
+          <p style="color: var(--text-muted); text-align:center; padding: 2rem;">Acesse a aba para calcular os alertas.</p>
         </div>
-	</div>
-<!-- ---------------- ABA 2: OS ---------------- -->
-<div id="tab-content-os" class="tab-panel">
-
-  <section class="panel-card">
-
-    <div class="panel-header">
-      <h2>🔧 Ordens de Serviço</h2>
-
-      <button id="btn-refresh-os" class="btn btn-primary">
-        Atualizar OS
-      </button>
+      </section>
     </div>
 
-    <div class="dashboard-grid">
-
-      <div class="kpi-card">
-        <span class="kpi-label">OS Abertas</span>
-        <div class="kpi-value" id="os-open-count">0</div>
+    <!-- ================= ABA: DIRETORIA ================= -->
+    <div id="tab-content-diretoria" class="tab-panel">
+      <div class="presentation-header no-print">
+        <h2><i data-lucide="presentation"></i> Apresentação Executiva para Diretoria</h2>
+        <button id="btn-print-presentation" class="btn btn-primary" type="button"><i data-lucide="printer"></i> Imprimir / Salvar PDF</button>
       </div>
-
-      <div class="kpi-card">
-        <span class="kpi-label">Em Andamento</span>
-        <div class="kpi-value" id="os-progress-count">0</div>
-      </div>
-
-      <div class="kpi-card">
-        <span class="kpi-label">Aguardando Peça</span>
-        <div class="kpi-value" id="os-parts-count">0</div>
-      </div>
-
-      <div class="kpi-card">
-        <span class="kpi-label">Concluídas</span>
-        <div class="kpi-value" id="os-closed-count">0</div>
-      </div>
-
-    </div>
-	<div class="kpi-card">
-	<span class="kpi-label">🔴 Críticas</span>
-  	<div class="kpi-value" id="os-critical-count">0</div>
-	</div>
-
-<div class="kpi-card">
-  <span class="kpi-label">🟡 Altas</span>
-  <div class="kpi-value" id="os-high-count">0</div>
-</div>
-
-<div class="kpi-card">
-  <span class="kpi-label">🟢 Baixas</span>
-  <div class="kpi-value" id="os-low-count">0</div>
-</div>
-
-  </section>
-
-  <section class="panel-card">
-
-   <div class="panel-header">
-
-  <h2>📋 Últimas Ordens de Serviço</h2>
-
-  <select id="os-filter-status" class="filter-select">
-
-    <option value="TODOS">Todos</option>
-
-    <option value="ABERTO">Abertos</option>
-
-    <option value="AGUARDANDO PEÇA">
-      Aguardando Peça
-    </option>
-
-    <option value="CONCLUÍDO">
-      Concluídas
-    </option>
-
-  </select>
-
-</div>
-
-    <table class="modern-table">
-
-      <thead>
-        <tr>
-          <th>OS</th>
-          <th>Status</th>
-          <th>Prioridade</th>
-          <th>Unidade</th>
-          <th>Equipamento</th>
-          <th>PDF</th>
-        </tr>
-      </thead>
-
-      <tbody id="os-table-body">
-
-      </tbody>
-
-    </table>
-
-  </section>
-
-</div>
-
-<!-- ================= ABA 3: PERDAS ================= -->
-<div id="tab-content-perdas" class="tab-panel">
-
-  <div id="perdas-conteudo">
-
-    <section class="panel-card">
-      <div class="panel-header">
-        <h2>📉 Gestão de Perdas YUKA</h2>
-      </div>
-
-      <p>Carregando dados...</p>
-
-    </section>
-
-  </div>
-</div>
-<!-- ================= ABA 4: REQUISIÇÕES ================= -->
-<div id="tab-content-requisicoes" class="tab-panel">
-
-  <section class="panel-card">
-
-    <div class="panel-header">
-      <h2>📦 Central de Requisições</h2>
-    </div>
-
-    <div class="dashboard-grid">
-
-      <div class="kpi-card requisicao-card" id="btn-limpeza">
-
-        <div class="kpi-value">
-          🧹
+      <div class="diretoria-print-wrapper" id="diretoria-print-content">
+        <div class="print-header-logo">
+          <div style="display: flex; align-items: center; gap: 10px;"><span style="font-size: 32px;">🇮🇹</span><div><h2>Mamma Mia</h2><p>Projeto Água - Gestão Inteligente do Consumo</p></div></div>
+          <div style="text-align: right; font-size: 0.85rem; color: #4b5563;"><p>Emitido em: <span id="dir-emission-date">--</span></p><p>Ciclo analisado: <strong id="dir-cycle-label">--</strong></p></div>
         </div>
-
-        <span class="kpi-label">
-          Limpeza e EPI
-        </span>
-
-        <p style="margin-top:10px;color:var(--text-muted);">
-          Materiais de limpeza, EPIs e utilidades.
-        </p>
-
-      </div>
-
-      <div class="kpi-card requisicao-card" id="btn-mp">
-
-        <div class="kpi-value">
-          🥩
+        <div class="main-executive-card diretoria-card-bg">
+          <div class="main-exec-header"><h3>🛰 RELATÓRIO OPERACIONAL DA DIRETORIA</h3><span class="main-exec-period" id="dir-exec-period">--</span></div>
+          <div class="main-exec-body" style="grid-template-columns: repeat(3, 1fr);">
+            <div class="exec-metric"><span class="exec-label">Consumo Acumulado Geral</span><span class="exec-val" id="dir-exec-consumed">0.00 m³</span><span class="dir-exec-sub">Meta Limite: <strong id="dir-exec-meta-val">80.00</strong> m³</span></div>
+            <div class="exec-metric highlight-success"><span class="exec-label">Saldo de Economia Global</span><span class="exec-val text-glow-green" id="dir-exec-balance" style="color: #10b981;">0.00 m³</span><span class="dir-exec-sub" id="dir-exec-balance-sub">Dentro do limite global</span></div>
+            <div class="exec-metric"><span class="exec-label">Projeção Final de Fechamento</span><span class="exec-val" id="dir-exec-projection">0.00 m³</span><span class="dir-exec-sub" id="dir-exec-projection-sub">Com base na média móvel</span></div>
+          </div>
+          <div class="main-exec-progress-track"><div class="main-exec-progress-bar" id="dir-exec-progress-bar" style="width: 0%;"></div></div>
         </div>
-
-        <span class="kpi-label">
-          MP e Recheios
-        </span>
-
-        <p style="margin-top:10px;color:var(--text-muted);">
-          Matéria-prima e recheios.
-        </p>
-
-      </div>
-
-    </div>
-
-  </section>
-
-  <section class="panel-card" id="requisicoes-conteudo">
-
-    <div class="panel-header">
-      <h2>Selecione um módulo</h2>
-    </div>
-
-  </section>
-
-</div>
-
-<!-- ================= ABA: OPERAÇÃO ================= -->
-<div id="tab-content-operacao" class="tab-panel">
-
-  <section class="panel-card">
-
-    <div class="panel-header">
-      <h2>📋 Checklists e Controles Operacionais</h2>
-    </div>
-
-    <div class="dashboard-grid">
-
-      <div class="kpi-card requisicao-card">
-        <div class="kpi-value">🏭</div>
-        <a href="https://docs.google.com/forms/d/e/1FAIpQLScu-Jzfh8CH5tlzUMxTWxWo5VGd0bZRKwgokyRHJadg2C37yA/viewform?usp=header" target="_blank" rel="noopener" class="kpi-label" style="text-decoration: none; color: var(--text-primary);">Abertura de Fábrica - YUKA</a>
-      </div>
-
-      <div class="kpi-card requisicao-card">
-        <div class="kpi-value">🏭</div>
-        <a href="https://docs.google.com/forms/d/e/1FAIpQLSczqxdvozpSVsc5eWqTAviPQxyzxaXS4htKwmn2Va-_RSQD3Q/viewform?usp=header" target="_blank" rel="noopener" class="kpi-label" style="text-decoration: none; color: var(--text-primary);">Abertura de Fábrica - TC</a>
-      </div>
-
-      <div class="kpi-card requisicao-card">
-        <div class="kpi-value">🔒</div>
-        <a href="https://docs.google.com/forms/d/e/1FAIpQLSdc979u_GeGxfbIB5MyjUuOhz9jdYPdASOhoznP33G1n_Nx5g/viewform?usp=header" target="_blank" rel="noopener" class="kpi-label" style="text-decoration: none; color: var(--text-primary);">Fechamento de Fábrica - YUKA</a>
-      </div>
-
-      <div class="kpi-card requisicao-card">
-        <div class="kpi-value">🔒</div>
-        <a href="https://docs.google.com/forms/d/e/1FAIpQLScwOvE4okSQoVn_dALhSOCaK4g9KDcOlFvWJwL2OiPlyrR1Ew/viewform?usp=header" target="_blank" rel="noopener" class="kpi-label" style="text-decoration: none; color: var(--text-primary);">Fechamento de Fábrica - TC</a>
-      </div>
-
-      <div class="kpi-card requisicao-card">
-        <div class="kpi-value">✅</div>
-        <a href="https://docs.google.com/forms/d/e/1FAIpQLSdPHVwU5_7iCX-j0jNOp_sb5Y6NtWVe3P3j_ZeC27BLCSbJ3g/viewform?usp=header" target="_blank" rel="noopener" class="kpi-label" style="text-decoration: none; color: var(--text-primary);">Controle de Boas Práticas (BPF)</a>
-      </div>
-
-      <div class="kpi-card requisicao-card">
-        <div class="kpi-value">📦</div>
-        <a href="https://docs.google.com/forms/d/e/1FAIpQLSfS0FGuovjr1I8Tk-UxGHwxaIusmHM8XVXM865Bw_gAogQJTQ/viewform?usp=header" target="_blank" rel="noopener" class="kpi-label" style="text-decoration: none; color: var(--text-primary);">Controle de Produção</a>
-      </div>
-
-    </div>
-
-  </section>
-
-</div>
-
-      <!-- ================= ABA 2: MODO DIRETORIA ================= -->
-      <div id="tab-content-diretoria" class="tab-panel">
-        <div class="presentation-header no-print">
-          <h2><i data-lucide="presentation"></i> Apresentação Executiva para Diretoria</h2>
-          <button id="btn-print-presentation" class="btn btn-primary" type="button"><i data-lucide="printer"></i> Imprimir / Salvar PDF</button>
+        <div class="kpi-grid" style="margin-bottom: 2rem;">
+          <div class="kpi-card"><div class="kpi-label">Economia Gerada</div><div class="kpi-value" id="dir-kpi-economy" style="color: var(--color-green);">0.00 <span class="unit">m³</span></div><div class="kpi-subtext" id="dir-kpi-economy-sub">Em relação ao ciclo anterior</div></div>
+          <div class="kpi-card"><div class="kpi-label">Hidrômetros em Alerta</div><div class="kpi-value" id="dir-kpi-alerts">0 <span class="unit">/ 4</span></div><div class="kpi-subtext">Pontos de consumo crítico</div></div>
+          <div class="kpi-card"><div class="kpi-label">Média Geral Diária</div><div class="kpi-value" id="dir-kpi-avg-general">0.00 <span class="unit">m³/d</span></div><div class="kpi-subtext">Meta diária geral de 2.66 m³/d</div></div>
         </div>
-
-        <!-- Layout otimizado para Reunião -->
-        <div class="diretoria-print-wrapper" id="diretoria-print-content">
-          <!-- Cabeçalho de impressão (oculto na tela, visível na impressão/PDF) -->
-          <div class="print-header-logo">
-            <div style="display: flex; align-items: center; gap: 10px;">
-              <span style="font-size: 32px;">🇮🇹</span>
-              <div>
-                <h2>Mamma Mia</h2>
-                <p>Projeto Água - Gestão Inteligente do Consumo</p>
-              </div>
-            </div>
-            <div style="text-align: right; font-size: 0.85rem; color: #4b5563;">
-              <p>Emitido em: <span id="dir-emission-date">--</span></p>
-              <p>Ciclo analisado: <strong id="dir-cycle-label">--</strong></p>
+        <div class="print-charts-row">
+          <div class="panel-card">
+            <div class="panel-header"><h2>🏆 RANKING DE DESEMPENHO E ECONOMIA</h2></div>
+            <div class="ranking-list" id="dir-ranking-list"></div>
+          </div>
+          <div class="panel-card">
+            <div class="panel-header"><h2>📊 DISTRIBUIÇÃO E HISTÓRICO NO PERÍODO</h2></div>
+            <div class="table-responsive">
+              <table style="font-size: 0.8rem;"><thead><tr><th>Hidrômetro</th><th>Apelido</th><th>Consumo</th><th>Meta</th><th>Status</th></tr></thead><tbody id="dir-table-summary"></tbody></table>
             </div>
           </div>
-
-          <div class="main-executive-card diretoria-card-bg">
-            <div class="main-exec-header">
-              <h3>🚰 RELATÓRIO OPERACIONAL DA DIRETORIA</h3>
-              <span class="main-exec-period" id="dir-exec-period">--</span>
-            </div>
-            <div class="main-exec-body" style="grid-template-columns: repeat(3, 1fr);">
-              <div class="exec-metric">
-                <span class="exec-label">Consumo Acumulado Geral</span>
-                <span class="exec-val" id="dir-exec-consumed">0.00 m³</span>
-                <span class="dir-exec-sub">Meta Limite: <strong id="dir-exec-meta-val">80.00</strong> m³</span>
-              </div>
-              <div class="exec-metric highlight-success">
-                <span class="exec-label">Saldo de Economia Global</span>
-                <span class="exec-val text-glow-green" id="dir-exec-balance" style="color: #10b981;">0.00 m³</span>
-                <span class="dir-exec-sub" id="dir-exec-balance-sub">Dentro do limite global</span>
-              </div>
-              <div class="exec-metric">
-                <span class="exec-label">Projeção Final de Fechamento</span>
-                <span class="exec-val" id="dir-exec-projection">0.00 m³</span>
-                <span class="dir-exec-sub" id="dir-exec-projection-sub">Com base na média móvel</span>
-              </div>
-            </div>
-            <div class="main-exec-progress-track">
-              <div class="main-exec-progress-bar" id="dir-exec-progress-bar" style="width: 0%;"></div>
-            </div>
-          </div>
-
-          <!-- Outros KPIs da diretoria -->
-          <div class="kpi-grid" style="margin-bottom: 2rem;">
-            <div class="kpi-card">
-              <div class="kpi-label">Economia Gerada</div>
-              <div class="kpi-value" id="dir-kpi-economy" style="color: var(--color-green);">0.00 <span class="unit">m³</span></div>
-              <div class="kpi-subtext" id="dir-kpi-economy-sub">Em relação ao ciclo anterior</div>
-            </div> 
-            <div class="kpi-card">
-              <div class="kpi-label">Hidrômetros em Alerta</div>
-              <div class="kpi-value" id="dir-kpi-alerts">0 <span class="unit">/ 4</span></div>
-              <div class="kpi-subtext">Pontos de consumo crítico</div>
-            </div>
-            <div class="kpi-card">
-              <div class="kpi-label">Média Geral Diária</div>
-              <div class="kpi-value" id="dir-kpi-avg-general">0.00 <span class="unit">m³/d</span></div>
-              <div class="kpi-subtext">Meta diária geral de 2.66 m³/d</div>
-            </div>
-          </div>
-
-          <!-- Divisão de Gráficos e Ranking para impressão -->
-          <div class="print-charts-row">
-            <div class="panel-card">
-              <div class="panel-header">
-                <h2>🏆 RANKING DE DESEMPENHO E ECONOMIA</h2>
-              </div>
-              <div class="ranking-list" id="dir-ranking-list">
-                <!-- Populado dinamicamente -->
-              </div>
-            </div>
-            <div class="panel-card">
-              <div class="panel-header">
-                <h2>📊 DISTRIBUIÇÃO E HISTÓRICO NO PERÍODO</h2>
-              </div>
-              <!-- Tabela compacta de hidrômetros para diretoria -->
-              <div class="table-responsive">
-                <table style="font-size: 0.8rem;">
-                  <thead>
-                    <tr>
-                      <th>Hidrômetro</th>
-                      <th>Apelido</th>
-                      <th>Consumo</th>
-                      <th>Meta</th>
-                      <th>Status</th>
-                    </tr>
-                  </thead>
-                  <tbody id="dir-table-summary">
-                    <!-- Populado dinamicamente -->
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </div>
-
         </div>
       </div>
+    </div>
 
-      <!-- ================= ABA 3: HISTÓRICO DE CICLOS ================= -->
-      <div id="tab-content-ciclos" class="tab-panel">
-        <section class="panel-card" style="margin-bottom: 2rem;">
-          <div class="panel-header">
-            <h2><i data-lucide="history" style="color: var(--color-blue);"></i> Registro Histórico de Ciclos Fechados</h2>
+    <!-- ================= ABA: CICLOS ================= -->
+    <div id="tab-content-ciclos" class="tab-panel">
+      <section class="panel-card" style="margin-bottom: 2rem;">
+        <div class="panel-header"><h2><i data-lucide="history" style="color: var(--color-blue);"></i> Registro Histórico de Ciclos Fechados</h2></div>
+        <div class="table-responsive">
+          <table><thead><tr><th>Ciclo</th><th>Consumo Total (m³)</th><th>Meta Global (m³)</th><th>Economia vs. Anterior (m³)</th><th>Alertas Ativos</th><th>Status Meta</th></tr></thead><tbody id="history-cycles-tbody"></tbody></table>
+        </div>
+      </section>
+      <section class="panel-card">
+        <div class="panel-header"><h2><i data-lucide="arrow-left-right" style="color: var(--color-purple);"></i> Comparador de Ciclos Históricos</h2></div>
+        <div class="filters-row" style="margin-bottom: 1.5rem;">
+          <div class="filter-group"><label for="comp-cycle-1" class="form-label" style="margin-bottom: 0;">Ciclo A (Principal):</label><select id="comp-cycle-1" class="filter-select"></select></div>
+          <div class="filter-group"><label for="comp-cycle-2" class="form-label" style="margin-bottom: 0;">Ciclo B (Comparativo):</label><select id="comp-cycle-2" class="filter-select"></select></div>
+          <button id="btn-run-cycles-comparison" class="btn btn-primary" type="button">Comparar Períodos</button>
+        </div>
+        <div id="cycles-comparison-results" style="display: none;">
+          <div class="comparador-secao-v2" style="background: rgba(255,255,255,0.02); margin-bottom: 1.5rem;">
+            <div class="comparador-info"><div class="comparador-icon"><i data-lucide="info"></i></div><div class="comparador-text"><h3 id="comp-results-title">Balanço do Ciclo A vs. Ciclo B</h3><p id="comp-results-sub">Carregando comparação...</p></div></div>
+            <div id="comp-results-badge" class="comparador-resultado economia"><span>--</span></div>
           </div>
-          
           <div class="table-responsive">
-            <table>
-              <thead>
-                <tr>
-                  <th>Ciclo</th>
-                  <th>Consumo Total (m³)</th>
-                  <th>Meta Global (m³)</th>
-                  <th>Economia vs. Anterior (m³)</th>
-                  <th>Alertas Ativos</th>
-                  <th>Status Meta</th>
-                </tr>
-              </thead>
-              <tbody id="history-cycles-tbody">
-                <!-- Populado dinamicamente -->
-              </tbody>
-            </table>
+            <table><thead><tr><th>Hidrômetro</th><th>Apelido</th><th>Consumo no Ciclo A (m³)</th><th>Consumo no Ciclo B (m³)</th><th>Diferença (m³)</th><th>Status Comparativo</th></tr></thead><tbody id="comp-results-tbody"></tbody></table>
           </div>
-        </section>
+        </div>
+      </section>
+    </div>
 
-        <!-- MÓDULO DE COMPARAÇÃO DE PERÍODOS -->
-        <section class="panel-card">
-          <div class="panel-header">
-            <h2><i data-lucide="arrow-left-right" style="color: var(--color-purple);"></i> Comparador de Ciclos Históricos</h2>
-          </div>
-          <div class="filters-row" style="margin-bottom: 1.5rem;">
-            <div class="filter-group">
-              <label for="comp-cycle-1" class="form-label" style="margin-bottom: 0;">Ciclo A (Principal):</label>
-              <select id="comp-cycle-1" class="filter-select"></select>
-            </div>
-            <div class="filter-group">
-              <label for="comp-cycle-2" class="form-label" style="margin-bottom: 0;">Ciclo B (Comparativo):</label>
-              <select id="comp-cycle-2" class="filter-select"></select>
-            </div>
-            <button id="btn-run-cycles-comparison" class="btn btn-primary" type="button">Comparar Períodos</button>
+    <!-- ================= ABA: CONFIGURAÇÕES ================= -->
+    <div id="tab-content-configuracoes" class="tab-panel">
+      <section class="panel-card">
+        <div class="panel-header" style="border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 1rem; margin-bottom: 1.5rem;">
+          <h2><i data-lucide="settings" style="color: var(--color-blue);"></i>⚙️ Painel Administrativo de Controle</h2>
+          <button id="btn-save-admin-settings" class="btn btn-primary" type="button"><i data-lucide="save"></i> Salvar Configurações</button>
+        </div>
+
+        <form id="form-admin-settings">
+
+          <!-- Informações Gerais -->
+          <div class="panel-card" style="margin-bottom:20px;">
+            <div class="panel-header"><h3>👤 Informações Gerais</h3></div>
+            <p><strong>Responsável:</strong> Thalita Campos</p>
+            <p><strong>Contato:</strong> thalita@mammamiasalgados.com.br</p>
           </div>
 
-          <div id="cycles-comparison-results" style="display: none;">
-            <div class="comparador-secao-v2" style="background: rgba(255,255,255,0.02); margin-bottom: 1.5rem;">
-              <div class="comparador-info">
-                <div class="comparador-icon"><i data-lucide="info"></i></div>
-                <div class="comparador-text">
-                  <h3 id="comp-results-title">Balanço do Ciclo A vs. Ciclo B</h3>
-                  <p id="comp-results-sub">Carregando comparação...</p>
+          <!-- Formulários Oficiais -->
+          <div class="panel-card" style="margin-bottom:20px;">
+            <div class="panel-header"><h3>📋 Formulários Oficiais</h3></div>
+            <div class="dashboard-grid">
+              <div class="kpi-card"><div class="kpi-value">💧</div><a href="https://docs.google.com/forms/d/e/1FAIpQLSfisK8w1mNz6Z4iR62GEo2l58FEg9EBZQ9vVmRiwdfkXH9Mag/viewform?usp=header" target="_blank" rel="noopener" class="kpi-label" style="text-decoration: none; color: var(--text-primary);">Controle de Água</a></div>
+              <div class="kpi-card"><div class="kpi-value">🔧</div><a href="https://docs.google.com/forms/d/e/1FAIpQLSf3EYS-UrlFKDx-QBudOCF9fP4egxL6wY7RcYnlPI-HEA_6Rw/viewform?usp=header" target="_blank" rel="noopener" class="kpi-label" style="text-decoration: none; color: var(--text-primary);">Ordem de Serviço</a></div>
+              <div class="kpi-card"><div class="kpi-value">📉</div><a href="https://docs.google.com/forms/d/e/1FAIpQLSdGz8GgzVjqK-Zt9fVUXK09Safz0eQIqc4rM0_Q7PEE9HKmCg/viewform?usp=header" target="_blank" rel="noopener" class="kpi-label" style="text-decoration: none; color: var(--text-primary);">Controle de Perdas</a></div>
+              <div class="kpi-card" style="position: relative;">
+                <div class="kpi-value">📦</div>
+                <span class="kpi-label" id="formularios-requisicoes-toggle" style="cursor: pointer; text-decoration: underline; text-decoration-style: dotted;">Requisições</span>
+                <div id="formularios-requisicoes-menu" style="display:none; position:absolute; top:100%; left:0; right:0; background: var(--card-bg); border:1px solid var(--card-border); border-radius: var(--border-radius-md); box-shadow: 0 8px 20px rgba(0,0,0,0.15); z-index: 10; margin-top: 6px; overflow:hidden;">
+                  <a href="https://docs.google.com/forms/d/e/1FAIpQLScOLcHL8fFQpXg3LMPZTmlYfmmfdJ-PX8GqmQyIbKDb5iM-RA/viewform?usp=header" target="_blank" rel="noopener" style="display:block; padding: 0.6rem 0.9rem; color: var(--text-primary); text-decoration:none; font-size:0.85rem; border-bottom: 1px solid var(--card-border);">🧹 Limpeza e EPIs</a>
+                  <a href="https://docs.google.com/forms/d/e/1FAIpQLSeEPlg0wMPk-zwtOPa5p8fnl3_J0wwjWSGPRGpZNw-1nscWbw/viewform?usp=header" target="_blank" rel="noopener" style="display:block; padding: 0.6rem 0.9rem; color: var(--text-primary); text-decoration:none; font-size:0.85rem;">🥩 Matéria-prima e Recheio</a>
                 </div>
               </div>
-              <div id="comp-results-badge" class="comparador-resultado economia"><span>--</span></div>
-            </div>
-
-            <!-- Tabela detalhada de comparação de hidrômetros -->
-            <div class="table-responsive">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Hidrômetro</th>
-                    <th>Apelido</th>
-                    <th>Consumo no Ciclo A (m³)</th>
-                    <th>Consumo no Ciclo B (m³)</th>
-                    <th>Diferença (m³)</th>
-                    <th>Status Comparativo</th>
-                  </tr>
-                </thead>
-                <tbody id="comp-results-tbody">
-                  <!-- Populado dinamicamente -->
-                </tbody>
-              </table>
             </div>
           </div>
-        </section>
-      </div>
 
-      <!-- ================= ABA 4: CONFIGURAÇÕES ADMINISTRATIVAS ================= -->
-      <div id="tab-content-configuracoes" class="tab-panel">
-        <section class="panel-card">
-          <div class="panel-header" style="border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 1rem; margin-bottom: 1.5rem;">
-            <h2><i data-lucide="settings" style="color: var(--color-blue);"></i>⚙️ Painel Administrativo de Controle</h2>
-            <button id="btn-save-admin-settings" class="btn btn-primary" type="button"><i data-lucide="save"></i> Salvar Configurações</button>
+          <!-- Parâmetros de Água -->
+          <h3 style="font-size: 1.1rem; font-weight: 700; color: white; margin-top: 2rem; margin-bottom: 1rem; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 0.5rem;">💧 Água</h3>
+          <div class="admin-settings-grid">
+            <div class="form-group"><label for="admin-meta-global" class="form-label">Meta Global</label><input type="number" id="admin-meta-global" class="form-control" step="1" required><span class="form-help">Consumo máximo somado dos 4 hidrômetros (Padrão: 80 m³).</span></div>
+            <div class="form-group"><label for="admin-meta-individual" class="form-label">Meta Individual</label><input type="number" id="admin-meta-individual" class="form-control" step="1" required><span class="form-help">Consumo máximo permitido para cada hidrômetro (Padrão: 20 m³).</span></div>
+            <div class="form-group"><label for="admin-alert-threshold" class="form-label">Limite de Alerta (%)</label><input type="number" id="admin-alert-threshold" class="form-control" step="1" max="100" min="50" required><span class="form-help">Percentual de uso da meta individual para alertar o painel (Padrão: 75%).</span></div>
+            <div class="form-group"><label for="admin-leak-threshold" class="form-label">Limite de Vazamento (m³/dia)</label><input type="number" id="admin-leak-threshold" class="form-control" step="0.1" required><span class="form-help">Consumo diário máximo aceitável antes de alertar possível vazamento (Padrão: 3 m³).</span></div>
           </div>
 
-          <form id="form-admin-settings">
-<!-- Informações Gerais -->
+          <!-- Parâmetros de OS -->
+          <h3 style="font-size: 1.1rem; font-weight: 700; color: white; margin-top: 2rem; margin-bottom: 1rem; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 0.5rem;">🔧 Ordens de Serviço</h3>
+          <div class="admin-settings-grid">
+            <div class="form-group"><label for="admin-os-dias-aberta" class="form-label">Dias para alerta OS aberta</label><input type="number" id="admin-os-dias-aberta" class="form-control" step="1" min="1" required><span class="form-help">OS aberta há mais de X dias gera alerta CRÍTICO (Padrão: 7 dias).</span></div>
+            <div class="form-group"><label for="admin-os-dias-aguardando" class="form-label">Dias para alerta Aguardando Peça</label><input type="number" id="admin-os-dias-aguardando" class="form-control" step="1" min="1" required><span class="form-help">OS aguardando peça há mais de X dias gera alerta ATENÇÃO (Padrão: 3 dias).</span></div>
+          </div>
 
-<div class="panel-card" style="margin-bottom:20px;">
+          <!-- Parâmetros de Perdas -->
+          <h3 style="font-size: 1.1rem; font-weight: 700; color: white; margin-top: 2rem; margin-bottom: 1rem; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 0.5rem;">📉 Perdas</h3>
+          <div class="admin-settings-grid">
+            <div class="form-group"><label for="admin-perdas-limite" class="form-label">Limite máximo de Perdas (registros)</label><input type="number" id="admin-perdas-limite" class="form-control" step="1" min="1" required><span class="form-help">Número máximo de registros de perdas antes de gerar alerta CRÍTICO (Padrão: 5).</span></div>
+          </div>
 
-  <div class="panel-header">
-    <h3>👤 Informações Gerais</h3>
-  </div>
+          <!-- Parâmetros de Operação -->
+          <h3 style="font-size: 1.1rem; font-weight: 700; color: white; margin-top: 2rem; margin-bottom: 1rem; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 0.5rem;">📋 Operação</h3>
+          <div class="admin-settings-grid">
+            <div class="form-group"><label for="admin-checklist-horas" class="form-label">Tempo máximo sem checklist (horas)</label><input type="number" id="admin-checklist-horas" class="form-control" step="1" min="1" required><span class="form-help">Horas sem preenchimento de checklist para gerar alerta (Padrão: 12h). Monitoramento automático será ativado quando a planilha de respostas estiver integrada.</span></div>
+          </div>
 
-  <p><strong>Responsável:</strong> Thalita Campos</p>
+          <!-- Hidrômetros -->
+          <h3 style="font-size: 1.1rem; font-weight: 700; color: white; margin-top: 2.5rem; margin-bottom: 1rem; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 0.5rem;">🛰 Cadastro de Hidrômetros</h3>
+          <div class="hydrometer-settings-list" id="admin-meters-list"></div>
 
-  <p><strong>Contato:</strong> thalita@mammamiasalgados.com.br</p>
-</div>
-
-
-<!-- Formulários Oficiais -->
-
-<div class="panel-card" style="margin-bottom:20px;">
-
-  <div class="panel-header">
-    <h3>📋 Formulários Oficiais</h3>
-  </div>
-
-  <div class="dashboard-grid">
-
-    <div class="kpi-card">
-      <div class="kpi-value">💧</div>
-      <a href="https://docs.google.com/forms/d/e/1FAIpQLSfisK8w1mNz6Z4iR62GEo2l58FEg9EBZQ9vVmRiwdfkXH9Mag/viewform?usp=header" target="_blank" rel="noopener" class="kpi-label" style="text-decoration: none; color: var(--text-primary);">Controle de Água</a>
-    </div>
-
-    <div class="kpi-card">
-      <div class="kpi-value">🔧</div>
-      <a href="https://docs.google.com/forms/d/e/1FAIpQLSf3EYS-UrlFKDx-QBudOCF9fP4egxL6wY7RcYnlPI-HEA_6Rw/viewform?usp=header" target="_blank" rel="noopener" class="kpi-label" style="text-decoration: none; color: var(--text-primary);">Ordem de Serviço</a>
-    </div>
-
-    <div class="kpi-card">
-      <div class="kpi-value">📉</div>
-      <a href="https://docs.google.com/forms/d/e/1FAIpQLSdGz8GgzVjqK-Zt9fVUXK09Safz0eQIqc4rM0_Q7PEE9HKmCg/viewform?usp=header" target="_blank" rel="noopener" class="kpi-label" style="text-decoration: none; color: var(--text-primary);">Controle de Perdas</a>
-    </div>
-
-    <div class="kpi-card" style="position: relative;">
-      <div class="kpi-value">📦</div>
-      <span class="kpi-label" id="formularios-requisicoes-toggle" style="cursor: pointer; text-decoration: underline; text-decoration-style: dotted;">Requisições</span>
-
-      <div id="formularios-requisicoes-menu" style="display:none; position:absolute; top:100%; left:0; right:0; background: var(--card-bg); border:1px solid var(--card-border); border-radius: var(--border-radius-md); box-shadow: 0 8px 20px rgba(0,0,0,0.15); z-index: 10; margin-top: 6px; overflow:hidden;">
-        <a href="https://docs.google.com/forms/d/e/1FAIpQLScOLcHL8fFQpXg3LMPZTmlYfmmfdJ-PX8GqmQyIbKDb5iM-RA/viewform?usp=header" target="_blank" rel="noopener" style="display:block; padding: 0.6rem 0.9rem; color: var(--text-primary); text-decoration:none; font-size:0.85rem; border-bottom: 1px solid var(--card-border);">🧹 Limpeza e EPIs</a>
-        <a href="https://docs.google.com/forms/d/e/1FAIpQLSeEPlg0wMPk-zwtOPa5p8fnl3_J0wwjWSGPRGpZNw-1nscWbw/viewform?usp=header" target="_blank" rel="noopener" style="display:block; padding: 0.6rem 0.9rem; color: var(--text-primary); text-decoration:none; font-size:0.85rem;">🥩 Matéria-prima e Recheio</a>
-      </div>
-    </div>
-
-  </div>
-
-</div>
-            <!-- Grid de Metas -->
-            <div class="admin-settings-grid">
-              <div class="form-group">
-                <label for="admin-meta-global" class="form-label">Meta Global</label>
-                <input type="number" id="admin-meta-global" class="form-control" step="1" required>
-                <span class="form-help">Consumo máximo somado dos 4 hidrômetros (Padrão: 80 m³).</span>
-              </div>
-              <div class="form-group">
-                <label for="admin-meta-individual" class="form-label">Meta Individual</label>
-                <input type="number" id="admin-meta-individual" class="form-control" step="1" required>
-                <span class="form-help">Consumo máximo permitido para cada hidrômetro (Padrão: 20 m³).</span>
-              </div>
-              <div class="form-group">
-                <label for="admin-alert-threshold" class="form-label">Limite de Alerta</label>
-                <input type="number" id="admin-alert-threshold" class="form-control" step="1" max="100" min="50" required>
-                <span class="form-help">Percentual de uso da meta individual para alertar o painel (Padrão: 75%).</span>
-              </div>
-              <div class="form-group">
-                <label for="admin-leak-threshold" class="form-label">Limite de Vazamento</label>
-                <input type="number" id="admin-leak-threshold" class="form-control" step="0.1" required>
-                <span class="form-help">Consumo diário máximo aceitável antes de alertar possível vazamento (Padrão: 3 m³).</span>
-              </div>
+          <!-- Multi-Unidade -->
+          <h3 style="font-size: 1.1rem; font-weight: 700; color: white; margin-top: 2.5rem; margin-bottom: 1rem; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 0.5rem;">Estrutura e Multi-Unidade (Preparação Futura)</h3>
+          <div class="admin-settings-grid">
+            <div class="form-group">
+              <label class="form-label">Unidade Ativa</label>
+              <select class="form-control" disabled style="background: rgba(255,255,255,0.02); cursor: not allowed;"><option>YUKA (Ativo)</option></select>
+              <span class="form-help">Outras unidades como 'TC' ou 'Unidade 3' estão preparadas no banco e serão liberadas na interface operacional assim que novos hidrômetros físicos forem instalados.</span>
             </div>
+          </div>
+        </form>
+      </section>
+    </div>
 
-            <!-- Cadastro de Hidrômetros / Apelidos / Cores -->
-            <h3 style="font-size: 1.1rem; font-weight: 700; color: white; margin-top: 2rem; margin-bottom: 1rem; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 0.5rem;">🚰 Cadastro de Hidrômetros</h3>
-            
-            <div class="hydrometer-settings-list" id="admin-meters-list">
-              <!-- Cards dinâmicos de configuração por hidrômetro -->
-            </div>
-            
-            <!-- Preparação para expansão / Multi-Unidade -->
-            <h3 style="font-size: 1.1rem; font-weight: 700; color: white; margin-top: 2.5rem; margin-bottom: 1rem; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 0.5rem;">Estrutura e Multi-Unidade (Preparação Futura)</h3>
-            <div class="admin-settings-grid">
-              <div class="form-group">
-                <label class="form-label">Unidade Ativa</label>
-                <select class="form-control" disabled style="background: rgba(255,255,255,0.02); cursor: not allowed;">
-                  <option>YUKA (Ativo)</option>
-                </select>
-                <span class="form-help">Outras unidades como 'TC' ou 'Unidade 3' estão preparadas no banco e serão liberadas na interface operacional assim que novos hidrômetros físicos forem instalados.</span>
-              </div>
-            </div>
-          </form>
-        </section>
-      </div>
+  </main>
 
-    </main>
-
-    <!-- FOOTER -->
-<footer class="system-footer">
-    <p>
-        Mamma Mia Control - Gestão Inteligente 
-    </p>
-
-    <p>
-        © 2026 Mamma Mia Salgados - By Thalita Campos - Processos e Automações
-    </p>
-</footer>
+  <!-- FOOTER -->
+  <footer class="system-footer">
+    <p>Mamma Mia Control - Gestão Inteligente</p>
+    <p>© 2026 Mamma Mia Salgados - By Thalita Campos - Processos e Automações</p>
+  </footer>
 
   <!-- MODAL: NOVA LEITURA -->
   <div id="modal-reading-v2" class="modal-overlay" aria-hidden="true" role="dialog">
     <div class="modal-content">
-      <div class="modal-header">
-        <h3>Lançar Nova Leitura</h3>
-        <button id="btn-close-reading-modal-v2" class="modal-close" type="button">&times;</button>
-      </div>
+      <div class="modal-header"><h3>Lançar Nova Leitura</h3><button id="btn-close-reading-modal-v2" class="modal-close" type="button">&times;</button></div>
       <form id="form-reading-v2">
-        <div class="form-group">
-          <label for="input-meter-v2" class="form-label">Selecione o Hidrômetro</label>
-          <select id="input-meter-v2" class="form-control" required>
-            <!-- Populado dinamicamente -->
-          </select>
-        </div>
-        <div class="form-group">
-          <label for="input-index-v2" class="form-label">Leitura Acumulada Atual (m³)</label>
-          <input type="number" id="input-index-v2" class="form-control" step="0.001" min="0" placeholder="Ex: 1254.450" required>
-          <span class="form-help" id="last-reading-help-v2">Última leitura registrada: --</span>
-        </div>
-        <div class="form-group">
-          <label for="input-date-v2" class="form-label">Data e Hora do Registro</label>
-          <input type="datetime-local" id="input-date-v2" class="form-control" required>
-        </div>
-        <div class="modal-footer">
-          <button type="button" id="btn-cancel-reading-v2" class="btn btn-secondary">Cancelar</button>
-          <button type="submit" class="btn btn-primary">Salvar Leitura</button>
-        </div>
+        <div class="form-group"><label for="input-meter-v2" class="form-label">Selecione o Hidrômetro</label><select id="input-meter-v2" class="form-control" required></select></div>
+        <div class="form-group"><label for="input-index-v2" class="form-label">Leitura Acumulada Atual (m³)</label><input type="number" id="input-index-v2" class="form-control" step="0.001" min="0" placeholder="Ex: 1254.450" required><span class="form-help" id="last-reading-help-v2">Última leitura registrada: --</span></div>
+        <div class="form-group"><label for="input-date-v2" class="form-label">Data e Hora do Registro</label><input type="datetime-local" id="input-date-v2" class="form-control" required></div>
+        <div class="modal-footer"><button type="button" id="btn-cancel-reading-v2" class="btn btn-secondary">Cancelar</button><button type="submit" class="btn btn-primary">Salvar Leitura</button></div>
       </form>
     </div>
   </div>
@@ -812,37 +422,19 @@
   <!-- MODAL: IMPORTAR CSV -->
   <div id="modal-csv-v2" class="modal-overlay" aria-hidden="true" role="dialog">
     <div class="modal-content" style="max-width: 550px;">
-      <div class="modal-header">
-        <h3>Importar do Google Sheets (CSV)</h3>
-        <button id="btn-close-csv-modal-v2" class="modal-close" type="button">&times;</button>
-      </div>
-      
+      <div class="modal-header"><h3>Importar do Google Sheets (CSV)</h3><button id="btn-close-csv-modal-v2" class="modal-close" type="button">&times;</button></div>
       <div class="drag-drop-zone" id="csv-drag-zone-v2">
         <i data-lucide="upload-cloud" class="drag-drop-icon"></i>
-        <div class="drag-drop-text">
-          <h4>Arraste o arquivo CSV aqui</h4>
-          <p>ou clique para selecionar do seu dispositivo</p>
-        </div>
+        <div class="drag-drop-text"><h4>Arraste o arquivo CSV aqui</h4><p>ou clique para selecionar do seu dispositivo</p></div>
         <input type="file" id="csv-file-input-v2" accept=".csv" style="display: none;">
       </div>
-
       <div style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 1.5rem; background: rgba(255,255,255,0.02); padding: 0.75rem; border-radius: var(--border-radius-md); border: 1px solid var(--card-border);">
         <h4 style="color: var(--color-blue); margin-bottom: 0.25rem; font-weight: 600;">Formatos de CSV Suportados:</h4>
         <p>1. <strong>Tabela de Colunas (Recomendado Sheets):</strong></p>
         <p style="font-family: monospace; font-size: 0.7rem; background: rgba(0,0,0,0.2); padding: 0.25rem; border-radius: 4px; margin: 0.25rem 0;">Data/Hora; Y21T156506; A25LM0975882; A25LM0975883; A25LM0975884</p>
-        <p>2. <strong>Histórico Linha a Linha:</strong></p>
-        <p style="font-family: monospace; font-size: 0.7rem; background: rgba(0,0,0,0.2); padding: 0.25rem; border-radius: 4px; margin: 0.25rem 0;">Data; Hidrômetro; Leitura Acumulada</p>
       </div>
-
-      <!-- Erros de Importação -->
-      <div id="csv-errors-container-v2" class="import-errors" style="display: none;">
-        <h5>Alguns registros continham problemas:</h5>
-        <ul id="csv-errors-list-v2" style="margin-left: 1rem;"></ul>
-      </div>
-
-      <div class="modal-footer" style="margin-top: 1.5rem;">
-        <button type="button" id="btn-close-csv-modal-footer-v2" class="btn btn-secondary">Fechar</button>
-      </div>
+      <div id="csv-errors-container-v2" class="import-errors" style="display: none;"><h5>Alguns registros continham problemas:</h5><ul id="csv-errors-list-v2" style="margin-left: 1rem;"></ul></div>
+      <div class="modal-footer" style="margin-top: 1.5rem;"><button type="button" id="btn-close-csv-modal-footer-v2" class="btn btn-secondary">Fechar</button></div>
     </div>
   </div>
 
@@ -851,15 +443,14 @@
 
   <!-- SCRIPT CENTRAL -->
   <script type="module" src="src/main.js"></script>
-
-<script>
-  if ('serviceWorker' in navigator) {
-    window.addEventListener('load', () => {
-      navigator.serviceWorker.register('/sw.js')
-        .then(() => console.log('Service Worker registrado com sucesso.'))
-        .catch((err) => console.error('Erro ao registrar Service Worker:', err));
-    });
-  }
-</script>
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js')
+          .then(() => console.log('Service Worker registrado com sucesso.'))
+          .catch((err) => console.error('Erro ao registrar Service Worker:', err));
+      });
+    }
+  </script>
 </body>
 </html>
