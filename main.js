@@ -204,17 +204,18 @@ function refreshApp() {
   }
 
   // Renderiza conforme a aba ativa para economizar recursos e evitar erros
- if (state.currentTab === 'dashboard') {
+if (state.currentTab === 'dashboard') {
   renderDashboardTab(stats, prevStats);
 
 } else if (state.currentTab === 'os') {
   carregarOS();
 
 } else if (state.currentTab === 'perdas') {
-  // futuro módulo perdas
+
+  carregarPerdas();
 
 } else if (state.currentTab === 'requisicoes') {
-  // futuro módulo requisições
+  carregarRequisicoes();
 
 } else if (state.currentTab === 'configuracoes') {
   renderConfiguracoesTab();
@@ -223,38 +224,176 @@ function refreshApp() {
   if (typeof lucide !== 'undefined') {
     lucide.createIcons();
   }
+
 }
+// ================= MÓDULO REQUISIÇÕES =================
 
-/**
- * Atualiza dropdowns de ciclo do header e histórico
- */
-function updateAppSelectors() {
-  const cycles = getAvailableCycles(state.readings);
-  
-  DOM.cycleSelect.innerHTML = '';
-  cycles.forEach(c => {
-    const option = document.createElement('option');
-    option.value = c;
-    const stats = getCycleStats(state.readings, c);
-    option.textContent = stats.label;
-    DOM.cycleSelect.appendChild(option);
-  });
+function carregarRequisicoes() {
 
-  DOM.filterMeter.innerHTML = '<option value="all">Todos os Hidrômetros</option>';
-  const settings = getAppSettings();
-  Object.keys(settings.hydrometers).forEach(id => {
-    const h = settings.hydrometers[id];
-    const option = document.createElement('option');
-    option.value = id;
-    option.textContent = `${id} (${h.alias})`;
-    DOM.filterMeter.appendChild(option);
-  });
+  const btnLimpeza = document.getElementById('btn-limpeza');
+  const btnMP = document.getElementById('btn-mp');
+  const conteudo = document.getElementById('requisicoes-conteudo');
 
-  if (state.selectedCycleKey) {
-    DOM.cycleSelect.value = state.selectedCycleKey;
+  if (!conteudo) return;
+
+  // ================= LIMPEZA =================
+
+  if (btnLimpeza) {
+
+    btnLimpeza.onclick = async () => {
+
+      try {
+
+        conteudo.innerHTML = `
+          <div class="panel-header">
+            <h2>🧹 Limpeza e EPI</h2>
+          </div>
+
+          <p>Carregando requisições...</p>
+        `;
+
+        const response = await fetch(LIMPEZA_CSV_URL);
+        const csv = await response.text();
+
+        const linhas = csv.split('\n');
+
+        let yuka = 0;
+        let tc = 0;
+        let cd = 0;
+
+        for (let i = 1; i < linhas.length; i++) {
+        const linha = linhas[i].toUpperCase();
+
+          if (linha.includes(',YUKA,')) yuka++;
+          if (linha.includes(',TC,')) tc++;
+          if (linha.includes(',CD,')) cd++;
+
+        }
+
+        conteudo.innerHTML = `
+          <div class="panel-header">
+            <h2>🧹 Limpeza e EPI</h2>
+          </div>
+
+          <p><strong>Total:</strong> ${linhas.length - 1}</p>
+
+          <p>🏢 YUKA: <strong>${yuka}</strong></p>
+          <p>🏢 TC: <strong>${tc}</strong></p>
+          <p>🏢 CD: <strong>${cd}</strong></p>
+        `;
+
+      } catch (erro) {
+
+        console.error(erro);
+
+        conteudo.innerHTML = `
+          <div class="panel-header">
+            <h2>🧹 Limpeza e EPI</h2>
+          </div>
+
+          <p>Erro ao carregar requisições.</p>
+        `;
+
+      }
+
+    };
+
   }
-}
 
+  // ================= MP E RECHEIOS =================
+
+  if (btnMP) {
+
+    btnMP.onclick = async () => {
+
+      try {
+
+        conteudo.innerHTML = `
+          <div class="panel-header">
+            <h2>🥩 MP e Recheios</h2>
+          </div>
+
+          <p>Carregando...</p>
+        `;
+
+        // TEMPORÁRIO
+        // Depois trocamos para o CSV definitivo
+       // TEMPORÁRIO
+// Depois trocamos para o CSV definitivo
+const response = await fetch(MP_CSV_URL);
+
+        const csv = await response.text();
+const linhas = csv.split('\n');
+
+const cabecalho = linhas[0].split(',');
+
+console.log('CABECALHO MP');
+console.log(cabecalho);
+console.log('LINHA 1');
+console.log(linhas[1]);
+
+console.log('LINHA 2');
+console.log(linhas[2]);
+
+console.log('LINHA 3');
+console.log(linhas[3]);
+
+console.log('LINHA 4');
+console.log(linhas[4]);
+
+console.log('LINHA 10');
+console.log(linhas[10]);
+
+console.log('LINHA 20');
+console.log(linhas[20]);
+
+let yuka = 0;
+let tc = 0;
+
+for (let i = 1; i < linhas.length; i++) {
+
+          const linha = linhas[i].toUpperCase();
+
+          if (linha.includes(',YUKA,')) yuka++;
+          if (linha.includes(',TC,')) tc++;
+
+         
+
+        }
+
+        conteudo.innerHTML = `
+          <div class="panel-header">
+            <h2>🥩 MP e Recheios</h2>
+          </div>
+
+          <p><strong>Total:</strong> ${linhas.length - 1}</p>
+
+          <p>🏢 YUKA: <strong>${yuka}</strong></p>
+          <p>🏢 TC: <strong>${tc}</strong></p>
+
+         `;
+      } catch (erro) {
+
+        console.error(erro);
+
+        conteudo.innerHTML = `
+          <div class="panel-header">
+            <h2>🥩 MP e Recheios</h2>
+          </div>
+
+          <p>Erro ao carregar dados.</p>
+        `;
+
+      }
+
+    };
+
+  }
+
+}
+function updateAppSelectors() {
+  console.log('updateAppSelectors executado');
+}
 // ================= RENDERIZADORES DE ABAS =================
 
 /**
@@ -777,62 +916,99 @@ function initEventListeners() {
   });
 
   // Header Selector Change
+ if (DOM.cycleSelect) {
   DOM.cycleSelect.addEventListener('change', (e) => {
     state.selectedCycleKey = e.target.value;
     refreshApp();
   });
+}
 
   // Filtros Histórico
-  DOM.filterMeter.addEventListener('change', (e) => {
-    state.filters.meter = e.target.value;
-    renderReadingsTable();
-    if (typeof lucide !== 'undefined') lucide.createIcons();
-  });
+  if (DOM.filterMeter) {
+    DOM.filterMeter.addEventListener('change', (e) => {
+      state.filters.meter = e.target.value;
+      renderReadingsTable();
+      if (typeof lucide !== 'undefined') lucide.createIcons();
+    });
+  }
 
   // Nova Leitura Modal controls
-  DOM.btnOpenReadingModal.addEventListener('click', () => {
-    resetReadingFormDate();
-    updateLastReadingHelp();
-    openModal(DOM.modalReading);
-  });
-  DOM.btnCloseReadingModal.addEventListener('click', () => closeModal(DOM.modalReading));
-  DOM.btnCancelReading.addEventListener('click', () => closeModal(DOM.modalReading));
-  DOM.inputMeter.addEventListener('change', updateLastReadingHelp);
+  if (DOM.btnOpenReadingModal) {
+    DOM.btnOpenReadingModal.addEventListener('click', () => {
+      resetReadingFormDate();
+      updateLastReadingHelp();
+      openModal(DOM.modalReading);
+    });
+  }
 
-  DOM.formReading.addEventListener('submit', (e) => {
-    e.preventDefault();
-    submitReadingForm();
-  });
+  if (DOM.btnCloseReadingModal) {
+    DOM.btnCloseReadingModal.addEventListener('click', () => closeModal(DOM.modalReading));
+  }
+
+  if (DOM.btnCancelReading) {
+    DOM.btnCancelReading.addEventListener('click', () => closeModal(DOM.modalReading));
+  }
+
+  if (DOM.inputMeter) {
+    DOM.inputMeter.addEventListener('change', updateLastReadingHelp);
+  }
+
+  if (DOM.formReading) {
+    DOM.formReading.addEventListener('submit', (e) => {
+      e.preventDefault();
+      submitReadingForm();
+    });
+  }
 
   // CSV Modal controls
-  DOM.btnOpenCsvModal.addEventListener('click', () => {
-    DOM.csvErrorsContainer.style.display = 'none';
-    DOM.csvFileInput.value = '';
-    openModal(DOM.modalCsv);
-  });
-  DOM.btnCloseCsvModal.addEventListener('click', () => closeModal(DOM.modalCsv));
-  DOM.btnCloseCsvModalFooter.addEventListener('click', () => closeModal(DOM.modalCsv));
-  
-  DOM.csvDragZone.addEventListener('click', () => DOM.csvFileInput.click());
-  DOM.csvFileInput.addEventListener('change', handleCsvFileSelect);
-  DOM.csvDragZone.addEventListener('dragover', (e) => {
-    e.preventDefault();
-    DOM.csvDragZone.classList.add('dragover');
-  });
-  DOM.csvDragZone.addEventListener('dragleave', () => DOM.csvDragZone.classList.remove('dragover'));
-  DOM.csvDragZone.addEventListener('drop', (e) => {
-    e.preventDefault();
-    DOM.csvDragZone.classList.remove('dragover');
-    if (e.dataTransfer.files.length > 0) {
-      processCsvFile(e.dataTransfer.files[0]);
-    }
-  });
+  if (DOM.btnOpenCsvModal) {
+    DOM.btnOpenCsvModal.addEventListener('click', () => {
+      DOM.csvErrorsContainer.style.display = 'none';
+      DOM.csvFileInput.value = '';
+      openModal(DOM.modalCsv);
+    });
+  }
 
+  if (DOM.btnCloseCsvModal) {
+    DOM.btnCloseCsvModal.addEventListener('click', () => closeModal(DOM.modalCsv));
+  }
+
+  if (DOM.btnCloseCsvModalFooter) {
+    DOM.btnCloseCsvModalFooter.addEventListener('click', () => closeModal(DOM.modalCsv));
+  }
+
+  if (DOM.csvDragZone && DOM.csvFileInput) {
+
+    DOM.csvDragZone.addEventListener('click', () => DOM.csvFileInput.click());
+
+    DOM.csvFileInput.addEventListener('change', handleCsvFileSelect);
+
+    DOM.csvDragZone.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      DOM.csvDragZone.classList.add('dragover');
+    });
+
+    DOM.csvDragZone.addEventListener('dragleave', () => {
+      DOM.csvDragZone.classList.remove('dragover');
+    });
+
+    DOM.csvDragZone.addEventListener('drop', (e) => {
+      e.preventDefault();
+      DOM.csvDragZone.classList.remove('dragover');
+
+      if (e.dataTransfer.files.length > 0) {
+        processCsvFile(e.dataTransfer.files[0]);
+      }
+    });
+
+  }
   // Integração Google Sheets Mock
+if (DOM.btnGoogleSheetsImport) {
   DOM.btnGoogleSheetsImport.addEventListener('click', () => {
     alert('Funcionalidade em desenvolvimento.');
     syncGoogleSheetsFuture(state.readings);
   });
+}
 
   // Exportadores
   DOM.btnExportPdf.addEventListener('click', () => {
@@ -869,17 +1045,22 @@ function initEventListeners() {
   });
 
   // Modo Diretoria Print / Save PDF
+if (DOM.btnPrintPresentation) {
   DOM.btnPrintPresentation.addEventListener('click', () => {
     window.print();
   });
-
-  // Comparador de Períodos
-  DOM.btnRunCyclesComparison.addEventListener('click', runCyclesComparison);
-
-  // Configurações Salvar
-  DOM.btnSaveAdminSettings.addEventListener('click', submitAdminSettings);
 }
 
+// Comparador de Períodos
+if (DOM.btnRunCyclesComparison) {
+  DOM.btnRunCyclesComparison.addEventListener('click', runCyclesComparison);
+}
+
+// Configurações Salvar
+if (DOM.btnSaveAdminSettings) {
+  DOM.btnSaveAdminSettings.addEventListener('click', submitAdminSettings);
+}
+}
 /**
  * Controla navegação entre abas
  */
@@ -1245,29 +1426,365 @@ function submitAdminSettings() {
   showToast('Configurações salvas e aplicadas com sucesso!', 'success');
 }
 
+const LIMPEZA_CSV_URL =
+'https://docs.google.com/spreadsheets/d/e/2PACX-1vRt3TOjpSYFl40nUJcPeL82B8SqmBpbomHDbPVK2rXcdPpuJ8M5QZgOlDQV1WFJl7371U7Ox7heooiv/pub?output=csv';
+
+const MP_CSV_URL =
+'https://docs.google.com/spreadsheets/d/e/2PACX-1vTFEg4Bpk7evJs7NDYRCMBVWm5ZB6hQRD8SS_RwowjbNS_hI2kmtzH5ovhjYRpRssk0YH00yiCgoyCC/pub?output=csv';
+
+const PERDAS_CSV_URL =
+'https://docs.google.com/spreadsheets/d/e/2PACX-1vQ0QXaxvuAAaF7XzQWayifLZIflDtS1psT3gNJTmkQ0BvPWbuKPttlJ6EAcE8Zv8IG_UlAbScrhD4Nb/pub?output=csv';
+
+// ================= MÓDULO PERDAS =================
+
+async function carregarPerdas() {
+
+  try {
+
+    const response = await fetch(PERDAS_CSV_URL);
+    const csv = await response.text();
+
+    const linhas = csv.split('\n');
+    const cabecalho = linhas[0].split(',');
+
+  console.log('CABECALHO PERDAS');
+
+cabecalho.forEach((coluna, indice) => {
+  console.log(indice, coluna);
+});
+
+  console.log('LINHA 1');
+  console.log(linhas[1]);
+    
+  console.log('LINHA 2');
+  console.log(linhas[2]);
+
+  console.log('LINHA 3');
+  console.log(linhas[3]);
+
+  console.log('LINHA 4');
+  console.log(linhas[4]);
+
+    let totalPerdas = linhas.length - 1;
+
+    const conteudo =
+      document.getElementById('perdas-conteudo');
+
+    if (!conteudo) return;
+
+         const primeiraLinha = linhas[1].split(',');
+
+const dataRegistro = primeiraLinha[0] || '-';
+const responsavel = primeiraLinha[2] || '-';
+const setor = primeiraLinha[4] || '-';
+const empresa = primeiraLinha[18] || 'YUKA';
+const motivos = {};
+const produtos = {};
+
+for (let i = 1; i < linhas.length; i++) {
+
+  const colunas = linhas[i].split(',');
+
+  const motivo =
+  (colunas[7] || 'OUTRO').trim();
+
+const produto =
+  (colunas[5] || 'SEM PRODUTO').trim();
+
+  const quantidade =
+    parseFloat(colunas[6]) || 0;
+
+  motivos[motivo] =
+    (motivos[motivo] || 0) + quantidade;
+
+  produtos[produto] =
+    (produtos[produto] || 0) + quantidade;
+
+}
+
+const rankingMotivos =
+  Object.entries(motivos)
+    .sort((a, b) => b[1] - a[1]);
+
+const rankingProdutos =
+  Object.entries(produtos)
+    .sort((a, b) => b[1] - a[1]);
+
+const maiorMotivo =
+  rankingMotivos[0]?.[0] || '-';
+
+const produtoMaisPerdido =
+  rankingProdutos[0]?.[0] || '-';
+const labelsMotivos =
+  rankingMotivos.slice(0, 10).map(item => item[0]);
+
+const valoresMotivos =
+  rankingMotivos.slice(0, 10).map(item => item[1]);
+
+const labelsProdutos =
+  rankingProdutos.slice(0, 10).map(item => item[0]);
+
+const valoresProdutos =
+  rankingProdutos.slice(0, 10).map(item => item[1]);
+conteudo.innerHTML = `
+  <div class="panel-header">
+    <h2>📉 Gestão de Perdas YUKA</h2>
+  </div>
+
+  <div class="dashboard-grid">
+
+    <div class="kpi-card">
+      <div class="kpi-label">📦 REGISTROS</div>
+      <div class="kpi-value">${totalPerdas}</div>
+    </div>
+
+    <div class="kpi-card">
+  <div class="kpi-label">⚠️ MAIOR MOTIVO</div>
+  <div class="kpi-value">${maiorMotivo}</div>
+</div>
+
+    <div class="kpi-card">
+  <div class="kpi-label">🥟 PRODUTO TOP</div>
+  <div class="kpi-value">${produtoMaisPerdido}</div>
+</div>
+
+    <div class="kpi-card">
+      <div class="kpi-label">🏭 SETOR</div>
+      <div class="kpi-value">${setor}</div>
+    </div>
+
+  </div>
+    </div>
+
+  <div class="panel-card">
+    <h3>🚨 Perdas por Motivo</h3>
+    <canvas id="graficoMotivos"></canvas>
+  </div>
+
+  <div class="panel-card">
+    <h3>🏆 Ranking de Produtos Perdidos</h3>
+    <canvas id="graficoProdutos"></canvas>
+  </div>
+  `;
+    
+const ctxMotivos = document.getElementById('graficoMotivos');
+
+if (ctxMotivos) {
+
+  new Chart(ctxMotivos, {
+    type: 'bar',
+    data: {
+      labels: labelsMotivos,
+      datasets: [{
+        label: 'Perdas',
+        data: valoresMotivos
+      }]
+    },
+    options: {
+      indexAxis: 'y',
+      responsive: true
+    }
+  });
+
+}
+
+const ctxProdutos = document.getElementById('graficoProdutos');
+
+if (ctxProdutos) {
+
+  new Chart(ctxProdutos, {
+    type: 'bar',
+    data: {
+      labels: labelsProdutos,
+      datasets: [{
+        label: 'Perdas',
+        data: valoresProdutos
+      }]
+    },
+    options: {
+      indexAxis: 'y',
+      responsive: true
+    }
+  });
+
+}
+  } catch (erro) {
+
+    console.error(erro);
+
+  }
+
+}
+
 // ================= MÓDULO OS =================
 
 const OS_CSV_URL =
-'https://docs.google.com/spreadsheets/d/e/2PACX-1vSyKnl6d4trSwtVru3JQIcoqb_h2gTHKBqn-3zXM1JW7MTzm_Xj01UJh62eDPDNEOYjisMWrGrWfFJt/pub?output=csv';
+'https://docs.google.com/spreadsheets/d/e/2PACX-1vSyKnl6d4trSwtVru3JQIcoqb_h2gTHKBqn-3zXM1JW7MTzm_Xj01UJh62eDPDNEOYjisMWrGrWfFJt/pub?gid=1728678619&single=true&output=csv';
 
 async function carregarOS() {
 
   try {
 
     const response = await fetch(OS_CSV_URL);
-
     const csv = await response.text();
 
-    console.log('CSV carregado!');
-console.log(csv.substring(0, 500));
+    const linhas = csv.split('\n');
 
-  } catch (error) {
+    const cabecalho = linhas[0].split(',');
+    console.log(cabecalho);
+
+    const indiceStatus = cabecalho.findIndex(col =>
+      col.trim().replace(/"/g, '').toUpperCase() === 'STATUS'
+    );
+
+    const indicePrioridade = cabecalho.findIndex(col =>
+      col.trim().replace(/"/g, '').toUpperCase() === 'PRIORIDADE'
+    );
+
+    const indiceOS = cabecalho.findIndex(col =>
+      col.trim().replace(/"/g, '').toUpperCase() === 'OS'
+    );
+
+    const indiceUnidade = cabecalho.findIndex(col =>
+      col.trim().replace(/"/g, '').toUpperCase() === 'UNIDADE'
+    );
+
+    const indiceEquipamento = cabecalho.findIndex(col =>
+      col.trim().replace(/"/g, '').toUpperCase() === 'EQUIPAMENTO OU LOCAL AFETADO'
+    );
+
+    const indicePDF = cabecalho.findIndex(col =>
+      col.trim().replace(/"/g, '').toUpperCase() === 'PDF_OS'
+    );
+
+    const tableBody =
+     document.getElementById('os-table-body');
+
+  const filtroStatus =
+  document.getElementById('os-filter-status')
+  ?.value || 'TODOS';
+
+  if (tableBody) {
+  tableBody.innerHTML = '';
+}
+
+    let abertas = 0;
+    let aguardando = 0;
+    let concluidas = 0;
+
+    let criticas = 0;
+    let altas = 0;
+    let baixas = 0;
+
+    for (let i = 1; i < linhas.length; i++) {
+
+      const colunas = linhas[i].split(',');
+
+      const status = (
+        colunas[indiceStatus] || ''
+      ).trim().replace(/"/g, '').toUpperCase();
+
+      const prioridade = (
+        colunas[indicePrioridade] || ''
+      ).trim().replace(/"/g, '').toUpperCase();
+
+      const os = (colunas[indiceOS] || '').replace(/"/g, '');
+      const unidade = (colunas[indiceUnidade] || '').replace(/"/g, '');
+      const equipamento = (colunas[indiceEquipamento] || '').replace(/"/g, '');
+      const pdf = (colunas[indicePDF] || '').replace(/"/g, '');
+
+      // CONTADORES
+
+      if (status === 'ABERTO') {
+
+        abertas++;
+
+        if (
+          prioridade === 'CRÍTICA' ||
+          prioridade === 'CRITICA'
+        ) {
+          criticas++;
+        }
+
+        if (prioridade === 'ALTA') {
+          altas++;
+        }
+
+        if (prioridade === 'BAIXA') {
+          baixas++;
+        }
+      }
+
+      if (status === 'AGUARDANDO PEÇA') {
+        aguardando++;
+      }
+
+      if (
+        status === 'CONCLUÍDO' ||
+        status === 'CONCLUIDO'
+      ) {
+        concluidas++;
+      }
+
+      // TABELA
+
+      if (tableBody) {
+
+        tableBody.innerHTML += `
+          <tr>
+            <td>${os}</td>
+            <td>${status}</td>
+            <td>${prioridade}</td>
+            <td>${unidade}</td>
+            <td>${equipamento}</td>
+            <td>
+              ${
+                pdf
+                  ? `<a href="${pdf}" target="_blank">📄 Abrir</a>`
+                  : '-'
+              }
+            </td>
+          </tr>
+        `;
+      }
+
+    }
+
+    // CARDS
+
+    const openCard = document.getElementById('os-open-count');
+    const waitingCard = document.getElementById('os-parts-count');
+    const closedCard = document.getElementById('os-closed-count');
+
+    if (openCard) openCard.textContent = abertas;
+    if (waitingCard) waitingCard.textContent = aguardando;
+    if (closedCard) closedCard.textContent = concluidas;
+
+    const criticalCard = document.getElementById('os-critical-count');
+    const highCard = document.getElementById('os-high-count');
+    const lowCard = document.getElementById('os-low-count');
+
+    if (criticalCard) criticalCard.textContent = criticas;
+    if (highCard) highCard.textContent = altas;
+    if (lowCard) lowCard.textContent = baixas;
+
+    console.log('OS Abertas:', abertas);
+    console.log('OS Aguardando:', aguardando);
+    console.log('OS Concluídas:', concluidas);
+    console.log('OS Críticas:', criticas);
+    console.log('OS Altas:', altas);
+    console.log('OS Baixas:', baixas);
+
+  } 
+  
+    catch (error) {
 
     console.error('Erro ao carregar OS:', error);
 
   }
 
 }
+
 // ================= NOTIFICAÇÕES TOAST (V2.0) =================
 
 function showToast(message, type = 'info') {
