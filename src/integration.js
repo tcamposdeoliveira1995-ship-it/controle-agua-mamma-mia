@@ -200,20 +200,25 @@ export function exportToPDF(cycleStats, comparisonStats, trendChartCanvas, compa
   const settings = getAppSettings();
   const emissionDate = formatDate(new Date(), true);
 
+  // Paleta de cores da marca (dourado/marrom)
+  const brandPrimary = '#b79b6c';   // dourado principal
+  const brandDark = '#8a8570';      // marrom/dourado escuro (títulos)
+  const brandText = '#4b433c';      // texto principal
+
   // Cabeçalho da Empresa
   let headerHtml = `
-    <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #3b82f6; padding-bottom: 15px; margin-bottom: 20px;">
-      <div>
-        <div style="display: flex; align-items: center; gap: 8px;">
-          <span style="font-size: 24px;">🇮🇹</span>
-          <h1 style="font-size: 20px; font-weight: 800; color: #1e3a8a; margin: 0; text-transform: uppercase; letter-spacing: -0.5px;">Mamma Mia</h1>
+    <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid ${brandPrimary}; padding-bottom: 15px; margin-bottom: 20px;">
+      <div style="display: flex; align-items: center; gap: 12px;">
+        <img src="logo-mamma-mia.jpg" alt="Mamma Mia Salgados" style="height: 50px; width: auto; object-fit: contain;">
+        <div>
+          <h1 style="font-size: 20px; font-weight: 800; color: ${brandDark}; margin: 0; text-transform: uppercase; letter-spacing: -0.5px;">Mamma Mia</h1>
+          <p style="font-size: 10px; color: ${brandText}; margin: 2px 0 0 0; text-transform: uppercase; letter-spacing: 1.5px; font-weight: 600;">Mamma Mia Control - Gestão de Consumo de Água</p>
         </div>
-        <p style="font-size: 10px; color: #4b5563; margin: 2px 0 0 0; text-transform: uppercase; letter-spacing: 1.5px; font-weight: 600;">Mamma Mia Control - Gestão de Consumo de Água</p>
       </div>
       <div style="text-align: right;">
-        <h2 style="font-size: 11px; color: #1f2937; margin: 0; font-weight: 700;">RELATÓRIO EXECUTIVO DE CONSUMO</h2>
+        <h2 style="font-size: 11px; color: ${brandText}; margin: 0; font-weight: 700;">RELATÓRIO EXECUTIVO DE CONSUMO</h2>
         <p style="font-size: 9px; color: #6b7280; margin: 2px 0 0 0;">Emitido em: ${emissionDate}</p>
-        <p style="font-size: 10px; color: #2563eb; margin: 2px 0 0 0; font-weight: 700;">Ciclo Analisado: ${cycleStats.label}</p>
+        <p style="font-size: 10px; color: ${brandPrimary}; margin: 2px 0 0 0; font-weight: 700;">Ciclo Analisado: ${cycleStats.label}</p>
       </div>
     </div>
   `;
@@ -223,7 +228,7 @@ export function exportToPDF(cycleStats, comparisonStats, trendChartCanvas, compa
   const saldoColor = isEconomy ? '#10b981' : '#ef4444';
 
   let statsHtml = `
-    <h3 style="font-size: 13px; font-weight: 700; color: #1e3a8a; margin-top: 0; margin-bottom: 10px; text-transform: uppercase;">1. Resumo Executivo do Ciclo</h3>
+    <h3 style="font-size: 13px; font-weight: 700; color: ${brandDark}; margin-top: 0; margin-bottom: 10px; text-transform: uppercase;">1. Resumo Executivo do Ciclo</h3>
     <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 25px;">
       <div style="border: 1px solid #e5e7eb; border-radius: 6px; padding: 10px; background: #f9fafb; text-align: center;">
         <p style="margin: 0; font-size: 9px; color: #6b7280; font-weight: 600; text-transform: uppercase;">Consumo Total</p>
@@ -239,7 +244,7 @@ export function exportToPDF(cycleStats, comparisonStats, trendChartCanvas, compa
         <p style="margin: 0; font-size: 9px; color: #6b7280; font-weight: 600; text-transform: uppercase;">% Limite Utilizado</p>
         <p style="margin: 4px 0 0 0; font-size: 18px; font-weight: 700; color: #111827;">${cycleStats.globalPercentUsed}%</p>
         <div style="background: #e5e7eb; height: 3px; border-radius: 1px; margin: 4px auto 0 auto; width: 60px;">
-          <div style="background: #3b82f6; height: 100%; width: ${Math.min(100, cycleStats.globalPercentUsed)}%;"></div>
+          <div style="background: ${brandPrimary}; height: 100%; width: ${Math.min(100, cycleStats.globalPercentUsed)}%;"></div>
         </div>
       </div>
       <div style="border: 1px solid #e5e7eb; border-radius: 6px; padding: 10px; background: #f9fafb; text-align: center;">
@@ -277,7 +282,7 @@ export function exportToPDF(cycleStats, comparisonStats, trendChartCanvas, compa
   });
 
   let tableHtml = `
-    <h3 style="font-size: 13px; font-weight: 700; color: #1e3a8a; margin-top: 0; margin-bottom: 10px; text-transform: uppercase;">2. Detalhamento por Hidrômetro</h3>
+    <h3 style="font-size: 13px; font-weight: 700; color: ${brandDark}; margin-top: 0; margin-bottom: 10px; text-transform: uppercase;">2. Detalhamento por Hidrômetro</h3>
     <table style="width: 100%; border-collapse: collapse; margin-bottom: 25px; font-size: 10.5px;">
       <thead>
         <tr style="background: #f3f4f6; border-bottom: 2px solid #d1d5db; font-weight: 700; text-align: left;">
@@ -305,7 +310,7 @@ export function exportToPDF(cycleStats, comparisonStats, trendChartCanvas, compa
     const compSign = comparisonStats.isEconomy ? '-' : '+';
 
     compHtml = `
-      <h3 style="font-size: 13px; font-weight: 700; color: #1e3a8a; margin-top: 0; margin-bottom: 10px; text-transform: uppercase;">3. Comparativo de Consumo entre Períodos</h3>
+      <h3 style="font-size: 13px; font-weight: 700; color: ${brandDark}; margin-top: 0; margin-bottom: 10px; text-transform: uppercase;">3. Comparativo de Consumo entre Períodos</h3>
       <div style="display: flex; gap: 15px; border: 1px solid #e5e7eb; border-radius: 6px; padding: 12px; margin-bottom: 25px; background: #fafafa;">
         <div style="flex: 1; text-align: center; border-right: 1px dashed #d1d5db;">
           <span style="font-size: 9px; color: #6b7280; font-weight: 600; text-transform: uppercase;">Ciclo Anterior (${comparisonStats.prevLabel})</span>
@@ -331,7 +336,7 @@ export function exportToPDF(cycleStats, comparisonStats, trendChartCanvas, compa
     chartsHtml = `
       <div style="page-break-before: always; padding-top: 15px;"></div>
       ${headerHtml}
-      <h3 style="font-size: 13px; font-weight: 700; color: #1e3a8a; margin-top: 0; margin-bottom: 15px; text-transform: uppercase;">4. Análise Gráfica de Tendência</h3>
+      <h3 style="font-size: 13px; font-weight: 700; color: ${brandDark}; margin-top: 0; margin-bottom: 15px; text-transform: uppercase;">4. Análise Gráfica de Tendência</h3>
       <div style="display: flex; flex-direction: column; gap: 20px;">
         ${trendImgSrc ? `
           <div style="text-align: center; border: 1px solid #e5e7eb; border-radius: 6px; padding: 10px;">
