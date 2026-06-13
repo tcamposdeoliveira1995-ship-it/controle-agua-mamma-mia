@@ -262,8 +262,7 @@ function carregarRequisicoes() {
         let cd = 0;
 
         for (let i = 1; i < linhas.length; i++) {
-
-          const linha = linhas[i].toUpperCase();
+        const linha = linhas[i].toUpperCase();
 
           if (linha.includes(',YUKA,')) yuka++;
           if (linha.includes(',TC,')) tc++;
