@@ -392,12 +392,10 @@ export function exportToPDF(cycleStats, comparisonStats, trendChartCanvas, compa
   `;
 
   // IMPORTANTE: precisa estar no DOM para o html2canvas renderizar corretamente
-  element.style.position = 'fixed';
+  element.style.position = 'absolute';
   element.style.top = '0';
-  element.style.left = '0';
-  element.style.width = '210mm'; // largura A4
-  element.style.zIndex = '-9999';
-  element.style.opacity = '0';
+  element.style.left = '-9999px';
+  element.style.width = '210mm';
   document.body.appendChild(element);
 
   // Configurações do html2pdf.js
