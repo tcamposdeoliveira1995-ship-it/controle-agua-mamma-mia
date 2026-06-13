@@ -1532,6 +1532,7 @@ transform:translateY(-4px);
 .modern-table td{
     padding:12px;
     text-align:left;
+    vertical-align:middle;
 }
 
 .modern-table th{
