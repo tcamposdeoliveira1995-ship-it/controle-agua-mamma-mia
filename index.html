@@ -23,6 +23,41 @@
 </head>
 
 <body>
+	<!-- TELA DE BLOQUEIO -->
+<div id="lock-screen" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: var(--bg-primary); display: flex; align-items: center; justify-content: center; z-index: 9999;">
+  <div style="background: var(--card-bg); border: 1px solid var(--card-border); border-radius: var(--border-radius-lg); padding: 2.5rem; max-width: 360px; width: 90%; text-align: center; box-shadow: 0 20px 50px rgba(0,0,0,0.2);">
+    <img src="logo-mamma-mia.jpg" alt="Mamma Mia Salgados" style="max-width: 160px; margin-bottom: 1.5rem;">
+    <h2 style="font-size: 1.2rem; font-weight: 700; color: var(--text-primary); margin-bottom: 1.5rem;">Acesso Restrito</h2>
+    <input type="password" id="lock-screen-input" class="form-control" placeholder="Digite a senha" style="text-align: center; margin-bottom: 1rem;" autofocus>
+    <button id="lock-screen-btn" class="btn btn-primary" type="button" style="width: 100%;">Entrar</button>
+    <p id="lock-screen-error" style="color: var(--color-red); font-size: 0.85rem; margin-top: 0.75rem; display: none;">Senha incorreta. Tente novamente.</p>
+  </div>
+</div>
+
+<script>
+  (function() {
+    const SENHA_CORRETA = '30154';
+    const lockScreen = document.getElementById('lock-screen');
+    const input = document.getElementById('lock-screen-input');
+    const btn = document.getElementById('lock-screen-btn');
+    const erro = document.getElementById('lock-screen-error');
+
+    function tentarEntrar() {
+      if (input.value === SENHA_CORRETA) {
+        lockScreen.style.display = 'none';
+      } else {
+        erro.style.display = 'block';
+        input.value = '';
+        input.focus();
+      }
+    }
+
+    btn.addEventListener('click', tentarEntrar);
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') tentarEntrar();
+    });
+  })();
+</script>
   <div class="app-container">
     
     <!-- HEADER -->
