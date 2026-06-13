@@ -1516,3 +1516,31 @@ transition:.3s;
 .requisicao-card:hover{
 transform:translateY(-4px);
 }
+.dashboard-grid{
+    display:grid;
+    grid-template-columns:repeat(auto-fit,minmax(220px,1fr));
+    gap:16px;
+    margin-bottom:20px;
+}
+
+.modern-table{
+    width:100%;
+    border-collapse:collapse;
+}
+
+.modern-table th,
+.modern-table td{
+    padding:12px;
+    text-align:left;
+}
+
+.modern-table th{
+    background:#f3ede3;
+}
+
+.status-badge{
+    padding:4px 10px;
+    border-radius:20px;
+    font-size:12px;
+    font-weight:600;
+}
