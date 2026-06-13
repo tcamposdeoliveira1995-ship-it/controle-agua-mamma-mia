@@ -1003,10 +1003,12 @@ function initEventListeners() {
 
   }
   // Integração Google Sheets Mock
+if (DOM.btnGoogleSheetsImport) {
   DOM.btnGoogleSheetsImport.addEventListener('click', () => {
     alert('Funcionalidade em desenvolvimento.');
     syncGoogleSheetsFuture(state.readings);
   });
+}
 
   // Exportadores
   DOM.btnExportPdf.addEventListener('click', () => {
