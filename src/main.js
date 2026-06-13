@@ -1060,7 +1060,23 @@ if (DOM.btnRunCyclesComparison) {
 if (DOM.btnSaveAdminSettings) {
   DOM.btnSaveAdminSettings.addEventListener('click', submitAdminSettings);
 }
-}
+// Toggle do menu de formulários de Requisições
+  const reqFormToggle = document.getElementById('formularios-requisicoes-toggle');
+  const reqFormMenu = document.getElementById('formularios-requisicoes-menu');
+
+  if (reqFormToggle && reqFormMenu) {
+    reqFormToggle.addEventListener('click', (e) => {
+      e.stopPropagation();
+      reqFormMenu.style.display = reqFormMenu.style.display === 'none' ? 'block' : 'none';
+    });
+
+    document.addEventListener('click', (e) => {
+      if (!reqFormMenu.contains(e.target) && e.target !== reqFormToggle) {
+        reqFormMenu.style.display = 'none';
+      }
+    });
+  }
+  }
 /**
  * Controla navegação entre abas
  */
