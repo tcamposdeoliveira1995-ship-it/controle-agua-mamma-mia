@@ -1009,17 +1009,21 @@ function initEventListeners() {
   });
 
   // Modo Diretoria Print / Save PDF
+if (DOM.btnPrintPresentation) {
   DOM.btnPrintPresentation.addEventListener('click', () => {
     window.print();
   });
-
-  // Comparador de Períodos
-  DOM.btnRunCyclesComparison.addEventListener('click', runCyclesComparison);
-
-  // Configurações Salvar
-  DOM.btnSaveAdminSettings.addEventListener('click', submitAdminSettings);
 }
 
+// Comparador de Períodos
+if (DOM.btnRunCyclesComparison) {
+  DOM.btnRunCyclesComparison.addEventListener('click', runCyclesComparison);
+}
+
+// Configurações Salvar
+if (DOM.btnSaveAdminSettings) {
+  DOM.btnSaveAdminSettings.addEventListener('click', submitAdminSettings);
+}
 /**
  * Controla navegação entre abas
  */
