@@ -417,7 +417,6 @@ export function exportToPDF(cycleStats, comparisonStats, trendChartCanvas, compa
     document.body.removeChild(element);
   });
 }
-}
 
 /**
  * Auxiliares
