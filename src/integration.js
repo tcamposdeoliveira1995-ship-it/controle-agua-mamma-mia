@@ -382,15 +382,8 @@ export function exportToPDF(cycleStats, comparisonStats, trendChartCanvas, compa
     ${footerHtmlText}
     ${chartsHtml}
   `;
-  element.innerHTML = `
-    ${headerHtml}
-    ${statsHtml}
-    ${tableHtml}
-    ${compHtml}
-    ${footerHtmlText}
-    ${chartsHtml}
-  `;
 
+  console.log('CONTEÚDO DO ELEMENT:', element.innerHTML.length, element.innerHTML.substring(0, 500));
   // IMPORTANTE: precisa estar no DOM para o html2canvas renderizar corretamente
   element.style.position = 'absolute';
   element.style.top = '0';
