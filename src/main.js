@@ -893,6 +893,8 @@ function submitAdminSettings() {
   showToast('Configurações salvas e aplicadas com sucesso!', 'success');
 }
 
+// ================= MÓDULO REQUISIÇÕES =================
+
 function carregarRequisicoes() {
   const btnLimpeza = document.getElementById('btn-limpeza');
   const btnMP = document.getElementById('btn-mp');
@@ -907,54 +909,14 @@ function carregarRequisicoes() {
         const csv = await response.text();
         const linhas = csv.split('\n').filter(l => l.trim());
         const cabecalho = linhas[0].split('\t');
-
-        let yuka = 0, tc = 0, cd = 0;
         const registros = [];
 
         for (let i = 1; i < linhas.length; i++) {
           const cols = linhas[i].split('\t');
-          const unidade = (cols[2] || '').trim().toUpperCase();
-          if (unidade.includes('YUKA')) yuka++;
-          if (unidade.includes('TC')) tc++;
-          if (unidade.includes('CD')) cd++;
           registros.push(cols);
         }
 
-        conteudo.innerHTML = `
-          <div class="panel-header">
-            <h2>🧹 Limpeza e EPI</h2>
-            <button id="btn-pdf-limpeza" class="btn btn-primary" style="font-size:0.82rem;">
-              <i data-lucide="file-text"></i> Gerar PDF
-            </button>
-          </div>
-          <div class="dashboard-grid" style="margin-bottom:1rem;">
-            <div class="kpi-card"><div class="kpi-label">Total</div><div class="kpi-value">${registros.length}</div></div>
-            <div class="kpi-card"><div class="kpi-label">🏢 YUKA</div><div class="kpi-value">${yuka}</div></div>
-            <div class="kpi-card"><div class="kpi-label">🏢 TC</div><div class="kpi-value">${tc}</div></div>
-            <div class="kpi-card"><div class="kpi-label">🏢 CD</div><div class="kpi-value">${cd}</div></div>
-          </div>
-          <div class="table-responsive">
-            <table class="modern-table">
-              <thead><tr>
-                <th>Data/Hora</th><th>Responsável</th><th>Unidade</th><th>Setor</th><th>Status</th>
-              </tr></thead>
-              <tbody>
-                ${registros.map(cols => `<tr>
-                  <td style="font-size:0.8rem;">${cols[0] || '-'}</td>
-                  <td>${cols[1] || '-'}</td>
-                  <td>${cols[2] || '-'}</td>
-                  <td>${cols[3] || '-'}</td>
-                  <td>${cols[41] || '-'}</td>
-                </tr>`).join('')}
-              </tbody>
-            </table>
-          </div>`;
-
-        if (typeof lucide !== 'undefined') lucide.createIcons();
-
-        document.getElementById('btn-pdf-limpeza')?.addEventListener('click', () => {
-          gerarPDFRequisicao('limpeza', cabecalho, registros, yuka, tc, cd);
-        });
+        renderTabelaRequisicoes('limpeza', cabecalho, registros, conteudo);
 
       } catch (erro) {
         console.error(erro);
@@ -962,6 +924,118 @@ function carregarRequisicoes() {
       }
     };
   }
+
+  function renderTabelaRequisicoes(tipo, cabecalho, registros, conteudo) {
+  const isLimpeza = tipo === 'limpeza';
+  const titulo = isLimpeza ? '🧹 Limpeza e EPI' : '🥩 MP e Recheios';
+
+  // Detecta empresas disponíveis
+  const empresas = new Set();
+  registros.forEach(cols => {
+    const unidade = (cols[2] || '').trim().toUpperCase();
+    if (unidade) empresas.add(unidade);
+  });
+  const empresasOrdenadas = ['TODOS', ...Array.from(empresas).sort()];
+
+  function contarPorEmpresa(filtro) {
+    return registros.filter(cols => {
+      const u = (cols[2] || '').trim().toUpperCase();
+      return filtro === 'TODOS' || u === filtro;
+    }).length;
+  }
+
+  function getLinhasTabela(filtro) {
+    const filtrados = filtro === 'TODOS' ? registros : registros.filter(cols => {
+      const u = (cols[2] || '').trim().toUpperCase();
+      return u === filtro;
+    });
+
+    if (isLimpeza) {
+      return filtrados.map(cols => `<tr>
+        <td style="font-size:0.8rem;">${cols[0] || '-'}</td>
+        <td>${cols[1] || '-'}</td>
+        <td>${cols[2] || '-'}</td>
+        <td>${cols[3] || '-'}</td>
+        <td>${cols[41] || '-'}</td>
+      </tr>`).join('');
+    } else {
+      return filtrados.map(cols => `<tr>
+        <td style="font-size:0.8rem;">${cols[0] || '-'}</td>
+        <td>${cols[1] || '-'}</td>
+        <td>${cols[2] || '-'}</td>
+        <td>${cols[3] || '-'}</td>
+        <td>${cols[4] || '-'}</td>
+        <td>${cols[7] || '-'}</td>
+        <td>${cols[12] || '-'}</td>
+      </tr>`).join('');
+    }
+  }
+
+  const theadLimpeza = `<tr><th>Data/Hora</th><th>Responsável</th><th>Unidade</th><th>Setor</th><th>Status</th></tr>`;
+  const theadMP = `<tr><th>Data/Hora</th><th>Requisitante</th><th>Unidade</th><th>Setor</th><th>Tipo</th><th>Prioridade</th><th>Status</th></tr>`;
+
+  conteudo.innerHTML = `
+    <div class="panel-header">
+      <h2>${titulo}</h2>
+      <button id="btn-pdf-req" class="btn btn-primary" style="font-size:0.82rem;">
+        <i data-lucide="file-text"></i> Gerar PDF
+      </button>
+    </div>
+
+    <div style="display:flex; align-items:center; gap:1rem; margin-bottom:1rem; flex-wrap:wrap;">
+      <div class="filter-group">
+        <label class="form-label" style="margin-bottom:0;">🏢 Empresa:</label>
+        <select id="filtro-empresa-req" class="filter-select">
+          ${empresasOrdenadas.map(e => `<option value="${e}">${e === 'TODOS' ? 'Todas as empresas' : e}</option>`).join('')}
+        </select>
+      </div>
+      <span id="req-contagem" style="font-size:0.85rem; color:var(--text-muted);">${registros.length} registro(s)</span>
+    </div>
+
+    <div class="dashboard-grid" id="req-kpis" style="margin-bottom:1rem;">
+      ${Array.from(empresas).sort().map(e => `
+        <div class="kpi-card">
+          <div class="kpi-label">🏢 ${e}</div>
+          <div class="kpi-value">${contarPorEmpresa(e)}</div>
+        </div>`).join('')}
+      <div class="kpi-card">
+        <div class="kpi-label">📋 Total</div>
+        <div class="kpi-value">${registros.length}</div>
+      </div>
+    </div>
+
+    <div class="table-responsive">
+      <table class="modern-table">
+        <thead>${isLimpeza ? theadLimpeza : theadMP}</thead>
+        <tbody id="req-tabela-body">${getLinhasTabela('TODOS')}</tbody>
+      </table>
+    </div>`;
+
+  if (typeof lucide !== 'undefined') lucide.createIcons();
+
+  // Filtro de empresa
+  const selectEmpresa = document.getElementById('filtro-empresa-req');
+  const tabelaBody = document.getElementById('req-tabela-body');
+  const contagem = document.getElementById('req-contagem');
+
+  selectEmpresa?.addEventListener('change', () => {
+    const filtro = selectEmpresa.value;
+    tabelaBody.innerHTML = getLinhasTabela(filtro);
+    const total = filtro === 'TODOS' ? registros.length : registros.filter(c => (c[2] || '').trim().toUpperCase() === filtro).length;
+    contagem.textContent = `${total} registro(s)`;
+  });
+
+  // Botão PDF — usa o filtro ativo no momento do clique
+  document.getElementById('btn-pdf-req')?.addEventListener('click', () => {
+    const filtro = selectEmpresa?.value || 'TODOS';
+    const registrosFiltrados = filtro === 'TODOS' ? registros : registros.filter(c => (c[2] || '').trim().toUpperCase() === filtro);
+    const yuka = registrosFiltrados.filter(c => (c[2] || '').trim().toUpperCase().includes('YUKA')).length;
+    const tc = registrosFiltrados.filter(c => (c[2] || '').trim().toUpperCase().includes('TC')).length;
+    const cd = registrosFiltrados.filter(c => (c[2] || '').trim().toUpperCase().includes('CD')).length;
+    const labelEmpresa = filtro === 'TODOS' ? 'Todas as empresas' : filtro;
+    gerarPDFRequisicao(tipo, cabecalho, registrosFiltrados, yuka, tc, cd, labelEmpresa);
+  });
+}
 
   if (btnMP) {
     btnMP.onclick = async () => {
@@ -1258,11 +1332,12 @@ function gerarRelatorioAlertas() {
 }
 // ================= PDF DE REQUISIÇÕES =================
 
-function gerarPDFRequisicao(tipo, cabecalho, registros, yuka, tc, cd) {
+function gerarPDFRequisicao(tipo, cabecalho, registros, yuka, tc, cd, labelEmpresa = 'Todas as empresas') {
   const agora = new Date().toLocaleString('pt-BR');
   const isLimpeza = tipo === 'limpeza';
   const titulo = isLimpeza ? '🧹 Requisição de Material de Limpeza e EPI' : '🥩 Requisição de MP e Recheios';
-
+  const subtitulo = `Empresa: ${labelEmpresa}`;
+  
   // Colunas a exibir na tabela do PDF
   const colunasLimpeza = [
     { idx: 0, label: 'Data/Hora' },
@@ -1337,6 +1412,7 @@ function gerarPDFRequisicao(tipo, cabecalho, registros, yuka, tc, cd) {
         <div>
           <h1 style="margin:0;font-size:20px;font-weight:800;color:#4b433c;">Mamma Mia Control</h1>
           <p style="margin:4px 0 0;font-size:13px;color:#8a8570;">${titulo}</p>
+<p style="margin:2px 0 0;font-size:12px;color:#b79b6c;font-weight:600;">${subtitulo}</p>
         </div>
         <div style="text-align:right;font-size:11px;color:#a09284;">
           <div>Emitido em:</div>
