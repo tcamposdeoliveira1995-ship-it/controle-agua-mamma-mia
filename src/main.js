@@ -1115,7 +1115,6 @@ function carregarRequisicoes() {
       }
     };
   }
-}
 function updateAppSelectors() { console.log('updateAppSelectors executado'); }
 // ================= MÓDULO PERDAS =================
 
