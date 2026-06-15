@@ -893,8 +893,6 @@ function submitAdminSettings() {
   showToast('Configurações salvas e aplicadas com sucesso!', 'success');
 }
 
-// ================= MÓDULO REQUISIÇÕES =================
-
 function carregarRequisicoes() {
   const btnLimpeza = document.getElementById('btn-limpeza');
   const btnMP = document.getElementById('btn-mp');
@@ -907,16 +905,61 @@ function carregarRequisicoes() {
         conteudo.innerHTML = `<div class="panel-header"><h2>🧹 Limpeza e EPI</h2></div><p>Carregando requisições...</p>`;
         const response = await fetch(LIMPEZA_CSV_URL);
         const csv = await response.text();
-        const linhas = csv.split('\n');
+        const linhas = csv.split('\n').filter(l => l.trim());
+        const cabecalho = linhas[0].split('\t');
+
         let yuka = 0, tc = 0, cd = 0;
+        const registros = [];
+
         for (let i = 1; i < linhas.length; i++) {
-          const linha = linhas[i].toUpperCase();
-          if (linha.includes(',YUKA,')) yuka++;
-          if (linha.includes(',TC,')) tc++;
-          if (linha.includes(',CD,')) cd++;
+          const cols = linhas[i].split('\t');
+          const unidade = (cols[2] || '').trim().toUpperCase();
+          if (unidade.includes('YUKA')) yuka++;
+          if (unidade.includes('TC')) tc++;
+          if (unidade.includes('CD')) cd++;
+          registros.push(cols);
         }
-        conteudo.innerHTML = `<div class="panel-header"><h2>🧹 Limpeza e EPI</h2></div><p><strong>Total:</strong> ${linhas.length - 1}</p><p>🏢 YUKA: <strong>${yuka}</strong></p><p>🏢 TC: <strong>${tc}</strong></p><p>🏢 CD: <strong>${cd}</strong></p>`;
-      } catch (erro) { console.error(erro); conteudo.innerHTML = `<div class="panel-header"><h2>🧹 Limpeza e EPI</h2></div><p>Erro ao carregar requisições.</p>`; }
+
+        conteudo.innerHTML = `
+          <div class="panel-header">
+            <h2>🧹 Limpeza e EPI</h2>
+            <button id="btn-pdf-limpeza" class="btn btn-primary" style="font-size:0.82rem;">
+              <i data-lucide="file-text"></i> Gerar PDF
+            </button>
+          </div>
+          <div class="dashboard-grid" style="margin-bottom:1rem;">
+            <div class="kpi-card"><div class="kpi-label">Total</div><div class="kpi-value">${registros.length}</div></div>
+            <div class="kpi-card"><div class="kpi-label">🏢 YUKA</div><div class="kpi-value">${yuka}</div></div>
+            <div class="kpi-card"><div class="kpi-label">🏢 TC</div><div class="kpi-value">${tc}</div></div>
+            <div class="kpi-card"><div class="kpi-label">🏢 CD</div><div class="kpi-value">${cd}</div></div>
+          </div>
+          <div class="table-responsive">
+            <table class="modern-table">
+              <thead><tr>
+                <th>Data/Hora</th><th>Responsável</th><th>Unidade</th><th>Setor</th><th>Status</th>
+              </tr></thead>
+              <tbody>
+                ${registros.map(cols => `<tr>
+                  <td style="font-size:0.8rem;">${cols[0] || '-'}</td>
+                  <td>${cols[1] || '-'}</td>
+                  <td>${cols[2] || '-'}</td>
+                  <td>${cols[3] || '-'}</td>
+                  <td>${cols[41] || '-'}</td>
+                </tr>`).join('')}
+              </tbody>
+            </table>
+          </div>`;
+
+        if (typeof lucide !== 'undefined') lucide.createIcons();
+
+        document.getElementById('btn-pdf-limpeza')?.addEventListener('click', () => {
+          gerarPDFRequisicao('limpeza', cabecalho, registros, yuka, tc, cd);
+        });
+
+      } catch (erro) {
+        console.error(erro);
+        conteudo.innerHTML = `<div class="panel-header"><h2>🧹 Limpeza e EPI</h2></div><p>Erro ao carregar requisições.</p>`;
+      }
     };
   }
 
@@ -926,21 +969,64 @@ function carregarRequisicoes() {
         conteudo.innerHTML = `<div class="panel-header"><h2>🥩 MP e Recheios</h2></div><p>Carregando...</p>`;
         const response = await fetch(MP_CSV_URL);
         const csv = await response.text();
-        const linhas = csv.split('\n');
+        const linhas = csv.split('\n').filter(l => l.trim());
+        const cabecalho = linhas[0].split('\t');
+
         let yuka = 0, tc = 0;
+        const registros = [];
+
         for (let i = 1; i < linhas.length; i++) {
-          const linha = linhas[i].toUpperCase();
-          if (linha.includes(',YUKA,')) yuka++;
-          if (linha.includes(',TC,')) tc++;
+          const cols = linhas[i].split('\t');
+          const unidade = (cols[2] || '').trim().toUpperCase();
+          if (unidade.includes('YUKA')) yuka++;
+          if (unidade.includes('TC')) tc++;
+          registros.push(cols);
         }
-        conteudo.innerHTML = `<div class="panel-header"><h2>🥩 MP e Recheios</h2></div><p><strong>Total:</strong> ${linhas.length - 1}</p><p>🏢 YUKA: <strong>${yuka}</strong></p><p>🏢 TC: <strong>${tc}</strong></p>`;
-      } catch (erro) { console.error(erro); conteudo.innerHTML = `<div class="panel-header"><h2>🥩 MP e Recheios</h2></div><p>Erro ao carregar dados.</p>`; }
+
+        conteudo.innerHTML = `
+          <div class="panel-header">
+            <h2>🥩 MP e Recheios</h2>
+            <button id="btn-pdf-mp" class="btn btn-primary" style="font-size:0.82rem;">
+              <i data-lucide="file-text"></i> Gerar PDF
+            </button>
+          </div>
+          <div class="dashboard-grid" style="margin-bottom:1rem;">
+            <div class="kpi-card"><div class="kpi-label">Total</div><div class="kpi-value">${registros.length}</div></div>
+            <div class="kpi-card"><div class="kpi-label">🏢 YUKA</div><div class="kpi-value">${yuka}</div></div>
+            <div class="kpi-card"><div class="kpi-label">🏢 TC</div><div class="kpi-value">${tc}</div></div>
+          </div>
+          <div class="table-responsive">
+            <table class="modern-table">
+              <thead><tr>
+                <th>Data/Hora</th><th>Requisitante</th><th>Unidade</th><th>Setor</th><th>Tipo</th><th>Prioridade</th><th>Status</th>
+              </tr></thead>
+              <tbody>
+                ${registros.map(cols => `<tr>
+                  <td style="font-size:0.8rem;">${cols[0] || '-'}</td>
+                  <td>${cols[1] || '-'}</td>
+                  <td>${cols[2] || '-'}</td>
+                  <td>${cols[3] || '-'}</td>
+                  <td>${cols[4] || '-'}</td>
+                  <td>${cols[7] || '-'}</td>
+                  <td>${cols[12] || '-'}</td>
+                </tr>`).join('')}
+              </tbody>
+            </table>
+          </div>`;
+
+        if (typeof lucide !== 'undefined') lucide.createIcons();
+
+        document.getElementById('btn-pdf-mp')?.addEventListener('click', () => {
+          gerarPDFRequisicao('mp', cabecalho, registros, yuka, tc, 0);
+        });
+
+      } catch (erro) {
+        console.error(erro);
+        conteudo.innerHTML = `<div class="panel-header"><h2>🥩 MP e Recheios</h2></div><p>Erro ao carregar dados.</p>`;
+      }
     };
   }
 }
-
-function updateAppSelectors() { console.log('updateAppSelectors executado'); }
-
 // ================= MÓDULO PERDAS =================
 
 async function carregarPerdas() {
@@ -1168,4 +1254,137 @@ function gerarRelatorioAlertas() {
     iframe.contentWindow.print();
     setTimeout(() => document.body.removeChild(iframe), 1000);
   }, 300);
+}
+// ================= PDF DE REQUISIÇÕES =================
+
+function gerarPDFRequisicao(tipo, cabecalho, registros, yuka, tc, cd) {
+  const agora = new Date().toLocaleString('pt-BR');
+  const isLimpeza = tipo === 'limpeza';
+  const titulo = isLimpeza ? '🧹 Requisição de Material de Limpeza e EPI' : '🥩 Requisição de MP e Recheios';
+
+  // Colunas a exibir na tabela do PDF
+  const colunasLimpeza = [
+    { idx: 0, label: 'Data/Hora' },
+    { idx: 1, label: 'Responsável' },
+    { idx: 2, label: 'Unidade' },
+    { idx: 3, label: 'Setor' },
+    { idx: 41, label: 'Status' },
+  ];
+
+  const colunasMP = [
+    { idx: 0, label: 'Data/Hora' },
+    { idx: 1, label: 'Requisitante' },
+    { idx: 2, label: 'Unidade' },
+    { idx: 3, label: 'Setor' },
+    { idx: 4, label: 'Tipo de Item' },
+    { idx: 5, label: 'Itens / Qtd' },
+    { idx: 7, label: 'Prioridade' },
+    { idx: 8, label: 'Finalidade' },
+    { idx: 12, label: 'Status' },
+  ];
+
+  const colunas = isLimpeza ? colunasLimpeza : colunasMP;
+
+  // Para limpeza: monta lista de produtos solicitados por requisição
+  const detalhesPorReq = isLimpeza ? registros.map((cols, idx) => {
+    const produtos = [];
+    // Colunas de produto começam no índice 4 até ~40
+    for (let c = 4; c <= 40; c++) {
+      const val = (cols[c] || '').trim();
+      const nomeProduto = (cabecalho[c] || '').trim();
+      if (val && val !== '0' && val !== '-' && nomeProduto) {
+        produtos.push(`${nomeProduto}: <strong>${val}</strong>`);
+      }
+    }
+    return { idx, responsavel: cols[1] || '-', unidade: cols[2] || '-', setor: cols[3] || '-', data: cols[0] || '-', produtos, outra: cols[37] || '' };
+  }) : [];
+
+  const linhasTabela = registros.map(cols => {
+    const tds = colunas.map(c => {
+      const val = (cols[c.idx] || '-').trim();
+      return `<td style="padding:5px 8px;border-bottom:1px solid #f0e8dc;font-size:11px;color:#4b433c;vertical-align:top;">${val}</td>`;
+    }).join('');
+    return `<tr>${tds}</tr>`;
+  }).join('');
+
+  const thsCabecalho = colunas.map(c =>
+    `<th style="padding:7px 8px;text-align:left;border-bottom:2px solid #b79b6c;font-size:11px;background:#f4efe8;">${c.label}</th>`
+  ).join('');
+
+  // Bloco de detalhes por requisição (apenas Limpeza)
+  const blocoDetalhes = isLimpeza ? `
+    <h2 style="font-size:13px;font-weight:700;color:#4b433c;margin:24px 0 10px;border-left:3px solid #b79b6c;padding-left:8px;">
+      Detalhes por Requisição
+    </h2>
+    ${detalhesPorReq.map((r, i) => `
+      <div style="background:#f9f5f0;border:1px solid #e8ddd0;border-radius:8px;padding:12px;margin-bottom:10px;">
+        <div style="font-weight:700;font-size:12px;margin-bottom:6px;color:#4b433c;">
+          #${i + 1} — ${r.responsavel} | ${r.unidade} | ${r.setor} | ${r.data}
+        </div>
+        ${r.produtos.length > 0
+          ? `<div style="font-size:11px;color:#5a4e45;line-height:1.8;">${r.produtos.join(' &nbsp;•&nbsp; ')}</div>`
+          : `<div style="font-size:11px;color:#a09284;font-style:italic;">Nenhum produto padrão selecionado.</div>`}
+        ${r.outra ? `<div style="font-size:11px;color:#7b6f63;margin-top:4px;"><strong>Outra requisição:</strong> ${r.outra}</div>` : ''}
+      </div>
+    `).join('')}
+  ` : '';
+
+  const html = `
+    <div style="font-family:Arial,sans-serif;max-width:820px;margin:0 auto;padding:28px;background:#fff;color:#4b433c;">
+
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid #b79b6c;padding-bottom:14px;margin-bottom:20px;">
+        <div>
+          <h1 style="margin:0;font-size:20px;font-weight:800;color:#4b433c;">Mamma Mia Control</h1>
+          <p style="margin:4px 0 0;font-size:13px;color:#8a8570;">${titulo}</p>
+        </div>
+        <div style="text-align:right;font-size:11px;color:#a09284;">
+          <div>Emitido em:</div>
+          <div style="font-weight:600;color:#4b433c;">${agora}</div>
+        </div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:repeat(${isLimpeza ? 4 : 3},1fr);gap:10px;margin-bottom:22px;">
+        <div style="background:#f9f5f0;border:1px solid #e8ddd0;border-radius:8px;padding:12px;text-align:center;">
+          <div style="font-size:10px;color:#8a8570;font-weight:600;text-transform:uppercase;">Total</div>
+          <div style="font-size:24px;font-weight:800;color:#4b433c;">${registros.length}</div>
+        </div>
+        <div style="background:#f9f5f0;border:1px solid #e8ddd0;border-radius:8px;padding:12px;text-align:center;">
+          <div style="font-size:10px;color:#8a8570;font-weight:600;text-transform:uppercase;">🏢 YUKA</div>
+          <div style="font-size:24px;font-weight:800;color:#b79b6c;">${yuka}</div>
+        </div>
+        <div style="background:#f9f5f0;border:1px solid #e8ddd0;border-radius:8px;padding:12px;text-align:center;">
+          <div style="font-size:10px;color:#8a8570;font-weight:600;text-transform:uppercase;">🏢 TC</div>
+          <div style="font-size:24px;font-weight:800;color:#b79b6c;">${tc}</div>
+        </div>
+        ${isLimpeza ? `<div style="background:#f9f5f0;border:1px solid #e8ddd0;border-radius:8px;padding:12px;text-align:center;">
+          <div style="font-size:10px;color:#8a8570;font-weight:600;text-transform:uppercase;">🏢 CD</div>
+          <div style="font-size:24px;font-weight:800;color:#b79b6c;">${cd}</div>
+        </div>` : ''}
+      </div>
+
+      <h2 style="font-size:13px;font-weight:700;color:#4b433c;margin-bottom:10px;border-left:3px solid #b79b6c;padding-left:8px;">
+        Lista Completa de Requisições
+      </h2>
+      <table style="width:100%;border-collapse:collapse;">
+        <thead><tr>${thsCabecalho}</tr></thead>
+        <tbody>${linhasTabela}</tbody>
+      </table>
+
+      ${blocoDetalhes}
+
+      <div style="margin-top:24px;padding-top:12px;border-top:1px solid #e8ddd0;font-size:10px;color:#a09284;text-align:center;">
+        Mamma Mia Control — Gestão Inteligente de Operações • © 2026 Mamma Mia Salgados
+      </div>
+    </div>`;
+
+  const iframe = document.createElement('iframe');
+  iframe.style.cssText = 'position:fixed;top:-9999px;left:-9999px;width:900px;height:600px;border:none;';
+  document.body.appendChild(iframe);
+  iframe.contentDocument.open();
+  iframe.contentDocument.write(html);
+  iframe.contentDocument.close();
+  setTimeout(() => {
+    iframe.contentWindow.print();
+    setTimeout(() => document.body.removeChild(iframe), 1000);
+  }, 400);
 }
