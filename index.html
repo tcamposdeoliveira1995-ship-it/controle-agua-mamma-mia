@@ -217,8 +217,12 @@
       <section class="panel-card">
         <div class="panel-header">
           <h2><i data-lucide="bell-ring" style="color: var(--color-red);"></i> Central de Alertas Operacionais</h2>
-          <span style="font-size:0.8rem; color:var(--text-muted);">Atualizado a cada acesso à aba</span>
-        </div>
+<div style="display:flex; gap:0.5rem; align-items:center; flex-wrap:wrap;">
+  <span style="font-size:0.8rem; color:var(--text-muted);">Atualizado a cada acesso à aba</span>
+  <button id="btn-relatorio-alertas" class="btn btn-primary" type="button" style="font-size:0.82rem; padding:0.4rem 0.9rem;">
+    <i data-lucide="file-text"></i> Gerar Relatório Executivo
+  </button>
+</div>        </div>
 
         <!-- KPI Cards de Alertas -->
         <div class="kpi-grid" style="margin-bottom: 1.5rem;">
