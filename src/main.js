@@ -734,6 +734,9 @@ function initEventListeners() {
 
   const osFilterStatus = document.getElementById('os-filter-status');
   if (osFilterStatus) osFilterStatus.addEventListener('change', () => { carregarOS(); });
+  // Relatório Executivo de Alertas
+  const btnRelatorio = document.getElementById('btn-relatorio-alertas');
+  if (btnRelatorio) btnRelatorio.addEventListener('click', gerarRelatorioAlertas);
 }
 
 function switchTab(tabName) {
@@ -1058,4 +1061,111 @@ function showToast(message, type = 'info') {
     toast.style.animation = 'slideIn 0.3s forwards reverse ease-out';
     toast.addEventListener('animationend', () => { toast.remove(); });
   }, 4500);
+}
+// ================= RELATÓRIO EXECUTIVO DE ALERTAS =================
+
+function gerarRelatorioAlertas() {
+  const alertas = state.alertasCache;
+  if (!alertas || alertas.length === 0) {
+    showToast('Nenhum dado de alerta disponível. Acesse a aba Alertas primeiro.', 'warning');
+    return;
+  }
+
+  const agora = new Date().toLocaleString('pt-BR');
+  const criticos = alertas.filter(a => a.prioridade === 'critico');
+  const atencao = alertas.filter(a => a.prioridade === 'atencao');
+  const informativos = alertas.filter(a => a.prioridade === 'informativo');
+  const porCategoria = { agua: [], os: [], perdas: [], operacao: [] };
+  alertas.forEach(a => { if (porCategoria[a.categoria]) porCategoria[a.categoria].push(a); });
+
+  const badgeStyle = (p) => p === 'critico'
+    ? 'background:#fef2f2;color:#c07a6c;border:1px solid #fca5a5;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:700;'
+    : p === 'atencao'
+    ? 'background:#fffbeb;color:#d6aa5f;border:1px solid #fcd34d;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:700;'
+    : 'background:#f0fdf4;color:#8f9b72;border:1px solid #86efac;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:700;';
+
+  const emoji = (p) => p === 'critico' ? '🔴' : p === 'atencao' ? '🟡' : '🟢';
+  const catLabel = { agua: '💧 Água', os: '🔧 OS', perdas: '📉 Perdas', operacao: '📋 Operação' };
+
+  const linhasTabela = alertas.map(a => `
+    <tr>
+      <td style="padding:6px 8px;border-bottom:1px solid #f0e8dc;">
+        <span style="${badgeStyle(a.prioridade)}">${emoji(a.prioridade)} ${a.prioridade.charAt(0).toUpperCase() + a.prioridade.slice(1)}</span>
+      </td>
+      <td style="padding:6px 8px;border-bottom:1px solid #f0e8dc;font-size:12px;color:#7b6f63;">${catLabel[a.categoria] || a.categoria}</td>
+      <td style="padding:6px 8px;border-bottom:1px solid #f0e8dc;font-size:12px;color:#4b433c;">${a.mensagem}</td>
+    </tr>`).join('');
+
+  const html = `
+    <div style="font-family:Arial,sans-serif;max-width:800px;margin:0 auto;padding:32px;background:#fff;color:#4b433c;">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid #b79b6c;padding-bottom:16px;margin-bottom:24px;">
+        <div>
+          <h1 style="margin:0;font-size:22px;font-weight:800;color:#4b433c;">Mamma Mia Control</h1>
+          <p style="margin:4px 0 0;font-size:13px;color:#8a8570;">Relatório Executivo de Alertas Operacionais</p>
+        </div>
+        <div style="text-align:right;font-size:12px;color:#a09284;">
+          <div>Emitido em:</div>
+          <div style="font-weight:600;color:#4b433c;">${agora}</div>
+        </div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:28px;">
+        <div style="background:#f9f5f0;border:1px solid #e8ddd0;border-radius:10px;padding:14px;text-align:center;">
+          <div style="font-size:11px;color:#8a8570;font-weight:600;text-transform:uppercase;">Total</div>
+          <div style="font-size:28px;font-weight:800;color:#4b433c;">${alertas.length}</div>
+        </div>
+        <div style="background:#fff5f5;border:1px solid #fca5a5;border-radius:10px;padding:14px;text-align:center;">
+          <div style="font-size:11px;color:#c07a6c;font-weight:600;text-transform:uppercase;">🔴 Críticos</div>
+          <div style="font-size:28px;font-weight:800;color:#c07a6c;">${criticos.length}</div>
+        </div>
+        <div style="background:#fffbeb;border:1px solid #fcd34d;border-radius:10px;padding:14px;text-align:center;">
+          <div style="font-size:11px;color:#d6aa5f;font-weight:600;text-transform:uppercase;">🟡 Atenção</div>
+          <div style="font-size:28px;font-weight:800;color:#d6aa5f;">${atencao.length}</div>
+        </div>
+        <div style="background:#f0fdf4;border:1px solid #86efac;border-radius:10px;padding:14px;text-align:center;">
+          <div style="font-size:11px;color:#8f9b72;font-weight:600;text-transform:uppercase;">🟢 Informativos</div>
+          <div style="font-size:28px;font-weight:800;color:#8f9b72;">${informativos.length}</div>
+        </div>
+      </div>
+
+      <h2 style="font-size:14px;font-weight:700;color:#4b433c;margin-bottom:12px;border-left:3px solid #b79b6c;padding-left:8px;">Resumo por Categoria</h2>
+      <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:28px;">
+        ${['agua','os','perdas','operacao'].map(cat => {
+          const itens = porCategoria[cat];
+          const crit = itens.filter(a => a.prioridade === 'critico').length;
+          const aten = itens.filter(a => a.prioridade === 'atencao').length;
+          return `<div style="background:#f9f5f0;border:1px solid #e8ddd0;border-radius:8px;padding:12px;">
+            <div style="font-weight:700;font-size:13px;margin-bottom:6px;">${catLabel[cat]}</div>
+            <div style="font-size:12px;color:#7b6f63;">${itens.length} alerta(s) — ${crit > 0 ? `<span style="color:#c07a6c;font-weight:700;">${crit} crítico(s)</span>` : '0 críticos'}, ${aten} atenção</div>
+          </div>`;
+        }).join('')}
+      </div>
+
+      <h2 style="font-size:14px;font-weight:700;color:#4b433c;margin-bottom:12px;border-left:3px solid #b79b6c;padding-left:8px;">Lista Completa de Alertas</h2>
+      <table style="width:100%;border-collapse:collapse;font-size:12px;">
+        <thead>
+          <tr style="background:#f4efe8;">
+            <th style="padding:8px;text-align:left;border-bottom:2px solid #b79b6c;width:100px;">Prioridade</th>
+            <th style="padding:8px;text-align:left;border-bottom:2px solid #b79b6c;width:90px;">Categoria</th>
+            <th style="padding:8px;text-align:left;border-bottom:2px solid #b79b6c;">Mensagem</th>
+          </tr>
+        </thead>
+        <tbody>${linhasTabela}</tbody>
+      </table>
+
+      <div style="margin-top:28px;padding-top:14px;border-top:1px solid #e8ddd0;font-size:11px;color:#a09284;text-align:center;">
+        Mamma Mia Control — Gestão Inteligente de Operações • © 2026 Mamma Mia Salgados
+      </div>
+    </div>`;
+
+  const iframe = document.createElement('iframe');
+  iframe.style.cssText = 'position:fixed;top:-9999px;left:-9999px;width:900px;height:600px;border:none;';
+  document.body.appendChild(iframe);
+  iframe.contentDocument.open();
+  iframe.contentDocument.write(html);
+  iframe.contentDocument.close();
+  setTimeout(() => {
+    iframe.contentWindow.print();
+    setTimeout(() => document.body.removeChild(iframe), 1000);
+  }, 300);
 }
