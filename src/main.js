@@ -894,13 +894,11 @@ function submitAdminSettings() {
 }
 
 // ================= MÓDULO REQUISIÇÕES =================
-
 function carregarRequisicoes() {
   const btnLimpeza = document.getElementById('btn-limpeza');
   const btnMP = document.getElementById('btn-mp');
   const conteudo = document.getElementById('requisicoes-conteudo');
   if (!conteudo) return;
-
   if (btnLimpeza) {
     btnLimpeza.onclick = async () => {
       try {
@@ -908,23 +906,40 @@ function carregarRequisicoes() {
         const response = await fetch(LIMPEZA_CSV_URL);
         const csv = await response.text();
         const linhas = csv.split('\n').filter(l => l.trim());
-        const cabecalho = linhas[0].split('\t');
+        const cabecalho = linhas[0].split(',');
         const registros = [];
-
         for (let i = 1; i < linhas.length; i++) {
-          const cols = linhas[i].split('\t');
+          const cols = linhas[i].split(',');
           registros.push(cols);
         }
-
         renderTabelaRequisicoes('limpeza', cabecalho, registros, conteudo);
-
       } catch (erro) {
         console.error(erro);
         conteudo.innerHTML = `<div class="panel-header"><h2>🧹 Limpeza e EPI</h2></div><p>Erro ao carregar requisições.</p>`;
       }
     };
   }
-
+  if (btnMP) {
+    btnMP.onclick = async () => {
+      try {
+        conteudo.innerHTML = `<div class="panel-header"><h2>🥩 MP e Recheios</h2></div><p>Carregando...</p>`;
+        const response = await fetch(MP_CSV_URL);
+        const csv = await response.text();
+        const linhas = csv.split('\n').filter(l => l.trim());
+        const cabecalho = linhas[0].split(',');
+        const registros = [];
+        for (let i = 1; i < linhas.length; i++) {
+          const cols = linhas[i].split(',');
+          registros.push(cols);
+        }
+        renderTabelaRequisicoes('mp', cabecalho, registros, conteudo);
+      } catch (erro) {
+        console.error(erro);
+        conteudo.innerHTML = `<div class="panel-header"><h2>🥩 MP e Recheios</h2></div><p>Erro ao carregar dados.</p>`;
+      }
+    };
+  }
+}
   function renderTabelaRequisicoes(tipo, cabecalho, registros, conteudo) {
   const isLimpeza = tipo === 'limpeza';
   const titulo = isLimpeza ? '🧹 Limpeza e EPI' : '🥩 MP e Recheios';
