@@ -734,6 +734,8 @@ function initEventListeners() {
 
   const osFilterStatus = document.getElementById('os-filter-status');
   if (osFilterStatus) osFilterStatus.addEventListener('change', () => { carregarOS(); });
+  const osFilterPrioridade = document.getElementById('os-filter-prioridade');
+  if (osFilterPrioridade) osFilterPrioridade.addEventListener('change', () => { carregarOS(); });
   // Relatório Executivo de Alertas
   const btnRelatorio = document.getElementById('btn-relatorio-alertas');
   if (btnRelatorio) btnRelatorio.addEventListener('click', gerarRelatorioAlertas);
@@ -1183,6 +1185,7 @@ async function carregarOS() {
 
     const tableBody = document.getElementById('os-table-body');
     const filtroStatus = document.getElementById('os-filter-status')?.value || 'TODOS';
+    const filtroPrioridade = document.getElementById('os-filter-prioridade')?.value || 'TODOS';
     if (tableBody) tableBody.innerHTML = '';
 
     let abertas = 0, aguardando = 0, concluidas = 0, criticas = 0, altas = 0, baixas = 0;
@@ -1206,6 +1209,7 @@ async function carregarOS() {
       if (status === 'CONCLUÍDO' || status === 'CONCLUIDO') concluidas++;
 
       if (filtroStatus !== 'TODOS' && status !== filtroStatus) continue;
+      if (filtroPrioridade !== 'TODOS' && prioridade !== filtroPrioridade) continue;
 
       if (tableBody) {
         tableBody.innerHTML += `<tr><td>${os}</td><td>${status}</td><td>${prioridade}</td><td>${unidade}</td><td>${equipamento}</td><td>${pdf ? `<a href="${pdf}" target="_blank">📄 Abrir</a>` : '-'}</td></tr>`;
