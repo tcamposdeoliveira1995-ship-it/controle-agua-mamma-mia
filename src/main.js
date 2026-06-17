@@ -1201,171 +1201,172 @@ async function carregarPerdas() {
 
 async function carregarCentralOperacional() {
 
-  try {
+try {
 
-    const conteudo = document.getElementById('central-conteudo');
+const conteudo = document.getElementById('central-conteudo');
 
-    if (!conteudo) return;
+if (!conteudo) return;
 
-    const response = await fetch(MP_CSV_URL);
-    const csv = await response.text();
+const response = await fetch(MP_CSV_URL);
+const csv = await response.text();
 
-    const linhas = parseCSVLinhas(csv);
+const linhas = parseCSVLinhas(csv);
 
-    if (linhas.length < 2) {
-      conteudo.innerHTML = `
-        <div class="panel-card">
-          <h3>📡 Central Operacional</h3>
-          <p>Nenhuma requisição encontrada.</p>
-        </div>
-      `;
-      return;
-    }
+if (linhas.length < 2) {
+  conteudo.innerHTML = `
+    <div class="panel-card">
+      <h3>📡 Central Operacional</h3>
+      <p>Nenhuma requisição encontrada.</p>
+    </div>
+  `;
+  return;
+}
 
-    const cabecalho = linhas[0];
+const cabecalho = linhas[0];
+const registros = [];
 
-    const registros = [];
+for (let i = 1; i < linhas.length; i++) {
 
-    for (let i = 1; i < linhas.length; i++) {
+  const cols = linhas[i];
 
-      const cols = linhas[i];
+  if (cols.every(c => !c || !c.trim())) continue;
 
-      if (cols.every(c => !c || !c.trim())) continue;
+  const registro = {};
 
-      const registro = {};
+  cabecalho.forEach((nomeCol, idx) => {
+    registro[nomeCol.trim()] = (cols[idx] || '').trim();
+  });
 
-      cabecalho.forEach((nomeCol, idx) => {
-        registro[nomeCol.trim()] = (cols[idx] || '').trim();
-      });
+  registros.push(registro);
+}
 
-      registros.push(registro);
-    }
+const aguardando = registros.filter(r =>
+  ['ABERTO', 'AGUARDANDO'].includes(
+    (r['STATUS'] || '').toUpperCase()
+  )
+).length;
 
-    const aguardando = registros.filter(r =>
-      ['ABERTO', 'AGUARDANDO'].includes(
-        (r['STATUS'] || '').toUpperCase()
-      )
-    ).length;
+const separacao = registros.filter(r =>
+  (r['STATUS'] || '').toUpperCase() === 'EM SEPARAÇÃO'
+).length;
 
-    const separacao = registros.filter(r =>
-      (r['STATUS'] || '').toUpperCase() === 'EM SEPARAÇÃO'
-    ).length;
+const concluido = registros.filter(r =>
+  (r['STATUS'] || '').toUpperCase() === 'CONCLUÍDO'
+).length;
 
-    const concluido = registros.filter(r =>
-      (r['STATUS'] || '').toUpperCase() === 'CONCLUÍDO'
-    ).length;
+const cancelado = registros.filter(r =>
+  (r['STATUS'] || '').toUpperCase() === 'CANCELADO'
+).length;
 
-    const cancelado = registros.filter(r =>
-      (r['STATUS'] || '').toUpperCase() === 'CANCELADO'
-    ).length;
+conteudo.innerHTML = `
 
-    conteudo.innerHTML = `
+  <div class="dashboard-grid">
 
-      <div class="dashboard-grid">
+    <div class="kpi-card">
+      <div class="kpi-value">${aguardando}</div>
+      <div class="kpi-label">🟡 AGUARDANDO</div>
+    </div>
 
-        <div class="kpi-card">
-          <div class="kpi-value">${aguardando}</div>
-          <div class="kpi-label">🟡 AGUARDANDO</div>
-        </div>
+    <div class="kpi-card">
+      <div class="kpi-value">${separacao}</div>
+      <div class="kpi-label">🔵 EM SEPARAÇÃO</div>
+    </div>
 
-        <div class="kpi-card">
-          <div class="kpi-value">${separacao}</div>
-          <div class="kpi-label">🔵 EM SEPARAÇÃO</div>
-        </div>
+    <div class="kpi-card">
+      <div class="kpi-value">${concluido}</div>
+      <div class="kpi-label">🟢 CONCLUÍDO</div>
+    </div>
 
-        <div class="kpi-card">
-          <div class="kpi-value">${concluido}</div>
-          <div class="kpi-label">🟢 CONCLUÍDO</div>
-        </div>
+    <div class="kpi-card">
+      <div class="kpi-value">${cancelado}</div>
+      <div class="kpi-label">🔴 CANCELADO</div>
+    </div>
 
-        <div class="kpi-card">
-          <div class="kpi-value">${cancelado}</div>
-          <div class="kpi-label">🔴 CANCELADO</div>
-        </div>
+  </div>
+
+  <section class="panel-card">
+
+    <div class="panel-header">
+      <h2>📦 Requisições</h2>
+    </div>
+
+    <p>
+      Total de requisições:
+      <strong>${registros.length}</strong>
+    </p>
+
+  </section>
+
+  <section class="panel-card" style="margin-top:20px;">
+
+    <div class="panel-header">
+      <h2>💬 Chat Operacional</h2>
+    </div>
+
+    <div style="display:flex; gap:20px; min-height:350px;">
+
+      <div style="
+        width:220px;
+        border-right:1px solid rgba(255,255,255,.1);
+        padding-right:15px;
+      ">
+
+        <button class="btn btn-secondary canal-btn" data-canal="Geral Operacional">
+          # Geral Operacional
+        </button>
+
+        <button class="btn btn-secondary canal-btn" data-canal="Diretoria">
+          # Diretoria
+        </button>
+
+        <button class="btn btn-secondary canal-btn" data-canal="TC">
+          # TC
+        </button>
+
+        <button class="btn btn-secondary canal-btn" data-canal="YUKA">
+          # YUKA
+        </button>
+
+        <button class="btn btn-secondary canal-btn" data-canal="CD">
+          # CD
+        </button>
 
       </div>
 
-      <section class="panel-card">
+      <div id="chat-conversa" style="flex:1;">
 
-        <div class="panel-header">
-          <h2>📦 Requisições</h2>
-        </div>
+        <h3>💬 Conversa</h3>
 
-        <p>
-          Total de requisições: <strong>${registros.length}</strong>
+        <p style="color:var(--text-muted);">
+          Selecione um canal para iniciar.
         </p>
 
-      </section>
-<section class="panel-card" style="margin-top:20px;">
-
-  <div class="panel-header">
-    <h2>💬 Chat Operacional</h2>
-  </div>
-
-  <div style="display:flex; gap:20px; min-height:350px;">
-
-    <div style="
-      width:220px;
-      border-right:1px solid rgba(255,255,255,.1);
-      padding-right:15px;
-    ">
-
-      <button class="btn btn-secondary" style="width:100%;margin-bottom:10px;">
-        # Geral Operacional
-      </button>
-
-      <button class="btn btn-secondary" style="width:100%;margin-bottom:10px;">
-        # Diretoria
-      </button>
-
-      <button class="btn btn-secondary" style="width:100%;margin-bottom:10px;">
-        # TC
-      </button>
-
-      <button class="btn btn-secondary" style="width:100%;margin-bottom:10px;">
-        # YUKA
-      </button>
-
-      <button class="btn btn-secondary" style="width:100%;">
-        # CD
-      </button>
+      </div>
 
     </div>
 
-    <div style="flex:1;">
+  </section>
 
-      <h3>💬 Conversa</h3>
+`;
 
-      <p style="color:var(--text-muted);">
-        Selecione um canal para iniciar.
-      </p>
+} catch (erro) {
 
+console.error(erro);
+
+const conteudo = document.getElementById('central-conteudo');
+
+if (conteudo) {
+  conteudo.innerHTML = `
+    <div class="panel-card">
+      <h3>📡 Central Operacional</h3>
+      <p>Erro ao carregar dados.</p>
     </div>
-
-  </div>
-
-</section>
-    `;
-
-  } catch (erro) {
-
-    console.error(erro);
-
-    const conteudo = document.getElementById('central-conteudo');
-
-    if (conteudo) {
-      conteudo.innerHTML = `
-        <div class="panel-card">
-          <h3>📡 Central Operacional</h3>
-          <p>Erro ao carregar dados.</p>
-        </div>
-      `;
-    }
-
-  }
+  `;
+}
 
 }
 
+}
 // ================= MÓDULO OS =================
 
 async function carregarOS() {
