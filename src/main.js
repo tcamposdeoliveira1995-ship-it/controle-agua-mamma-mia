@@ -1196,7 +1196,15 @@ async function carregarPerdas() {
     if (ctxProdutos) new Chart(ctxProdutos, { type: 'bar', data: { labels: labelsProdutos, datasets: [{ label: 'Perdas', data: valoresProdutos }] }, options: { indexAxis: 'y', responsive: true } });
   } catch (erro) { console.error(erro); }
 }
+let canalAtual = null;
 
+const mensagensPorCanal = {
+  "Geral Operacional": [],
+  "Diretoria": [],
+  "TC": [],
+  "YUKA": [],
+  "CD": []
+};
 // ================= MÓDULO CENTRAL OPERACIONAL =================
 
 async function carregarCentralOperacional() {
@@ -1349,6 +1357,16 @@ conteudo.innerHTML = `
 
 `;
 
+document.querySelectorAll('.canal-btn').forEach(btn => {
+
+  btn.addEventListener('click', () => {
+
+    abrirCanal(btn.dataset.canal);
+
+  });
+
+});
+  
 } catch (erro) {
 
 console.error(erro);
@@ -1367,6 +1385,27 @@ if (conteudo) {
 }
 
 }
+
+function abrirCanal(canal) {
+
+  canalAtual = canal;
+
+  const conversa = document.getElementById('chat-conversa');
+
+  if (!conversa) return;
+
+  conversa.innerHTML = `
+
+    <h3>💬 Canal ${canal}</h3>
+
+    <p style="color:var(--text-muted);">
+      Canal aberto com sucesso.
+    </p>
+
+  `;
+
+}
+
 // ================= MÓDULO OS =================
 
 async function carregarOS() {
