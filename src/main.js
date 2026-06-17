@@ -1549,6 +1549,28 @@ async function carregarRequisicoesCentral(canal) {
             ${status}
           </div>
 
+<div class="req-acoes" style="margin-top:10px;display:flex;gap:6px;flex-wrap:wrap;">
+
+  <button
+    onclick="atualizarStatusCentral('${req['REQUISICOES']}', 'EM SEPARAÇÃO')"
+  >
+    ⚙️ EM SEPARAÇÃO
+  </button>
+
+  <button
+    onclick="atualizarStatusCentral('${req['REQUISICOES']}', 'CONCLUÍDO')"
+  >
+    ✅ CONCLUÍDO
+  </button>
+
+  <button
+    onclick="atualizarStatusCentral('${req['REQUISICOES']}', 'CANCELADO')"
+  >
+    ❌ CANCELAR
+  </button>
+
+</div>
+
         </div>
 
       `;
@@ -1565,6 +1587,43 @@ async function carregarRequisicoesCentral(canal) {
       <h3>Erro</h3>
       <p>Não foi possível carregar as requisições.</p>
     `;
+
+  }
+
+}
+
+async function atualizarStatusCentral(rq, status) {
+
+  try {
+
+    const url =
+      'https://script.google.com/macros/s/AKfycby-80t2GWkm9ZFjgEh93mkCzUHBJpKKFXFSvqvT9Scx3SbhC94iUxG_hN55BsyNrEaEGA/exec';
+
+    const resposta = await fetch(
+      `${url}?rq=${encodeURIComponent(rq)}&status=${encodeURIComponent(status)}`
+    );
+
+    const dados = await resposta.json();
+
+    console.log(dados);
+
+    if (dados.sucesso) {
+
+      alert(`✅ ${rq} atualizada para ${status}`);
+
+      abrirCanal(canalAtual);
+
+    } else {
+
+      alert('❌ Não foi possível atualizar.');
+
+    }
+
+  } catch (erro) {
+
+    console.error(erro);
+
+    alert('❌ Erro ao atualizar status.');
 
   }
 
