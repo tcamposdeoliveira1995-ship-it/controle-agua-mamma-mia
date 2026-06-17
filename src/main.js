@@ -1562,12 +1562,12 @@ if (
 
     const dataTexto =
       req['Timestamp'];
-
+console.log('DATA CSV:', dataTexto);
     if (!dataTexto) return false;
 
     const dataReq =
       new Date(dataTexto);
-
+console.log('DATA JS:', dataReq);
     if (
       filtrosCentral.dataInicial &&
       dataReq <
