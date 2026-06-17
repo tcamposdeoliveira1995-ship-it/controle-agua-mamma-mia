@@ -154,6 +154,7 @@ function refreshApp() {
   else if (state.currentTab === 'os') carregarOS();
   else if (state.currentTab === 'perdas') carregarPerdas();
   else if (state.currentTab === 'requisicoes') carregarRequisicoes();
+  else if (state.currentTab === 'central') carregarCentralOperacional();
   else if (state.currentTab === 'alertas') carregarAlertas();
   else if (state.currentTab === 'configuracoes') renderConfiguracoesTab();
 
@@ -1194,6 +1195,55 @@ async function carregarPerdas() {
     const ctxProdutos = document.getElementById('graficoProdutos');
     if (ctxProdutos) new Chart(ctxProdutos, { type: 'bar', data: { labels: labelsProdutos, datasets: [{ label: 'Perdas', data: valoresProdutos }] }, options: { indexAxis: 'y', responsive: true } });
   } catch (erro) { console.error(erro); }
+}
+
+// ================= MÓDULO CENTRAL OPERACIONAL =================
+
+function carregarCentralOperacional() {
+
+  const conteudo = document.getElementById('central-conteudo');
+
+  if (!conteudo) return;
+
+  conteudo.innerHTML = `
+
+    <div class="dashboard-grid">
+
+      <div class="kpi-card">
+        <div class="kpi-value">0</div>
+        <div class="kpi-label">🟡 AGUARDANDO</div>
+      </div>
+
+      <div class="kpi-card">
+        <div class="kpi-value">0</div>
+        <div class="kpi-label">🔵 EM SEPARAÇÃO</div>
+      </div>
+
+      <div class="kpi-card">
+        <div class="kpi-value">0</div>
+        <div class="kpi-label">🟢 CONCLUÍDO</div>
+      </div>
+
+      <div class="kpi-card">
+        <div class="kpi-value">0</div>
+        <div class="kpi-label">🔴 CANCELADO</div>
+      </div>
+
+    </div>
+
+    <section class="panel-card">
+
+      <div class="panel-header">
+        <h2>📦 Requisições</h2>
+      </div>
+
+      <p style="color:var(--text-muted)">
+        Nenhuma requisição carregada.
+      </p>
+
+    </section>
+
+  `;
 }
 
 // ================= MÓDULO OS =================
