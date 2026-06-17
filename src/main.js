@@ -1415,7 +1415,7 @@ function abrirCanal(canal) {
       break;
 
     default:
-      titulo = 📦 ${canal};
+      titulo = '📦 ${canal};
   }
 
   conversa.innerHTML = 
@@ -1424,7 +1424,7 @@ function abrirCanal(canal) {
     <p style="color:var(--text-muted);">
       Carregando requisições...
     </p>
-  ;
+  ';
 }
 
 // ================= MÓDULO OS =================
