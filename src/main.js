@@ -1415,16 +1415,17 @@ function abrirCanal(canal) {
       break;
 
     default:
-      titulo = '📦 ${canal};
+      titulo = `📦 ${canal}`;
   }
 
-  conversa.innerHTML = 
-    <h3>${titulo}</h3>
+conversa.innerHTML = `
+  <h3>${titulo}</h3>
 
-    <p style="color:var(--text-muted);">
-      Carregando requisições...
-    </p>
-  ';
+  <p style="color:var(--text-muted);">
+    Carregando requisições...
+  </p>
+`;
+
 }
 
 // ================= MÓDULO OS =================
