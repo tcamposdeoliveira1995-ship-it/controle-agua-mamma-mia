@@ -1565,8 +1565,13 @@ if (
 console.log('DATA CSV:', dataTexto);
     if (!dataTexto) return false;
 
-    const dataReq =
-      new Date(dataTexto);
+    const partes = dataTexto.split('/');
+
+const dataReq = new Date(
+  Number(partes[2]),
+  Number(partes[1]) - 1,
+  Number(partes[0])
+);
 console.log('DATA JS:', dataReq);
     if (
       filtrosCentral.dataInicial &&
