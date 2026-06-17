@@ -964,6 +964,33 @@ function parseCSVLinhas(csvText) {
   });
 }
 
+// Converte um Timestamp do Google Sheets/Forms (geralmente mm/dd/yyyy hh:mm:ss
+// ou variações) para o formato brasileiro dd/mm/yyyy hh:mm. Mantém o texto
+// original se não conseguir interpretar como data válida.
+function formatarTimestampBR(valorOriginal) {
+  if (!valorOriginal || !valorOriginal.trim()) return '-';
+
+  const texto = valorOriginal.trim();
+
+  // Tenta separar "data" de "hora", caso existam ambos
+  const partes = texto.split(' ');
+  const partedata = partes[0];
+  const partehora = partes.length > 1 ? partes.slice(1).join(' ') : '';
+
+  // Espera algo como m/d/yyyy ou mm/dd/yyyy
+  const match = partedata.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+
+  if (!match) return texto; // não reconheceu o padrão, devolve como veio
+
+  const mes = match[1].padStart(2, '0');
+  const dia = match[2].padStart(2, '0');
+  const ano = match[3];
+
+  const dataFormatada = `${dia}/${mes}/${ano}`;
+
+  return partehora ? `${dataFormatada} ${partehora}` : dataFormatada;
+}
+
 function renderTabelaRequisicoesMP(cabecalho, colunasProduto, registros, conteudo) {
   const empresas = new Set();
   registros.forEach(r => { const u = (r['Unidade solicitante'] || '').toUpperCase(); if (u) empresas.add(u); });
@@ -989,7 +1016,7 @@ function renderTabelaRequisicoesMP(cabecalho, colunasProduto, registros, conteud
       const itens = getItensDoRegistro(r);
       const itensTexto = itens.length > 0 ? itens.join(' • ') : '<span style="color:var(--text-muted);">Nenhum item</span>';
       return `<tr>
-        <td style="font-size:0.8rem;">${r['Timestamp'] || '-'}</td>
+        <td style="font-size:0.8rem;">${formatarTimestampBR(r['Timestamp'])}</td>
         <td>${r['Nome do requisitante'] || '-'}</td>
         <td>${r['Unidade solicitante'] || '-'}</td>
         <td>${r['Setor solicitante'] || '-'}</td>
@@ -1068,7 +1095,7 @@ function gerarPDFRequisicaoMP(registros, colunasProduto, labelEmpresa) {
     return `
       <div style="background:#f9f5f0;border:1px solid #e8ddd0;border-radius:8px;padding:12px;margin-bottom:10px;">
         <div style="font-weight:700;font-size:12px;margin-bottom:6px;color:#4b433c;">
-          #${idx + 1} — ${r['Nome do requisitante'] || '-'} | ${r['Unidade solicitante'] || '-'} | ${r['Setor solicitante'] || '-'} | ${r['Timestamp'] || '-'}
+          #${idx + 1} — ${r['Nome do requisitante'] || '-'} | ${r['Unidade solicitante'] || '-'} | ${r['Setor solicitante'] || '-'} | ${formatarTimestampBR(r['Timestamp'])}
         </div>
         <div style="font-size:11px;color:#7b6f63;margin-bottom:4px;">Prioridade: ${r['Prioridade'] || '-'} | Status: ${r['STATUS'] || '-'} | Finalidade: ${r['Finalidade da requisição'] || '-'}</div>
         ${itens.length > 0
