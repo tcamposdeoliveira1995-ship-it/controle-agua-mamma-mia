@@ -1304,14 +1304,47 @@ conteudo.innerHTML = `
 
   <section class="panel-card">
 
-    <div class="panel-header">
-      <h2>📦 Requisições</h2>
-    </div>
+  <div class="panel-header">
+    <h2>📦 Requisições</h2>
+  </div>
 
-    <p>
-      Total de requisições:
-      <strong>${registros.length}</strong>
-    </p>
+  <p>
+    Total de requisições:
+    <strong>${registros.length}</strong>
+  </p>
+
+  <div
+    style="
+      display:flex;
+      gap:10px;
+      flex-wrap:wrap;
+      margin-top:15px;
+      align-items:center;
+    "
+  >
+
+    <input
+      type="date"
+      id="filtro-data-inicial"
+      value="${filtrosCentral.dataInicial}"
+    >
+
+    <input
+      type="date"
+      id="filtro-data-final"
+      value="${filtrosCentral.dataFinal}"
+    >
+
+    <button
+      class="btn btn-primary"
+      id="btn-filtrar-central"
+    >
+      🔍 Filtrar
+    </button>
+
+  </div>
+
+</section>
 
   </section>
 
