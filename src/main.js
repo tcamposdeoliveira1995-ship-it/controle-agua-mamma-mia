@@ -1197,7 +1197,17 @@ async function carregarPerdas() {
   } catch (erro) { console.error(erro); }
 }
 let canalAtual = null;
+const filtrosCentral = {
 
+  dataInicial: '',
+
+  dataFinal: '',
+
+  unidade: 'TODOS',
+
+  status: 'TODOS'
+
+};
 const mensagensPorCanal = {
   "Geral Operacional": [],
   "Diretoria": [],
