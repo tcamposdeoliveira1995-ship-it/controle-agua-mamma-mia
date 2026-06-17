@@ -1296,7 +1296,55 @@ async function carregarCentralOperacional() {
         </p>
 
       </section>
+<section class="panel-card" style="margin-top:20px;">
 
+  <div class="panel-header">
+    <h2>💬 Chat Operacional</h2>
+  </div>
+
+  <div style="display:flex; gap:20px; min-height:350px;">
+
+    <div style="
+      width:220px;
+      border-right:1px solid rgba(255,255,255,.1);
+      padding-right:15px;
+    ">
+
+      <button class="btn btn-secondary" style="width:100%;margin-bottom:10px;">
+        # Geral Operacional
+      </button>
+
+      <button class="btn btn-secondary" style="width:100%;margin-bottom:10px;">
+        # Diretoria
+      </button>
+
+      <button class="btn btn-secondary" style="width:100%;margin-bottom:10px;">
+        # TC
+      </button>
+
+      <button class="btn btn-secondary" style="width:100%;margin-bottom:10px;">
+        # YUKA
+      </button>
+
+      <button class="btn btn-secondary" style="width:100%;">
+        # CD
+      </button>
+
+    </div>
+
+    <div style="flex:1;">
+
+      <h3>💬 Conversa</h3>
+
+      <p style="color:var(--text-muted);">
+        Selecione um canal para iniciar.
+      </p>
+
+    </div>
+
+  </div>
+
+</section>
     `;
 
   } catch (erro) {
