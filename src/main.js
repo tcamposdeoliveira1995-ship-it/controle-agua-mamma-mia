@@ -1553,7 +1553,54 @@ async function carregarRequisicoesCentral(canal) {
       );
 
     }
+if (
+  filtrosCentral.dataInicial ||
+  filtrosCentral.dataFinal
+) {
 
+  filtradas = filtradas.filter(req => {
+
+    const dataTexto =
+      req['Timestamp'];
+
+    if (!dataTexto) return false;
+
+    const dataReq =
+      new Date(dataTexto);
+
+    if (
+      filtrosCentral.dataInicial &&
+      dataReq <
+      new Date(filtrosCentral.dataInicial)
+    ) {
+      return false;
+    }
+
+    if (
+      filtrosCentral.dataFinal
+    ) {
+
+      const dataFinal =
+        new Date(filtrosCentral.dataFinal);
+
+      dataFinal.setHours(
+        23,
+        59,
+        59,
+        999
+      );
+
+      if (dataReq > dataFinal) {
+        return false;
+      }
+
+    }
+
+    return true;
+
+  });
+
+}
     filtradas.sort((a,b) => {
 
       return (b['REQUISICOES'] || '')
