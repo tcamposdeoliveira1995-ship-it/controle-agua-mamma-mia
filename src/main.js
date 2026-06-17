@@ -1199,51 +1199,123 @@ async function carregarPerdas() {
 
 // ================= MÓDULO CENTRAL OPERACIONAL =================
 
-function carregarCentralOperacional() {
+async function carregarCentralOperacional() {
 
-  const conteudo = document.getElementById('central-conteudo');
+  try {
 
-  if (!conteudo) return;
+    const conteudo = document.getElementById('central-conteudo');
 
-  conteudo.innerHTML = `
+    if (!conteudo) return;
 
-    <div class="dashboard-grid">
+    const response = await fetch(MP_CSV_URL);
+    const csv = await response.text();
 
-      <div class="kpi-card">
-        <div class="kpi-value">0</div>
-        <div class="kpi-label">🟡 AGUARDANDO</div>
+    const linhas = parseCSVLinhas(csv);
+
+    if (linhas.length < 2) {
+      conteudo.innerHTML = `
+        <div class="panel-card">
+          <h3>📡 Central Operacional</h3>
+          <p>Nenhuma requisição encontrada.</p>
+        </div>
+      `;
+      return;
+    }
+
+    const cabecalho = linhas[0];
+
+    const registros = [];
+
+    for (let i = 1; i < linhas.length; i++) {
+
+      const cols = linhas[i];
+
+      if (cols.every(c => !c || !c.trim())) continue;
+
+      const registro = {};
+
+      cabecalho.forEach((nomeCol, idx) => {
+        registro[nomeCol.trim()] = (cols[idx] || '').trim();
+      });
+
+      registros.push(registro);
+    }
+
+    const aguardando = registros.filter(r =>
+      ['ABERTO', 'AGUARDANDO'].includes(
+        (r['STATUS'] || '').toUpperCase()
+      )
+    ).length;
+
+    const separacao = registros.filter(r =>
+      (r['STATUS'] || '').toUpperCase() === 'EM SEPARAÇÃO'
+    ).length;
+
+    const concluido = registros.filter(r =>
+      (r['STATUS'] || '').toUpperCase() === 'CONCLUÍDO'
+    ).length;
+
+    const cancelado = registros.filter(r =>
+      (r['STATUS'] || '').toUpperCase() === 'CANCELADO'
+    ).length;
+
+    conteudo.innerHTML = `
+
+      <div class="dashboard-grid">
+
+        <div class="kpi-card">
+          <div class="kpi-value">${aguardando}</div>
+          <div class="kpi-label">🟡 AGUARDANDO</div>
+        </div>
+
+        <div class="kpi-card">
+          <div class="kpi-value">${separacao}</div>
+          <div class="kpi-label">🔵 EM SEPARAÇÃO</div>
+        </div>
+
+        <div class="kpi-card">
+          <div class="kpi-value">${concluido}</div>
+          <div class="kpi-label">🟢 CONCLUÍDO</div>
+        </div>
+
+        <div class="kpi-card">
+          <div class="kpi-value">${cancelado}</div>
+          <div class="kpi-label">🔴 CANCELADO</div>
+        </div>
+
       </div>
 
-      <div class="kpi-card">
-        <div class="kpi-value">0</div>
-        <div class="kpi-label">🔵 EM SEPARAÇÃO</div>
-      </div>
+      <section class="panel-card">
 
-      <div class="kpi-card">
-        <div class="kpi-value">0</div>
-        <div class="kpi-label">🟢 CONCLUÍDO</div>
-      </div>
+        <div class="panel-header">
+          <h2>📦 Requisições</h2>
+        </div>
 
-      <div class="kpi-card">
-        <div class="kpi-value">0</div>
-        <div class="kpi-label">🔴 CANCELADO</div>
-      </div>
+        <p>
+          Total de requisições: <strong>${registros.length}</strong>
+        </p>
 
-    </div>
+      </section>
 
-    <section class="panel-card">
+    `;
 
-      <div class="panel-header">
-        <h2>📦 Requisições</h2>
-      </div>
+  } catch (erro) {
 
-      <p style="color:var(--text-muted)">
-        Nenhuma requisição carregada.
-      </p>
+    console.error(erro);
 
-    </section>
+    const conteudo = document.getElementById('central-conteudo');
 
-  `;
+    if (conteudo) {
+      conteudo.innerHTML = `
+        <div class="panel-card">
+          <h3>📡 Central Operacional</h3>
+          <p>Erro ao carregar dados.</p>
+        </div>
+      `;
+    }
+
+  }
+
 }
 
 // ================= MÓDULO OS =================
