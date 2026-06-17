@@ -1343,10 +1343,10 @@ conteudo.innerHTML = `
 
       <div id="chat-conversa" style="flex:1;">
 
-        <h3>💬 Conversa</h3>
+        <h3>📦 Central de Requisições</h3>
 
         <p style="color:var(--text-muted);">
-          Selecione um canal para iniciar.
+          Selecione uma unidade para acompanhar as requisições.
         </p>
 
       </div>
