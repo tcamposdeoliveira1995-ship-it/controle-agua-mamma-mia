@@ -1386,7 +1386,7 @@ if (conteudo) {
 
 }
 
-function abrirCanal(canal) {
+async function abrirCanal(canal) {
 
   canalAtual = canal;
 
@@ -1418,13 +1418,155 @@ function abrirCanal(canal) {
       titulo = `📦 ${canal}`;
   }
 
-conversa.innerHTML = `
-  <h3>${titulo}</h3>
+  conversa.innerHTML = `
+    <h3>${titulo}</h3>
+    <p style="color:var(--text-muted);">
+      Carregando requisições...
+    </p>
+  `;
 
-  <p style="color:var(--text-muted);">
-    Carregando requisições...
-  </p>
-`;
+  await carregarRequisicoesCentral(canal);
+
+}
+
+async function carregarRequisicoesCentral(canal) {
+
+  const conversa = document.getElementById('chat-conversa');
+
+  try {
+
+    const response = await fetch(MP_CSV_URL);
+
+    const csv = await response.text();
+
+    const linhas = parseCSVLinhas(csv);
+
+    if (linhas.length < 2) {
+
+      conversa.innerHTML = `
+        <h3>📦 Requisições</h3>
+        <p>Nenhuma requisição encontrada.</p>
+      `;
+
+      return;
+    }
+
+    const cabecalho = linhas[0];
+
+    const registros = [];
+
+    for (let i = 1; i < linhas.length; i++) {
+
+      const cols = linhas[i];
+
+      if (cols.every(c => !c || !c.trim())) continue;
+
+      const registro = {};
+
+      cabecalho.forEach((nomeCol, idx) => {
+
+        registro[nomeCol.trim()] =
+          (cols[idx] || '').trim();
+
+      });
+
+      registros.push(registro);
+
+    }
+
+    let filtradas = registros;
+
+    if (canal !== 'GERAL') {
+
+      filtradas = registros.filter(r =>
+
+        (r['Unidade solicitante'] || '')
+          .toUpperCase()
+          .trim() === canal
+
+      );
+
+    }
+
+    filtradas.sort((a,b) => {
+
+      return (b['REQUISICOES'] || '')
+        .localeCompare(a['REQUISICOES'] || '');
+
+    });
+
+    let html = `
+      <h3>📦 ${canal}</h3>
+
+      <p style="margin-bottom:20px;">
+        Total: <strong>${filtradas.length}</strong>
+      </p>
+    `;
+
+    filtradas.forEach(req => {
+
+      const status =
+        req['STATUS'] || 'AGUARDANDO';
+
+      let cor = '#f59e0b';
+
+      if(status === 'EM SEPARAÇÃO')
+        cor = '#3b82f6';
+
+      if(status === 'CONCLUÍDO')
+        cor = '#22c55e';
+
+      if(status === 'CANCELADO')
+        cor = '#ef4444';
+
+      html += `
+
+        <div class="req-card">
+
+          <div class="req-header">
+
+            <strong>
+              ${req['REQUISICOES'] || '-'}
+            </strong>
+
+          </div>
+
+          <div>
+            👤 ${req['Nome do requisitante'] || '-'}
+          </div>
+
+          <div>
+            📍 ${req['Setor solicitante'] || '-'}
+          </div>
+
+          <div
+            style="
+              margin-top:8px;
+              font-weight:700;
+              color:${cor};
+            "
+          >
+            ${status}
+          </div>
+
+        </div>
+
+      `;
+
+    });
+
+    conversa.innerHTML = html;
+
+  } catch (erro) {
+
+    console.error(erro);
+
+    conversa.innerHTML = `
+      <h3>Erro</h3>
+      <p>Não foi possível carregar as requisições.</p>
+    `;
+
+  }
 
 }
 
