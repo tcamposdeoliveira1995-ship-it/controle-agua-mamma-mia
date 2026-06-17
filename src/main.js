@@ -1628,7 +1628,7 @@ async function atualizarStatusCentral(rq, status) {
   }
 
 }
-
+window.atualizarStatusCentral = atualizarStatusCentral;
 // ================= MÓDULO OS =================
 
 async function carregarOS() {
