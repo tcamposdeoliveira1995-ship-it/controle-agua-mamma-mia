@@ -1394,16 +1394,37 @@ function abrirCanal(canal) {
 
   if (!conversa) return;
 
-  conversa.innerHTML = `
+  let titulo = '';
 
-    <h3>💬 Canal ${canal}</h3>
+  switch(canal){
+
+    case 'GERAL':
+      titulo = '📦 Geral Operacional';
+      break;
+
+    case 'TC':
+      titulo = '🏭 Requisições TC';
+      break;
+
+    case 'YUKA':
+      titulo = '🥐 Requisições YUKA';
+      break;
+
+    case 'CD':
+      titulo = '🚚 Requisições CD';
+      break;
+
+    default:
+      titulo = 📦 ${canal};
+  }
+
+  conversa.innerHTML = 
+    <h3>${titulo}</h3>
 
     <p style="color:var(--text-muted);">
-      Canal aberto com sucesso.
+      Carregando requisições...
     </p>
-
-  `;
-
+  ;
 }
 
 // ================= MÓDULO OS =================
