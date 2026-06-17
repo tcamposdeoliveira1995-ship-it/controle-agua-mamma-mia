@@ -1308,7 +1308,7 @@ conteudo.innerHTML = `
   <section class="panel-card" style="margin-top:20px;">
 
     <div class="panel-header">
-      <h2>💬 Chat Operacional</h2>
+      <h2>💬 Central Operacional</h2>
     </div>
 
     <div style="display:flex; gap:20px; min-height:350px;">
