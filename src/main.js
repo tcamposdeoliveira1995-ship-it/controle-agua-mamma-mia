@@ -1409,7 +1409,30 @@ document.querySelectorAll('.canal-btn').forEach(btn => {
   });
 
 });
-  
+  const btnFiltro =
+  document.getElementById('btn-filtrar-central');
+
+if (btnFiltro) {
+
+  btnFiltro.addEventListener('click', () => {
+
+    filtrosCentral.dataInicial =
+      document.getElementById('filtro-data-inicial')?.value || '';
+
+    filtrosCentral.dataFinal =
+      document.getElementById('filtro-data-final')?.value || '';
+
+    console.log('Filtros:', filtrosCentral);
+
+    if (canalAtual) {
+
+      abrirCanal(canalAtual);
+
+    }
+
+  });
+
+}
 } catch (erro) {
 
 console.error(erro);
