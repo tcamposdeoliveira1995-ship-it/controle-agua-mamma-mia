@@ -1839,10 +1839,6 @@ ${new Date().toLocaleString('pt-BR')}
 
 <hr>
 
-<p>
-Relatório em construção
-</p>
-
 `);
   registros.forEach(req => {
 
