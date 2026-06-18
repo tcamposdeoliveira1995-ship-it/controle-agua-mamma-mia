@@ -1773,11 +1773,31 @@ async function gerarRelatorioCentral() {
   const csv = await response.text();
 
   console.log(csv.substring(0, 300));
+janela.document.write(`
 
-  janela.document.write(`
-<h1>Teste PDF</h1>
+<h1>Mamma Mia Control</h1>
+
+<h2>📦 Central Operacional</h2>
+
+<p>
+Período:
+${filtrosCentral.dataInicial || 'Não informado'}
+até
+${filtrosCentral.dataFinal || 'Não informado'}
+</p>
+
+<p>
+Emitido em:
+${new Date().toLocaleString('pt-BR')}
+</p>
+
+<hr>
+
+<p>
+Relatório em construção
+</p>
+
 `);
-
 janela.document.close();
 
 }
