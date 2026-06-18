@@ -1766,7 +1766,18 @@ async function atualizarStatusCentral(rq, status) {
 window.atualizarStatusCentral = atualizarStatusCentral;
 function gerarRelatorioCentral() {
 
-  alert('📄 Relatório da Central');
+  const janela = window.open('', '_blank');
+
+  janela.document.write(`
+    <h1>Mamma Mia Control</h1>
+    <h2>📦 Central Operacional</h2>
+
+    <p>
+      Relatório em construção
+    </p>
+  `);
+
+  janela.document.close();
 
 }
 // ================= MÓDULO OS =================
