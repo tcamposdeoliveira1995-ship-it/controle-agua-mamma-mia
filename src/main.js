@@ -1775,7 +1775,10 @@ async function gerarRelatorioCentral() {
   console.log(csv.substring(0, 300));
 
   janela.document.write(`
-  janela.document.close();
+<h1>Teste PDF</h1>
+`);
+
+janela.document.close();
 
 }
 // ================= MÓDULO OS =================
