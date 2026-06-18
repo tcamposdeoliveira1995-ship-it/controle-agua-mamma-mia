@@ -63,8 +63,6 @@
     <button class="tab-btn" data-tab="requisicoes"><i data-lucide="package"></i>Requisições</button>
     <button class="tab-btn" data-tab="central"><i data-lucide="radio"></i>Central</button>
     <button class="tab-btn" data-tab="operacao"><i data-lucide="clipboard-check"></i>Operação</button>
-    <button class="tab-btn" data-tab="alertas"><i data-lucide="bell-ring"></i>🚨 Alertas</button>
-    <button class="tab-btn" data-tab="configuracoes"><i data-lucide="settings-2"></i>Configurações</button>
   </nav>
 
   <main id="app-main-content">
@@ -205,59 +203,63 @@
       <section class="panel-card" id="requisicoes-conteudo"><div class="panel-header"><h2>Selecione um módulo</h2></div></section>
     </div>
 
+    <!-- ================= ABA: CENTRAL OPERACIONAL ================= -->
+    <div id="tab-content-central" class="tab-panel">
+
+      <section class="panel-card">
+
+        <div class="panel-header">
+          <h2>📡 Central Operacional</h2>
+        </div>
+
+        <div id="central-conteudo">
+
+          <div class="dashboard-grid">
+
+            <div class="kpi-card">
+              <div class="kpi-value">0</div>
+              <span class="kpi-label">🟡 Aguardando</span>
+            </div>
+
+            <div class="kpi-card">
+              <div class="kpi-value">0</div>
+              <span class="kpi-label">🔵 Em Separação</span>
+            </div>
+
+            <div class="kpi-card">
+              <div class="kpi-value">0</div>
+              <span class="kpi-label">🟢 Concluído</span>
+            </div>
+
+            <div class="kpi-card">
+              <div class="kpi-value">0</div>
+              <span class="kpi-label">🔴 Cancelado</span>
+            </div>
+
+          </div>
+
+          <p style="margin-top:20px;color:var(--text-muted);">
+            Central Operacional em desenvolvimento...
+          </p>
+
+        </div>
+
+      </section>
+
     </div>
 
-<!-- ================= ABA: CENTRAL OPERACIONAL ================= -->
-<div id="tab-content-central" class="tab-panel">
-
-  <section class="panel-card">
-
-    <div class="panel-header">
-      <h2>📡 Central Operacional</h2>
-    </div>
-
-    <div id="central-conteudo">
-
-      <div class="dashboard-grid">
-
-        <div class="kpi-card">
-          <div class="kpi-value">0</div>
-          <span class="kpi-label">🟡 Aguardando</span>
-        </div>
-
-        <div class="kpi-card">
-          <div class="kpi-value">0</div>
-          <span class="kpi-label">🔵 Em Separação</span>
-        </div>
-
-        <div class="kpi-card">
-          <div class="kpi-value">0</div>
-          <span class="kpi-label">🟢 Concluído</span>
-        </div>
-
-        <div class="kpi-card">
-          <div class="kpi-value">0</div>
-          <span class="kpi-label">🔴 Cancelado</span>
-        </div>
-
-      </div>
-
-      <p style="margin-top:20px;color:var(--text-muted);">
-        Central Operacional em desenvolvimento...
-      </p>
-
-    </div>
-
-  </section>
-
-</div>
-
-<!-- ================= ABA: OPERAÇÃO ================= -->
-<div id="tab-content-operacao" class="tab-panel">
     <!-- ================= ABA: OPERAÇÃO ================= -->
     <div id="tab-content-operacao" class="tab-panel">
       <section class="panel-card">
-        <div class="panel-header"><h2>📋 Checklists e Controles Operacionais</h2></div>
+        <div class="panel-header"><h2>📋 Formulários Operacionais</h2></div>
+        <div class="dashboard-grid">
+          <div class="kpi-card requisicao-card"><div class="kpi-value">📉</div><a href="https://docs.google.com/forms/d/e/1FAIpQLSdGz8GgzVjqK-Zt9fVUXK09Safz0eQIqc4rM0_Q7PEE9HKmCg/viewform?usp=header" target="_blank" rel="noopener" class="kpi-label" style="text-decoration: none; color: var(--text-primary);">Registro de Perdas – Mamma Mia</a></div>
+          <div class="kpi-card requisicao-card"><div class="kpi-value">🔧</div><a href="https://docs.google.com/forms/d/e/1FAIpQLSdbnjll-8FQA8fpSYDsFi6fb_2lxydvucvhmGNZ1ptViMDJxg/viewform?usp=header" target="_blank" rel="noopener" class="kpi-label" style="text-decoration: none; color: var(--text-primary);">Chamado de Manutenção</a></div>
+          <div class="kpi-card requisicao-card"><div class="kpi-value">💧</div><a href="https://docs.google.com/forms/d/e/1FAIpQLSfisK8w1mNz6Z4iR62GEo2l58FEg9EBZQ9vVmRiwdfkXH9Mag/viewform?usp=header" target="_blank" rel="noopener" class="kpi-label" style="text-decoration: none; color: var(--text-primary);">Controle de Água</a></div>
+        </div>
+      </section>
+      <section class="panel-card">
+        <div class="panel-header"><h2>✅ Checklists e Controles Operacionais</h2></div>
         <div class="dashboard-grid">
           <div class="kpi-card requisicao-card"><div class="kpi-value">🏭</div><a href="https://docs.google.com/forms/d/e/1FAIpQLScu-Jzfh8CH5tlzUMxTWxWo5VGd0bZRKwgokyRHJadg2C37yA/viewform?usp=header" target="_blank" rel="noopener" class="kpi-label" style="text-decoration: none; color: var(--text-primary);">Abertura de Fábrica - YUKA</a></div>
           <div class="kpi-card requisicao-card"><div class="kpi-value">🏭</div><a href="https://docs.google.com/forms/d/e/1FAIpQLSczqxdvozpSVsc5eWqTAviPQxyzxaXS4htKwmn2Va-_RSQD3Q/viewform?usp=header" target="_blank" rel="noopener" class="kpi-label" style="text-decoration: none; color: var(--text-primary);">Abertura de Fábrica - TC</a></div>
@@ -265,49 +267,6 @@
           <div class="kpi-card requisicao-card"><div class="kpi-value">🔒</div><a href="https://docs.google.com/forms/d/e/1FAIpQLScwOvE4okSQoVn_dALhSOCaK4g9KDcOlFvWJwL2OiPlyrR1Ew/viewform?usp=header" target="_blank" rel="noopener" class="kpi-label" style="text-decoration: none; color: var(--text-primary);">Fechamento de Fábrica - TC</a></div>
           <div class="kpi-card requisicao-card"><div class="kpi-value">✅</div><a href="https://docs.google.com/forms/d/e/1FAIpQLSdPHVwU5_7iCX-j0jNOp_sb5Y6NtWVe3P3j_ZeC27BLCSbJ3g/viewform?usp=header" target="_blank" rel="noopener" class="kpi-label" style="text-decoration: none; color: var(--text-primary);">Controle de Boas Práticas (BPF)</a></div>
           <div class="kpi-card requisicao-card"><div class="kpi-value">📦</div><a href="https://docs.google.com/forms/d/e/1FAIpQLSfS0FGuovjr1I8Tk-UxGHwxaIusmHM8XVXM865Bw_gAogQJTQ/viewform?usp=header" target="_blank" rel="noopener" class="kpi-label" style="text-decoration: none; color: var(--text-primary);">Controle de Produção</a></div>
-        </div>
-      </section>
-    </div>
-
-    <!-- ================= ABA: ALERTAS ================= -->
-    <div id="tab-content-alertas" class="tab-panel">
-      <section class="panel-card">
-        <div class="panel-header">
-          <h2><i data-lucide="bell-ring" style="color: var(--color-red);"></i> Central de Alertas Operacionais</h2>
-<div style="display:flex; gap:0.5rem; align-items:center; flex-wrap:wrap;">
-  <span style="font-size:0.8rem; color:var(--text-muted);">Atualizado a cada acesso à aba</span>
-  <button id="btn-relatorio-alertas" class="btn btn-primary" type="button" style="font-size:0.82rem; padding:0.4rem 0.9rem;">
-    <i data-lucide="file-text"></i> Gerar Relatório Executivo
-  </button>
-</div>        </div>
-
-        <!-- KPI Cards de Alertas -->
-        <div class="kpi-grid" style="margin-bottom: 1.5rem;">
-          <div class="kpi-card" style="border-left: 3px solid var(--text-muted);">
-            <div class="kpi-label">📊 Total</div>
-            <div class="kpi-value" id="alerta-kpi-total">--</div>
-            <div class="kpi-subtext">Todos os alertas</div>
-          </div>
-          <div class="kpi-card" style="border-left: 3px solid var(--color-red);">
-            <div class="kpi-label">🔴 Críticos</div>
-            <div class="kpi-value" id="alerta-kpi-critico" style="color: var(--color-red);">--</div>
-            <div class="kpi-subtext">Requerem ação imediata</div>
-          </div>
-          <div class="kpi-card" style="border-left: 3px solid var(--color-orange);">
-            <div class="kpi-label">🟡 Atenção</div>
-            <div class="kpi-value" id="alerta-kpi-atencao" style="color: var(--color-orange);">--</div>
-            <div class="kpi-subtext">Monitorar de perto</div>
-          </div>
-          <div class="kpi-card" style="border-left: 3px solid var(--color-green);">
-            <div class="kpi-label">🟢 Informativos</div>
-            <div class="kpi-value" id="alerta-kpi-info" style="color: var(--color-green);">--</div>
-            <div class="kpi-subtext">Situação normal</div>
-          </div>
-        </div>
-
-        <!-- Conteúdo dinâmico dos alertas -->
-        <div id="alertas-conteudo">
-          <p style="color: var(--text-muted); text-align:center; padding: 2rem;">Acesse a aba para calcular os alertas.</p>
         </div>
       </section>
     </div>
@@ -513,5 +472,6 @@
       });
     }
   </script>
+</div>
 </body>
 </html>
