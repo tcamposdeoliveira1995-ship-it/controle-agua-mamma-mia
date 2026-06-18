@@ -1445,7 +1445,7 @@ if (btnPdf) {
 
   btnPdf.addEventListener('click', () => {
 
-    alert('📄 Gerando PDF...');
+    gerarRelatorioCentral();
 
   });
 
@@ -1764,6 +1764,11 @@ async function atualizarStatusCentral(rq, status) {
 
 }
 window.atualizarStatusCentral = atualizarStatusCentral;
+function gerarRelatorioCentral() {
+
+  alert('📄 Relatório da Central');
+
+}
 // ================= MÓDULO OS =================
 
 async function carregarOS() {
