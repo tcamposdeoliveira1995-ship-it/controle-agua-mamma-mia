@@ -1341,7 +1341,12 @@ conteudo.innerHTML = `
     >
       🔍 Filtrar
     </button>
-
+<button
+  class="btn btn-secondary"
+  id="btn-pdf-central"
+>
+  📄 PDF
+</button>
   </div>
 
 </section>
@@ -1429,6 +1434,18 @@ if (btnFiltro) {
       abrirCanal(canalAtual);
 
     }
+
+  });
+
+}
+  const btnPdf =
+  document.getElementById('btn-pdf-central');
+
+if (btnPdf) {
+
+  btnPdf.addEventListener('click', () => {
+
+    alert('📄 Gerando PDF...');
 
   });
 
