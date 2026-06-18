@@ -196,6 +196,30 @@ async function calcularAlertas() {
   try {
     const response = await fetch(OS_CSV_URL);
     const csv = await response.text();
+    const linhas = parseCSVLinhas(csv);
+
+const cabecalho = linhas[0];
+
+const registros = [];
+
+for (let i = 1; i < linhas.length; i++) {
+
+  const cols = linhas[i];
+
+  if (cols.every(c => !c || !c.trim())) continue;
+
+  const registro = {};
+
+  cabecalho.forEach((nomeCol, idx) => {
+
+    registro[nomeCol.trim()] =
+      (cols[idx] || '').trim();
+
+  });
+
+  registros.push(registro);
+
+}
     const linhas = csv.split('\n');
     const cabecalho = linhas[0].split(',');
 
@@ -1771,6 +1795,30 @@ async function gerarRelatorioCentral() {
   const response = await fetch(MP_CSV_URL);
 
   const csv = await response.text();
+  const linhas = parseCSVLinhas(csv);
+
+const cabecalho = linhas[0];
+
+const registros = [];
+
+for (let i = 1; i < linhas.length; i++) {
+
+  const cols = linhas[i];
+
+  if (cols.every(c => !c || !c.trim())) continue;
+
+  const registro = {};
+
+  cabecalho.forEach((nomeCol, idx) => {
+
+    registro[nomeCol.trim()] =
+      (cols[idx] || '').trim();
+
+  });
+
+  registros.push(registro);
+
+}
 
   console.log(csv.substring(0, 300));
 janela.document.write(`
@@ -1798,6 +1846,43 @@ Relatório em construção
 </p>
 
 `);
+  registros.forEach(req => {
+
+  janela.document.write(`
+
+    <div style="
+      border:1px solid #ccc;
+      padding:10px;
+      margin-bottom:10px;
+      border-radius:8px;
+    ">
+
+      <strong>
+        ${req['REQUISICOES'] || '-'}
+      </strong>
+
+      <br>
+
+      👤 ${req['Nome do requisitante'] || '-'}
+
+      <br>
+
+      🏭 ${req['Unidade solicitante'] || '-'}
+
+      <br>
+
+      📍 ${req['Setor solicitante'] || '-'}
+
+      <br>
+
+      Status:
+      ${req['STATUS'] || '-'}
+
+    </div>
+
+  `);
+
+});
 janela.document.close();
 
 }
