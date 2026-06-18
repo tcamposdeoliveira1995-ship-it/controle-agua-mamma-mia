@@ -1764,19 +1764,17 @@ async function atualizarStatusCentral(rq, status) {
 
 }
 window.atualizarStatusCentral = atualizarStatusCentral;
-function gerarRelatorioCentral() {
+async function gerarRelatorioCentral() {
 
   const janela = window.open('', '_blank');
 
+  const response = await fetch(MP_CSV_URL);
+
+  const csv = await response.text();
+
+  console.log(csv.substring(0, 300));
+
   janela.document.write(`
-    <h1>Mamma Mia Control</h1>
-    <h2>📦 Central Operacional</h2>
-
-    <p>
-      Relatório em construção
-    </p>
-  `);
-
   janela.document.close();
 
 }
