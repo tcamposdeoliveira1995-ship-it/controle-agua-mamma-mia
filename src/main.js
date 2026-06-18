@@ -220,9 +220,7 @@ for (let i = 1; i < linhas.length; i++) {
   registros.push(registro);
 
 }
-    const linhas = csv.split('\n');
-    const cabecalho = linhas[0].split(',');
-
+    
     const indiceStatus = cabecalho.findIndex(c => c.trim().replace(/"/g, '').toUpperCase() === 'STATUS');
     const indicePrioridade = cabecalho.findIndex(c => c.trim().replace(/"/g, '').toUpperCase() === 'PRIORIDADE');
     const indiceOS = cabecalho.findIndex(c => c.trim().replace(/"/g, '').toUpperCase() === 'OS');
