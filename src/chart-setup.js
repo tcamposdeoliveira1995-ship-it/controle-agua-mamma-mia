@@ -8,7 +8,6 @@ import { getAppSettings } from './data.js';
 let trendChartInstance = null;
 let comparisonChartInstance = null;
 
-// Configurações globais do Chart.js para o tema escuro
 function setupChartGlobals() {
   if (typeof Chart !== 'undefined') {
     Chart.defaults.color = '#9ca3af';
@@ -24,9 +23,6 @@ function setupChartGlobals() {
   }
 }
 
-/**
- * Renderiza o gráfico de linha contendo a evolução de consumo acumulado no ciclo
- */
 export function renderTrendChart(canvas, cycleStats, processedReadings) {
   if (!canvas) return;
   setupChartGlobals();
@@ -62,6 +58,9 @@ export function renderTrendChart(canvas, cycleStats, processedReadings) {
       .filter(r => r.meterId === meterId && !r.isInitial && new Date(r.date) >= startDate && new Date(r.date) <= endDate)
       .sort((a, b) => new Date(a.date) - new Date(b.date));
 
+    const today = new Date();
+    today.setHours(23, 59, 59, 999);
+
     cycleDates.forEach(date => {
       const dayEnd = new Date(date);
       dayEnd.setHours(23, 59, 59, 999);
@@ -70,9 +69,6 @@ export function renderTrendChart(canvas, cycleStats, processedReadings) {
         .filter(r => new Date(r.date) <= dayEnd)
         .reduce((total, r) => total + r.consumption, 0);
 
-      // Data de hoje para ocultar valores futuros no gráfico
-      const today = new Date('2026-06-11');
-      today.setHours(23, 59, 59, 999);
       if (date <= today) {
         dataPoints.push(Number(sum.toFixed(3)));
       } else {
@@ -93,7 +89,6 @@ export function renderTrendChart(canvas, cycleStats, processedReadings) {
     };
   });
 
-  // Linha horizontal de Meta (20m³)
   datasets.push({
     label: 'Meta (20 m³)',
     data: Array(totalDays).fill(20),
@@ -109,21 +104,14 @@ export function renderTrendChart(canvas, cycleStats, processedReadings) {
   const ctx = canvas.getContext('2d');
   trendChartInstance = new Chart(ctx, {
     type: 'line',
-    data: {
-      labels,
-      datasets
-    },
+    data: { labels, datasets },
     options: {
       responsive: true,
       maintainAspectRatio: false,
       plugins: {
         legend: {
           position: 'top',
-          labels: {
-            boxWidth: 12,
-            padding: 12,
-            font: { weight: '600' }
-          }
+          labels: { boxWidth: 12, padding: 12, font: { weight: '600' } }
         },
         tooltip: {
           mode: 'index',
@@ -132,9 +120,7 @@ export function renderTrendChart(canvas, cycleStats, processedReadings) {
             label: function(context) {
               let label = context.dataset.label || '';
               if (label) label += ': ';
-              if (context.parsed.y !== null) {
-                label += context.parsed.y.toFixed(3) + ' m³';
-              }
+              if (context.parsed.y !== null) label += context.parsed.y.toFixed(3) + ' m³';
               return label;
             }
           }
@@ -147,11 +133,7 @@ export function renderTrendChart(canvas, cycleStats, processedReadings) {
         },
         y: {
           grid: { color: 'rgba(255, 255, 255, 0.05)' },
-          title: {
-            display: true,
-            text: 'Volume Acumulado (m³)',
-            font: { weight: '600' }
-          },
+          title: { display: true, text: 'Volume Acumulado (m³)', font: { weight: '600' } },
           suggestedMax: 22
         }
       }
@@ -159,9 +141,6 @@ export function renderTrendChart(canvas, cycleStats, processedReadings) {
   });
 }
 
-/**
- * Renderiza o gráfico de barras comparativo de consumos (Ciclo Atual vs Ciclo Anterior)
- */
 export function renderComparisonChart(canvas, currentStats, prevStats) {
   if (!canvas) return;
   setupChartGlobals();
@@ -217,11 +196,7 @@ export function renderComparisonChart(canvas, currentStats, prevStats) {
       plugins: {
         legend: {
           position: 'top',
-          labels: {
-            boxWidth: 12,
-            padding: 12,
-            font: { weight: '600' }
-          }
+          labels: { boxWidth: 12, padding: 12, font: { weight: '600' } }
         },
         tooltip: {
           callbacks: {
@@ -232,20 +207,13 @@ export function renderComparisonChart(canvas, currentStats, prevStats) {
         }
       },
       scales: {
-        x: {
-          grid: { display: false }
-        },
+        x: { grid: { display: false } },
         y: {
           grid: { color: 'rgba(255, 255, 255, 0.05)' },
-          title: {
-            display: true,
-            text: 'Consumo (m³)',
-            font: { weight: '600' }
-          },
+          title: { display: true, text: 'Consumo (m³)', font: { weight: '600' } },
           suggestedMax: 22
         }
       }
     }
   });
 }
-
