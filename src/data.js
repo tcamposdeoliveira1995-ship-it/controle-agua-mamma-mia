@@ -109,7 +109,7 @@ export function saveReadings(readings) {
 function generateMockReadings() {
   const list = [];
   const startDay = new Date(2026, 3, 6, 12, 0, 0);
-  const endDay = new Date(2026, 5, 11, 12, 0, 0);
+  const endDay = new Date(); endDay.setHours(12, 0, 0, 0);
 
   const accumulators = {
     'Y21T156506': 1250.00,
@@ -176,7 +176,7 @@ export function getCycleStats(readings, cycleKey) {
   let startCycleDate, endCycleDate, label;
 
   if (cycleKey === 'current') {
-    const info = getCycleInfo(new Date('2026-06-11'));
+    const info = getCycleInfo(new Date());
     startCycleDate = info.start; endCycleDate = info.end; label = info.label; cycleKey = info.key;
   } else {
     const [year, month] = cycleKey.split('-').map(Number);
@@ -190,7 +190,7 @@ export function getCycleStats(readings, cycleKey) {
   });
 
   const totalDays = Math.ceil((endCycleDate - startCycleDate) / (1000 * 60 * 60 * 24));
-  const today = new Date('2026-06-11');
+  const today = new Date();
   const now = today > endCycleDate ? endCycleDate : (today < startCycleDate ? startCycleDate : today);
   const elapsedDays = Math.max(1, Math.ceil((now - startCycleDate) / (1000 * 60 * 60 * 24)));
   const remainingDays = Math.max(0, totalDays - elapsedDays);
