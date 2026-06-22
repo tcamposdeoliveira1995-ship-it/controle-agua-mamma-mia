@@ -771,7 +771,7 @@ function openModal(modal) { modal.classList.add('active'); modal.setAttribute('a
 function closeModal(modal) { modal.classList.remove('active'); modal.setAttribute('aria-hidden', 'true'); }
 
 function resetReadingFormDate() {
-  const now = new Date('2026-06-11T15:23:00');
+  const now = new Date();
   DOM.inputDate.value = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}T${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
 }
 
