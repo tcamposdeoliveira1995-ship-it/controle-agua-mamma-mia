@@ -1105,7 +1105,7 @@ function closeModal(modal) {
  * Reseta data/hora padrão do formulário para o tempo atual do contexto
  */
 function resetReadingFormDate() {
-  const now = new Date('2026-06-11T15:23:00');
+  const now = new Date();
   const yyyy = now.getFullYear();
   const mm = String(now.getMonth() + 1).padStart(2, '0');
   const dd = String(now.getDate()).padStart(2, '0');
