@@ -1,533 +1,2163 @@
-<!DOCTYPE html>
-<html lang="pt-BR">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Mamma Mia - Controle de Consumo de Água</title>
-<meta name="description" content="Sistema web de alta fidelidade para controle, análise e auditoria do consumo de água do restaurante Mamma Mia.">
-<link rel="manifest" href="manifest.json">
-<link rel="icon" href="logo-mamma-mia.jpg">
-<link rel="apple-touch-icon" href="apple-touch-icon.png">
-<meta name="theme-color" content="#050816">
-<link rel="stylesheet" href="style.css">
-<script src="https://cdn.jsdelivr.net/npm/chart.js" defer></script>
-<script src="https://unpkg.com/lucide@latest" defer></script>
-<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js" defer></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js" defer></script>
-</head>
+/**
+ * src/main.js - Controlador Central (Versão 2.1)
+ * Mamma Mia Control - Central de Alertas incluída
+ */
 
-<body>
-<!-- TELA DE BLOQUEIO -->
-<div id="lock-screen" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: var(--bg-primary); display: flex; align-items: center; justify-content: center; z-index: 9999;">
-  <div style="background: var(--card-bg); border: 1px solid var(--card-border); border-radius: var(--border-radius-lg); padding: 2.5rem; max-width: 360px; width: 90%; text-align: center; box-shadow: 0 20px 50px rgba(0,0,0,0.2);">
-    <img src="logo-mamma-mia.jpg" alt="Mamma Mia Salgados" style="max-width: 160px; margin-bottom: 1.5rem;">
-    <h2 style="font-size: 1.2rem; font-weight: 700; color: var(--text-primary); margin-bottom: 1.5rem;">Acesso Restrito</h2>
-    <input type="password" id="lock-screen-input" class="form-control" placeholder="Digite a senha" style="text-align: center; margin-bottom: 1rem;" autofocus>
-    <button id="lock-screen-btn" class="btn btn-primary" type="button" style="width: 100%;">Entrar</button>
-    <p id="lock-screen-error" style="color: var(--color-red); font-size: 0.85rem; margin-top: 0.75rem; display: none;">Senha incorreta. Tente novamente.</p>
-  </div>
-</div>
-<script>
-  (function() {
-    const SENHA_CORRETA = '30154';
-    const lockScreen = document.getElementById('lock-screen');
-    const input = document.getElementById('lock-screen-input');
-    const btn = document.getElementById('lock-screen-btn');
-    const erro = document.getElementById('lock-screen-error');
-    function tentarEntrar() {
-      if (input.value === SENHA_CORRETA) { lockScreen.style.display = 'none'; }
-      else { erro.style.display = 'block'; input.value = ''; input.focus(); }
+import {
+  initializeData, saveReadings, calculateConsumptions, getCycleStats,
+  getAvailableCycles, compareCycles, parseCSV, formatDate,
+  getAppSettings, saveAppSettings, checkDuplicateDayReading
+} from './data.js';
+
+import { renderTrendChart, renderComparisonChart } from './chart-setup.js';
+
+import { exportToJSON, exportToCSV, exportToExcel, exportToPDF, syncGoogleSheetsFuture } from './integration.js';
+
+// --- URLs CSV ---
+const LIMPEZA_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRt3TOjpSYFl40nUJcPeL82B8SqmBpbomHDbPVK2rXcdPpuJ8M5QZgOlDQV1WFJl7371U7Ox7heooiv/pub?output=csv';
+const MP_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTFEg4Bpk7evJs7NDYRCMBVWm5ZB6hQRD8SS_RwowjbNS_hI2kmtzH5ovhjYRpRssk0YH00yiCgoyCC/pub?gid=2077926267&single=true&output=csv';
+const PERDAS_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQ0QXaxvuAAaF7XzQWayifLZIflDtS1psT3gNJTmkQ0BvPWbuKPttlJ6EAcE8Zv8IG_UlAbScrhD4Nb/pub?output=csv';
+const OS_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSyKnl6d4trSwtVru3JQIcoqb_h2gTHKBqn-3zXM1JW7MTzm_Xj01UJh62eDPDNEOYjisMWrGrWfFJt/pub?gid=1728678619&single=true&output=csv';
+
+// --- ESTADO GLOBAL ---
+let state = {
+  readings: [],
+  selectedCycleKey: '',
+  currentTab: 'dashboard',
+  filters: { meter: 'all' },
+  alertasCache: null
+};
+
+// --- DOM ---
+const DOM = {
+  tabButtons: document.querySelectorAll('.tab-btn'),
+  tabPanels: document.querySelectorAll('.tab-panel'),
+  cycleSelect: document.getElementById('cycle-select'),
+  filterMeter: document.getElementById('filter-meter-v2'),
+  mainExecPeriodLabel: document.getElementById('main-exec-period-label'),
+  mainExecMeta: document.getElementById('main-exec-meta'),
+  mainExecConsumed: document.getElementById('main-exec-consumed'),
+  mainExecBalance: document.getElementById('main-exec-balance'),
+  mainExecPercent: document.getElementById('main-exec-percent'),
+  mainExecDaysLeft: document.getElementById('main-exec-days-left'),
+  mainExecProgressBar: document.getElementById('main-exec-progress-bar'),
+  valAlertsV2: document.getElementById('val-alerts-v2'),
+  valAlertsSubtextV2: document.getElementById('val-alerts-subtext-v2'),
+  valAvgGeneral: document.getElementById('val-avg-general'),
+  valHighestConsumer: document.getElementById('val-highest-consumer'),
+  valHighestConsumerSub: document.getElementById('val-highest-consumer-sub'),
+  valLowestConsumer: document.getElementById('val-lowest-consumer'),
+  valLowestConsumerSub: document.getElementById('val-lowest-consumer-sub'),
+  valProjGlobal: document.getElementById('val-proj-global'),
+  valProjGlobalSub: document.getElementById('val-proj-global-sub'),
+  valEconomyProjected: document.getElementById('val-economy-projected'),
+  valEconomyProjectedSub: document.getElementById('val-economy-projected-sub'),
+  comparadorBadgeV2: document.getElementById('comparador-badge-v2'),
+  comparadorDetailsV2: document.getElementById('comparador-details-v2'),
+  leakAlertBanner: document.getElementById('leak-alert-banner'),
+  leakAlertDesc: document.getElementById('leak-alert-desc'),
+  operationalAlertsPanel: document.getElementById('operational-alerts-panel'),
+  operationalAlertsList: document.getElementById('operational-alerts-list'),
+  metersCardsContainer: document.getElementById('hidrometros-cards-container-v2'),
+  readingsTableBody: document.getElementById('readings-table-body-v2'),
+  tableRecordCount: document.getElementById('table-record-count-v2'),
+  trendChartCanvas: document.getElementById('trendChartV2'),
+  comparisonChartCanvas: document.getElementById('comparisonChartV2'),
+  btnOpenReadingModal: document.getElementById('btn-open-reading-modal-v2'),
+  btnOpenCsvModal: document.getElementById('btn-open-csv-modal-v2'),
+  btnGoogleSheetsImport: document.getElementById('btn-google-sheets-import'),
+  btnExportPdf: document.getElementById('btn-export-pdf'),
+  btnExportXlsx: document.getElementById('btn-export-xlsx'),
+  btnExportCsv: document.getElementById('btn-export-csv'),
+  btnExportJson: document.getElementById('btn-export-json'),
+  modalReading: document.getElementById('modal-reading-v2'),
+  btnCloseReadingModal: document.getElementById('btn-close-reading-modal-v2'),
+  btnCancelReading: document.getElementById('btn-cancel-reading-v2'),
+  formReading: document.getElementById('form-reading-v2'),
+  inputMeter: document.getElementById('input-meter-v2'),
+  inputIndex: document.getElementById('input-index-v2'),
+  inputDate: document.getElementById('input-date-v2'),
+  lastReadingHelp: document.getElementById('last-reading-help-v2'),
+  modalCsv: document.getElementById('modal-csv-v2'),
+  btnCloseCsvModal: document.getElementById('btn-close-csv-modal-v2'),
+  btnCloseCsvModalFooter: document.getElementById('btn-close-csv-modal-footer-v2'),
+  csvDragZone: document.getElementById('csv-drag-zone-v2'),
+  csvFileInput: document.getElementById('csv-file-input-v2'),
+  csvErrorsContainer: document.getElementById('csv-errors-container-v2'),
+  csvErrorsList: document.getElementById('csv-errors-list-v2'),
+  btnPrintPresentation: document.getElementById('btn-print-presentation'),
+  dirEmissionDate: document.getElementById('dir-emission-date'),
+  dirCycleLabel: document.getElementById('dir-cycle-label'),
+  dirExecPeriod: document.getElementById('dir-exec-period'),
+  dirExecConsumed: document.getElementById('dir-exec-consumed'),
+  dirExecMetaVal: document.getElementById('dir-exec-meta-val'),
+  dirExecBalance: document.getElementById('dir-exec-balance'),
+  dirExecBalanceSub: document.getElementById('dir-exec-balance-sub'),
+  dirExecProjection: document.getElementById('dir-exec-projection'),
+  dirExecProjectionSub: document.getElementById('dir-exec-projection-sub'),
+  dirExecProgressBar: document.getElementById('dir-exec-progress-bar'),
+  dirKpiEconomy: document.getElementById('dir-kpi-economy'),
+  dirKpiEconomySub: document.getElementById('dir-kpi-economy-sub'),
+  dirKpiAlerts: document.getElementById('dir-kpi-alerts'),
+  dirKpiAvgGeneral: document.getElementById('dir-kpi-avg-general'),
+  dirRankingList: document.getElementById('dir-ranking-list'),
+  dirTableSummary: document.getElementById('dir-table-summary'),
+  historyCyclesTbody: document.getElementById('history-cycles-tbody'),
+  compCycle1: document.getElementById('comp-cycle-1'),
+  compCycle2: document.getElementById('comp-cycle-2'),
+  btnRunCyclesComparison: document.getElementById('btn-run-cycles-comparison'),
+  cyclesComparisonResults: document.getElementById('cycles-comparison-results'),
+  compResultsTitle: document.getElementById('comp-results-title'),
+  compResultsSub: document.getElementById('comp-results-sub'),
+  compResultsBadge: document.getElementById('comp-results-badge'),
+  compResultsTbody: document.getElementById('comp-results-tbody'),
+  formAdminSettings: document.getElementById('form-admin-settings'),
+  btnSaveAdminSettings: document.getElementById('btn-save-admin-settings'),
+  adminMetaGlobal: document.getElementById('admin-meta-global'),
+  adminMetaIndividual: document.getElementById('admin-meta-individual'),
+  adminAlertThreshold: document.getElementById('admin-alert-threshold'),
+  adminLeakThreshold: document.getElementById('admin-leak-threshold'),
+  adminOsDiasAberta: document.getElementById('admin-os-dias-aberta'),
+  adminOsDiasAguardando: document.getElementById('admin-os-dias-aguardando'),
+  adminPerdasLimite: document.getElementById('admin-perdas-limite'),
+  adminChecklistHoras: document.getElementById('admin-checklist-horas'),
+  adminMetersList: document.getElementById('admin-meters-list'),
+  toastContainer: document.getElementById('toast-container-v2')
+};
+
+// --- INICIALIZAÇÃO ---
+document.addEventListener('DOMContentLoaded', () => {
+  state.readings = initializeData();
+  updateAppSelectors();
+  resetReadingFormDate();
+  switchTab(state.currentTab);
+  initEventListeners();
+  if (typeof lucide !== 'undefined') lucide.createIcons();
+});
+
+// ================= REFRESH GERAL =================
+
+function refreshApp() {
+  // Abas independentes de ciclo — executar antes do guard
+  if (state.currentTab === 'pipa') { carregarPipa(); if (typeof lucide !== 'undefined') lucide.createIcons(); return; }
+
+  const availableCycles = getAvailableCycles(state.readings);
+  if (!state.selectedCycleKey || !availableCycles.includes(state.selectedCycleKey)) {
+    state.selectedCycleKey = availableCycles[0] || '';
+  }
+  if (!state.selectedCycleKey) return;
+
+  const stats = getCycleStats(state.readings, state.selectedCycleKey);
+  const currentIndex = availableCycles.indexOf(state.selectedCycleKey);
+  const prevCycleKey = currentIndex !== -1 && currentIndex < availableCycles.length - 1 ? availableCycles[currentIndex + 1] : null;
+  let prevStats = null;
+  if (prevCycleKey) prevStats = getCycleStats(state.readings, prevCycleKey);
+
+  if (state.currentTab === 'dashboard') renderDashboardTab(stats, prevStats);
+  else if (state.currentTab === 'os') carregarOS();
+  else if (state.currentTab === 'perdas') carregarPerdas();
+  else if (state.currentTab === 'requisicoes') carregarRequisicoes();
+  else if (state.currentTab === 'central') carregarCentralOperacional();
+  else if (state.currentTab === 'alertas') carregarAlertas();
+  else if (state.currentTab === 'configuracoes') renderConfiguracoesTab();
+
+  if (typeof lucide !== 'undefined') lucide.createIcons();
+}
+
+// ================= CENTRAL DE ALERTAS =================
+
+/**
+ * Calcula todos os alertas do sistema agregando Água, OS, Perdas e Operação.
+ * Retorna array de objetos { prioridade, categoria, mensagem, data }
+ */
+async function calcularAlertas() {
+  const alertas = [];
+  const settings = getAppSettings();
+  const hoje = new Date();
+
+  // --- ÁGUA ---
+  try {
+    const stats = getCycleStats(state.readings, state.selectedCycleKey || 'current');
+    Object.values(stats.meters).forEach(m => {
+      if (m.consumption > m.limit) {
+        alertas.push({ prioridade: 'critico', categoria: 'agua', mensagem: `Hidrômetro ${m.alias} (${m.id}): consumo ${m.consumption.toFixed(2)} m³ excedeu a meta de ${m.limit} m³.`, data: hoje.toISOString() });
+      } else if (m.status === 'warning') {
+        alertas.push({ prioridade: 'atencao', categoria: 'agua', mensagem: `Hidrômetro ${m.alias} (${m.id}): consumo ${m.consumption.toFixed(2)} m³ próximo da meta (${m.percentUsed}% utilizado).`, data: hoje.toISOString() });
+      }
+      if (m.hasLeak) {
+        alertas.push({ prioridade: 'critico', categoria: 'agua', mensagem: `Hidrômetro ${m.alias} (${m.id}): possível vazamento detectado (pico diário acima de ${settings.leakThreshold} m³).`, data: hoje.toISOString() });
+      }
+      if (m.projection > m.limit && m.status !== 'danger') {
+        alertas.push({ prioridade: 'atencao', categoria: 'agua', mensagem: `Hidrômetro ${m.alias} (${m.id}): projeção de fechamento (${m.projection.toFixed(2)} m³) excederá a meta.`, data: hoje.toISOString() });
+      }
+    });
+  } catch (e) {
+    console.warn('Alertas Água: erro ao calcular', e);
+  }
+
+  // --- OS ---
+  try {
+    const response = await fetch(OS_CSV_URL);
+    const csv = await response.text();
+    const linhas = parseCSVLinhas(csv);
+
+const cabecalho = linhas[0];
+
+const registros = [];
+
+for (let i = 1; i < linhas.length; i++) {
+
+  const cols = linhas[i];
+
+  if (cols.every(c => !c || !c.trim())) continue;
+
+  const registro = {};
+
+  cabecalho.forEach((nomeCol, idx) => {
+
+    registro[nomeCol.trim()] =
+      (cols[idx] || '').trim();
+
+  });
+
+  registros.push(registro);
+
+}
+    
+    const indiceStatus = cabecalho.findIndex(c => c.trim().replace(/"/g, '').toUpperCase() === 'STATUS');
+    const indicePrioridade = cabecalho.findIndex(c => c.trim().replace(/"/g, '').toUpperCase() === 'PRIORIDADE');
+    const indiceOS = cabecalho.findIndex(c => c.trim().replace(/"/g, '').toUpperCase() === 'OS');
+    const indiceData = cabecalho.findIndex(c => c.trim().replace(/"/g, '').toUpperCase().includes('DATA'));
+
+    for (let i = 1; i < linhas.length; i++) {
+      const colunas = linhas[i].split(',');
+      const status = (colunas[indiceStatus] || '').trim().replace(/"/g, '').toUpperCase();
+      const prioridade = (colunas[indicePrioridade] || '').trim().replace(/"/g, '').toUpperCase();
+      const osNum = (colunas[indiceOS] || '').replace(/"/g, '');
+      const dataAbertura = indiceData >= 0 ? (colunas[indiceData] || '').replace(/"/g, '').trim() : '';
+
+      if (!status) continue;
+
+      // Calcula dias em aberto
+      let diasAberta = 0;
+      if (dataAbertura) {
+        const parts = dataAbertura.split('/');
+        if (parts.length === 3) {
+          const dtAberta = new Date(parseInt(parts[2]), parseInt(parts[1]) - 1, parseInt(parts[0]));
+          if (!isNaN(dtAberta.getTime())) {
+            diasAberta = Math.floor((hoje - dtAberta) / (1000 * 60 * 60 * 24));
+          }
+        }
+      }
+
+      if (status === 'ABERTO') {
+        if (prioridade === 'CRÍTICA' || prioridade === 'CRITICA') {
+          alertas.push({ prioridade: 'critico', categoria: 'os', mensagem: `OS ${osNum}: prioridade CRÍTICA em aberto${diasAberta > 0 ? ` há ${diasAberta} dias` : ''}.`, data: hoje.toISOString() });
+        } else if (diasAberta >= settings.alertOsDiasAberta) {
+          alertas.push({ prioridade: 'critico', categoria: 'os', mensagem: `OS ${osNum}: aberta há ${diasAberta} dias (limite: ${settings.alertOsDiasAberta} dias).`, data: hoje.toISOString() });
+        }
+      } else if (status === 'AGUARDANDO PEÇA') {
+        if (diasAberta >= settings.alertOsDiasAguardando) {
+          alertas.push({ prioridade: 'atencao', categoria: 'os', mensagem: `OS ${osNum}: aguardando peça há ${diasAberta} dias (limite: ${settings.alertOsDiasAguardando} dias).`, data: hoje.toISOString() });
+        }
+      }
     }
-    btn.addEventListener('click', tentarEntrar);
-    input.addEventListener('keydown', (e) => { if (e.key === 'Enter') tentarEntrar(); });
-  })();
-</script>
+  } catch (e) {
+    console.warn('Alertas OS: erro ao buscar CSV', e);
+    alertas.push({ prioridade: 'informativo', categoria: 'os', mensagem: 'Não foi possível verificar OS no momento. Verifique a conexão.', data: hoje.toISOString() });
+  }
 
-<div class="app-container">
-  <!-- HEADER -->
-  <header class="no-print">
-    <div class="logo-section">
-      <img src="logo-mamma-mia.jpg" alt="Mamma Mia Salgados" class="logo-real">
-      <div>
-        <div style="display: flex; align-items: baseline; gap: 0.5rem;"><h1>Mamma Mia</h1></div>
-        <p class="logo-subtitle">Mamma Mia Control - Gestão Inteligente</p>
-      </div>
-    </div>
-  </header>
+  // --- PERDAS ---
+  try {
+    const response = await fetch(PERDAS_CSV_URL);
+    const csv = await response.text();
+    const linhas = csv.split('\n').filter(l => l.trim());
+    const totalPerdas = linhas.length - 1;
+    const limite = settings.alertPerdasLimite;
 
-  <!-- NAVEGAÇÃO -->
-  <nav class="navigation-tabs no-print" aria-label="Abas do Sistema">
-    <button class="tab-btn active" data-tab="dashboard"><i data-lucide="droplets"></i>Água</button>
-    <button class="tab-btn" data-tab="os"><i data-lucide="wrench"></i>OS</button>
-    <button class="tab-btn" data-tab="perdas"><i data-lucide="trending-down"></i>Perdas</button>
-    <button class="tab-btn" data-tab="requisicoes"><i data-lucide="package"></i>Requisições</button>
-    <button class="tab-btn" data-tab="central"><i data-lucide="radio"></i>Central</button>
-    <button class="tab-btn" data-tab="operacao"><i data-lucide="clipboard-check"></i>Operação</button>
-    <button class="tab-btn" data-tab="pipa"><i data-lucide="truck"></i>Pipa</button>
-  </nav>
+    // Referência: média de registros (simplificado: comparamos com um total de 30 registros como base)
+    // Na prática, totalPerdas é contagem total acumulada, não só do mês. Usamos o limite% como nº máximo aceitável.
+    // Lógica: se totalPerdas > limite (como número absoluto configurável), alerta.
+    if (totalPerdas > limite) {
+      const excesso = totalPerdas - limite;
+      alertas.push({ prioridade: 'critico', categoria: 'perdas', mensagem: `Perdas: ${totalPerdas} registros totais excedem o limite configurado de ${limite} (excesso: ${excesso}).`, data: hoje.toISOString() });
+    } else if (totalPerdas > limite * 0.7) {
+      alertas.push({ prioridade: 'atencao', categoria: 'perdas', mensagem: `Perdas: ${totalPerdas} registros totais estão em ${Math.round((totalPerdas / limite) * 100)}% do limite configurado (${limite}).`, data: hoje.toISOString() });
+    } else {
+      alertas.push({ prioridade: 'informativo', categoria: 'perdas', mensagem: `Perdas: ${totalPerdas} registros totais dentro do limite (${limite}).`, data: hoje.toISOString() });
+    }
+  } catch (e) {
+    console.warn('Alertas Perdas: erro ao buscar CSV', e);
+    alertas.push({ prioridade: 'informativo', categoria: 'perdas', mensagem: 'Não foi possível verificar Perdas no momento. Verifique a conexão.', data: hoje.toISOString() });
+  }
 
-  <main id="app-main-content">
+  // --- OPERAÇÃO (placeholder — checklists são Google Forms externos sem dados acessíveis) ---
+  // Quando a planilha de respostas estiver disponível, substituir este bloco pela leitura real.
+  alertas.push({
+    prioridade: 'informativo',
+    categoria: 'operacao',
+    mensagem: `Checklists operacionais: monitoramento automático não disponível (Google Forms externos). Parâmetro configurado: ${settings.alertChecklistHoras}h sem preenchimento = alerta. Expansão futura prevista.`,
+    data: hoje.toISOString()
+  });
 
-    <!-- ================= ABA: ÁGUA / DASHBOARD ================= -->
-    <div id="tab-content-dashboard" class="tab-panel active">
-      <section class="main-executive-card" aria-label="Meta do Ciclo Atual">
-        <div class="main-exec-header">
-          <h3><span style="font-size: 1.25rem; vertical-align: middle;">🛰</span> META DO CICLO</h3>
-          <span class="main-exec-period" id="main-exec-period-label">07/06/2026 a 06/07/2026</span>
+  // ---- EXPANSÃO FUTURA (código pronto, comentado) ----
+  // async function sendTelegramAlertFuture(alerta) { /* chamar API Telegram Bot */ }
+  // async function sendWhatsAppAlertFuture(alerta) { /* chamar API WhatsApp Business */ }
+  // async function sendPushNotificationFuture(alerta) { /* chamar Push API */ }
+  // async function sendEmailAlertFuture(alerta) { /* chamar serviço de e-mail */ }
+
+  return alertas;
+}
+
+async function carregarAlertas() {
+  const container = document.getElementById('alertas-conteudo');
+  if (!container) return;
+
+  // KPI cards loading
+  ['alerta-kpi-total', 'alerta-kpi-critico', 'alerta-kpi-atencao', 'alerta-kpi-info'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = '...';
+  });
+
+  container.innerHTML = `<div style="text-align:center; padding: 2rem; color: var(--text-muted);"><i data-lucide="loader-2" style="animation: spin 1s linear infinite;"></i> Calculando alertas...</div>`;
+  if (typeof lucide !== 'undefined') lucide.createIcons();
+
+  let alertas = [];
+  try {
+    alertas = await calcularAlertas();
+    state.alertasCache = alertas;
+  } catch (e) {
+    container.innerHTML = `<p style="color:var(--color-red); padding:1rem;">Erro ao calcular alertas: ${e.message}</p>`;
+    return;
+  }
+
+  renderizarAlertas(alertas);
+}
+
+function renderizarAlertas(alertas, filtroPrioridade = 'todos', filtroCategoria = 'todos') {
+  const criticos = alertas.filter(a => a.prioridade === 'critico');
+  const atencao = alertas.filter(a => a.prioridade === 'atencao');
+  const informativos = alertas.filter(a => a.prioridade === 'informativo');
+
+  // Atualiza KPIs
+  const kpiTotal = document.getElementById('alerta-kpi-total');
+  const kpiCritico = document.getElementById('alerta-kpi-critico');
+  const kpiAtencao = document.getElementById('alerta-kpi-atencao');
+  const kpiInfo = document.getElementById('alerta-kpi-info');
+  if (kpiTotal) kpiTotal.textContent = alertas.length;
+  if (kpiCritico) kpiCritico.textContent = criticos.length;
+  if (kpiAtencao) kpiAtencao.textContent = atencao.length;
+  if (kpiInfo) kpiInfo.textContent = informativos.length;
+
+  // Filtra para a tabela
+  let filtrados = alertas;
+  if (filtroPrioridade !== 'todos') filtrados = filtrados.filter(a => a.prioridade === filtroPrioridade);
+  if (filtroCategoria !== 'todos') filtrados = filtrados.filter(a => a.categoria === filtroCategoria);
+
+  const container = document.getElementById('alertas-conteudo');
+  if (!container) return;
+
+  // Cards de resumo (Críticos e Atenção)
+  const resumoCriticos = criticos.slice(0, 5);
+  const resumoAtencao = atencao.slice(0, 5);
+
+  const iconePorCategoria = { agua: 'droplets', os: 'wrench', perdas: 'trending-down', operacao: 'clipboard-check' };
+
+  container.innerHTML = `
+    <!-- Cards de resumo -->
+    <div class="alerta-resumo-grid">
+      <div class="alerta-card alerta-card-critico">
+        <div class="alerta-card-header">
+          <i data-lucide="alert-octagon"></i>
+          <span>🔴 Críticos (${criticos.length})</span>
         </div>
-        <div class="main-exec-body">
-          <div class="exec-metric"><span class="exec-label">Meta Total</span><span class="exec-val" id="main-exec-meta">80.00 <span class="exec-unit">m³</span></span></div>
-          <div class="exec-metric"><span class="exec-label">Consumido</span><span class="exec-val" id="main-exec-consumed">0.00 <span class="exec-unit">m³</span></span></div>
-          <div class="exec-metric highlight-success"><span class="exec-label">Saldo para Meta</span><span class="exec-val text-glow-green" id="main-exec-balance">0.00 <span class="exec-unit">m³</span></span></div>
-          <div class="exec-metric"><span class="exec-label">% Utilizado</span><span class="exec-val" id="main-exec-percent">0.0<span class="exec-unit">%</span></span></div>
-          <div class="exec-metric highlight-info"><span class="exec-label">Dias Restantes</span><span class="exec-val" id="main-exec-days-left">0 <span class="exec-unit">dias</span></span></div>
-        </div>
-        <div class="main-exec-progress-track"><div class="main-exec-progress-bar" id="main-exec-progress-bar" style="width: 0%;"></div></div>
-      </section>
-
-      <section class="kpi-grid" style="margin-bottom: 2rem;" aria-label="Indicadores de Gestão">
-        <div class="kpi-card" id="kpi-alerts-v2">
-          <div class="kpi-label">Hidrômetros em Alerta</div>
-          <div class="kpi-value" id="val-alerts-v2">0</div>
-          <div class="kpi-subtext" id="val-alerts-subtext-v2">Nenhum hidrômetro crítico</div>
-        </div>
-        <div class="kpi-card"><div class="kpi-label">Consumo Médio Geral</div><div class="kpi-value" id="val-avg-general">0.00 <span class="unit">m³/d</span></div><div class="kpi-subtext">Média somada diária</div></div>
-        <div class="kpi-card"><div class="kpi-label">Maior Consumidor</div><div class="kpi-value" id="val-highest-consumer" style="font-size: 1.4rem; padding-top: 0.15rem; color: var(--color-orange);">--</div><div class="kpi-subtext" id="val-highest-consumer-sub">Consumo máximo registrado</div></div>
-        <div class="kpi-card"><div class="kpi-label">Menor Consumidor</div><div class="kpi-value" id="val-lowest-consumer" style="font-size: 1.4rem; padding-top: 0.15rem; color: var(--color-green);">--</div><div class="kpi-subtext" id="val-lowest-consumer-sub">Consumo mínimo registrado</div></div>
-        <div class="kpi-card"><div class="kpi-label">Projeção Final Global</div><div class="kpi-value" id="val-proj-global">0.00 <span class="unit">m³</span></div><div class="kpi-subtext" id="val-proj-global-sub">Estima consumo até dia 06</div></div>
-        <div class="kpi-card"><div class="kpi-label">Economia Projetada</div><div class="kpi-value" id="val-economy-projected">0.00 <span class="unit">m³</span></div><div class="kpi-subtext" id="val-economy-projected-sub">Economia estimada do ciclo</div></div>
-      </section>
-
-      <div class="double-panel-row">
-        <div class="comparador-secao-v2" id="comparador-ciclos-v2">
-          <div class="comparador-info">
-            <div class="comparador-icon"><i data-lucide="arrow-left-right"></i></div>
-            <div class="comparador-text"><h3>Balanço vs. Ciclo Anterior</h3><p id="comparador-details-v2">Consumo Atual: -- m³ | Anterior: -- m³</p></div>
+        ${resumoCriticos.length === 0 ? '<p class="alerta-empty">Nenhum alerta crítico</p>' : resumoCriticos.map(a => `
+          <div class="alerta-item">
+            <i data-lucide="${iconePorCategoria[a.categoria] || 'alert-circle'}" style="width:13px;height:13px;flex-shrink:0;"></i>
+            <span>${a.mensagem}</span>
           </div>
-          <div id="comparador-badge-v2" class="comparador-resultado economia"><span>Carregando dados...</span></div>
-        </div>
-        <div class="leak-alert-card" id="leak-alert-banner" style="display: none;">
-          <div class="leak-alert-icon"><i data-lucide="droplet-off"></i></div>
-          <div class="leak-alert-text"><h3>🔴 Possível Vazamento Detectado</h3><p id="leak-alert-desc">Verifique o hidrômetro com pico anômalo.</p></div>
-        </div>
+        `).join('')}
+        ${criticos.length > 5 ? `<p style="font-size:0.75rem;color:var(--text-muted);margin-top:0.5rem;">+${criticos.length - 5} outros críticos na tabela abaixo.</p>` : ''}
       </div>
-
-      <section class="panel-card no-print" id="operational-alerts-panel" style="margin-bottom: 2rem; display: none;">
-        <div class="panel-header" style="margin-bottom: 1rem;"><h2 style="color: var(--color-red);"><i data-lucide="alert-octagon"></i> Alertas Operacionais Ativos</h2></div>
-        <div class="alerts-list-wrapper" id="operational-alerts-list"></div>
-      </section>
-
-      <section class="hidrometros-grid" id="hidrometros-cards-container-v2" aria-label="Consumo por Hidrômetro"></section>
-
-      <div class="layout-panels">
-        <section class="panel-card" aria-label="Evolução Temporal do Consumo">
-          <div class="panel-header"><h2><i data-lucide="bar-chart-3" style="color: var(--color-blue);"></i> Tendência de Consumo</h2><span style="font-size: 0.8rem; color: var(--text-muted);">Acumulado Diário no Ciclo</span></div>
-          <div class="chart-wrapper"><canvas id="trendChartV2"></canvas></div>
-        </section>
-        <section class="panel-card" style="display: flex; flex-direction: column; justify-content: space-between;">
-          <div>
-            <div class="panel-header"><h2><i data-lucide="pie-chart" style="color: var(--color-purple);"></i> Divisão por Hidrômetro</h2></div>
-            <div class="chart-wrapper" style="height: 180px; margin-bottom: 1rem;"><canvas id="comparisonChartV2"></canvas></div>
-          </div>
-          <div>
-            <div class="panel-header" style="margin-bottom: 0.75rem; margin-top: 1rem; border-top: 1px solid rgba(255,255,255,0.05); padding-top: 1rem;"><h2 style="font-size: 1.1rem;"><i data-lucide="download" style="color: var(--color-blue);"></i> Relatórios e Exportação</h2></div>
-            <div class="export-actions-grid">
-              <button id="btn-export-pdf" class="btn btn-primary" type="button"><i data-lucide="file-text"></i> PDF Executivo</button>
-              <button id="btn-export-xlsx" class="btn btn-secondary" type="button"><i data-lucide="table"></i> Planilha Excel</button>
-              <button id="btn-export-csv" class="btn btn-secondary" type="button"><i data-lucide="file-spreadsheet"></i> CSV</button>
-              <button id="btn-export-json" class="btn btn-secondary" type="button"><i data-lucide="braces"></i> Backup JSON</button>
-            </div>
-          </div>
-        </section>
-      </div>
-    </div>
-
-    <!-- ================= ABA: OS ================= -->
-    <div id="tab-content-os" class="tab-panel">
-      <section class="panel-card">
-        <div class="panel-header"><h2>🔧 Ordens de Serviço</h2><button id="btn-refresh-os" class="btn btn-primary">Atualizar OS</button></div>
-        <div class="dashboard-grid">
-          <div class="kpi-card"><span class="kpi-label">OS Abertas</span><div class="kpi-value" id="os-open-count">0</div></div>
-          <div class="kpi-card"><span class="kpi-label">Em Andamento</span><div class="kpi-value" id="os-progress-count">0</div></div>
-          <div class="kpi-card"><span class="kpi-label">Aguardando Peça</span><div class="kpi-value" id="os-parts-count">0</div></div>
-          <div class="kpi-card"><span class="kpi-label">Concluídas</span><div class="kpi-value" id="os-closed-count">0</div></div>
+      <div class="alerta-card alerta-card-atencao">
+        <div class="alerta-card-header">
+          <i data-lucide="alert-triangle"></i>
+          <span>🟡 Atenção (${atencao.length})</span>
         </div>
-        <div class="kpi-card"><span class="kpi-label">🔴 Críticas</span><div class="kpi-value" id="os-critical-count">0</div></div>
-        <div class="kpi-card"><span class="kpi-label">🟡 Altas</span><div class="kpi-value" id="os-high-count">0</div></div>
-        <div class="kpi-card"><span class="kpi-label">🟢 Baixas</span><div class="kpi-value" id="os-low-count">0</div></div>
-      </section>
-      <section class="panel-card">
-        <div class="panel-header">
-          <h2>📋 Últimas Ordens de Serviço</h2>
-          <select id="os-filter-status" class="filter-select">
-          <option value="TODOS">Todos</option>
-          <option value="ABERTO">Abertos</option>
-          <option value="AGUARDANDO PEÇA">Aguardando Peça</option>
-          <option value="CONCLUÍDO">Concluídas</option>
-  </select>
-  <select id="os-filter-prioridade" class="filter-select" style="margin-left:0.5rem;">
-  <option value="TODOS">Todas Prioridades</option>
-  <option value="CRÍTICA">🔴 Crítica</option>
-  <option value="ALTA">🟠 Alta</option>
-  <option value="MÉDIA">🟡 Média</option>
-  <option value="BAIXA">🟢 Baixa</option>
-</select>
-        </div>
-        <table class="modern-table"><thead><tr><th>OS</th><th>Status</th><th>Prioridade</th><th>Unidade</th><th>Equipamento</th><th>PDF</th></tr></thead><tbody id="os-table-body"></tbody></table>
-      </section>
-    </div>
-
-    <!-- ================= ABA: PERDAS ================= -->
-    <div id="tab-content-perdas" class="tab-panel">
-      <div id="perdas-conteudo">
-        <section class="panel-card"><div class="panel-header"><h2>📉 Gestão de Perdas YUKA</h2></div><p>Carregando dados...</p></section>
+        ${resumoAtencao.length === 0 ? '<p class="alerta-empty">Nenhum alerta de atenção</p>' : resumoAtencao.map(a => `
+          <div class="alerta-item">
+            <i data-lucide="${iconePorCategoria[a.categoria] || 'alert-circle'}" style="width:13px;height:13px;flex-shrink:0;"></i>
+            <span>${a.mensagem}</span>
+          </div>
+        `).join('')}
+        ${atencao.length > 5 ? `<p style="font-size:0.75rem;color:var(--text-muted);margin-top:0.5rem;">+${atencao.length - 5} outros na tabela abaixo.</p>` : ''}
       </div>
     </div>
 
-    <!-- ================= ABA: REQUISIÇÕES ================= -->
-    <div id="tab-content-requisicoes" class="tab-panel">
-      <section class="panel-card">
-        <div class="panel-header"><h2>📦 Central de Requisições</h2></div>
-        <div class="dashboard-grid">
-          <div class="kpi-card requisicao-card" id="btn-limpeza">
-            <div class="kpi-value">🧹</div>
-            <span class="kpi-label">Limpeza e EPI</span>
-            <p style="margin-top:10px;color:var(--text-muted);">Materiais de limpeza, EPIs e utilidades.</p>
-          </div>
-          <div class="kpi-card requisicao-card" id="btn-mp">
-            <div class="kpi-value">🥩</div>
-            <span class="kpi-label">MP e Recheios</span>
-            <p style="margin-top:10px;color:var(--text-muted);">Matéria-prima e recheios.</p>
-          </div>
-        </div>
-      </section>
-      <section class="panel-card" id="requisicoes-conteudo"><div class="panel-header"><h2>Selecione um módulo</h2></div></section>
-    </div>
-
-    <!-- ================= ABA: CENTRAL OPERACIONAL ================= -->
-    <div id="tab-content-central" class="tab-panel">
-
-      <section class="panel-card">
-
-        <div class="panel-header">
-          <h2>📡 Central Operacional</h2>
-        </div>
-
-        <div id="central-conteudo">
-
-          <div class="dashboard-grid">
-
-            <div class="kpi-card">
-              <div class="kpi-value">0</div>
-              <span class="kpi-label">🟡 Aguardando</span>
-            </div>
-
-            <div class="kpi-card">
-              <div class="kpi-value">0</div>
-              <span class="kpi-label">🔵 Em Separação</span>
-            </div>
-
-            <div class="kpi-card">
-              <div class="kpi-value">0</div>
-              <span class="kpi-label">🟢 Concluído</span>
-            </div>
-
-            <div class="kpi-card">
-              <div class="kpi-value">0</div>
-              <span class="kpi-label">🔴 Cancelado</span>
-            </div>
-
-          </div>
-
-          <p style="margin-top:20px;color:var(--text-muted);">
-            Central Operacional em desenvolvimento...
-          </p>
-
-        </div>
-
-      </section>
-
-    </div>
-
-    <!-- ================= ABA: OPERAÇÃO ================= -->
-    <div id="tab-content-operacao" class="tab-panel">
-      <section class="panel-card">
-        <div class="panel-header"><h2>📋 Formulários Operacionais</h2></div>
-        <div class="dashboard-grid">
-          <div class="kpi-card requisicao-card"><div class="kpi-value">📉</div><a href="https://docs.google.com/forms/d/e/1FAIpQLSdGz8GgzVjqK-Zt9fVUXK09Safz0eQIqc4rM0_Q7PEE9HKmCg/viewform?usp=header" target="_blank" rel="noopener" class="kpi-label" style="text-decoration: none; color: var(--text-primary);">Registro de Perdas – Mamma Mia</a></div>
-          <div class="kpi-card requisicao-card"><div class="kpi-value">🔧</div><a href="https://docs.google.com/forms/d/e/1FAIpQLSdbnjll-8FQA8fpSYDsFi6fb_2lxydvucvhmGNZ1ptViMDJxg/viewform?usp=header" target="_blank" rel="noopener" class="kpi-label" style="text-decoration: none; color: var(--text-primary);">Chamado de Manutenção</a></div>
-          <div class="kpi-card requisicao-card"><div class="kpi-value">💧</div><a href="https://docs.google.com/forms/d/e/1FAIpQLSfisK8w1mNz6Z4iR62GEo2l58FEg9EBZQ9vVmRiwdfkXH9Mag/viewform?usp=header" target="_blank" rel="noopener" class="kpi-label" style="text-decoration: none; color: var(--text-primary);">Controle de Água</a></div>
-        </div>
-      </section>
-      <section class="panel-card">
-        <div class="panel-header"><h2>✅ Checklists e Controles Operacionais</h2></div>
-        <div class="dashboard-grid">
-          <div class="kpi-card requisicao-card"><div class="kpi-value">🏭</div><a href="https://docs.google.com/forms/d/e/1FAIpQLScu-Jzfh8CH5tlzUMxTWxWo5VGd0bZRKwgokyRHJadg2C37yA/viewform?usp=header" target="_blank" rel="noopener" class="kpi-label" style="text-decoration: none; color: var(--text-primary);">Abertura de Fábrica - YUKA</a></div>
-          <div class="kpi-card requisicao-card"><div class="kpi-value">🏭</div><a href="https://docs.google.com/forms/d/e/1FAIpQLSczqxdvozpSVsc5eWqTAviPQxyzxaXS4htKwmn2Va-_RSQD3Q/viewform?usp=header" target="_blank" rel="noopener" class="kpi-label" style="text-decoration: none; color: var(--text-primary);">Abertura de Fábrica - TC</a></div>
-          <div class="kpi-card requisicao-card"><div class="kpi-value">🔒</div><a href="https://docs.google.com/forms/d/e/1FAIpQLSdc979u_GeGxfbIB5MyjUuOhz9jdYPdASOhoznP33G1n_Nx5g/viewform?usp=header" target="_blank" rel="noopener" class="kpi-label" style="text-decoration: none; color: var(--text-primary);">Fechamento de Fábrica - YUKA</a></div>
-          <div class="kpi-card requisicao-card"><div class="kpi-value">🔒</div><a href="https://docs.google.com/forms/d/e/1FAIpQLScwOvE4okSQoVn_dALhSOCaK4g9KDcOlFvWJwL2OiPlyrR1Ew/viewform?usp=header" target="_blank" rel="noopener" class="kpi-label" style="text-decoration: none; color: var(--text-primary);">Fechamento de Fábrica - TC</a></div>
-          <div class="kpi-card requisicao-card"><div class="kpi-value">✅</div><a href="https://docs.google.com/forms/d/e/1FAIpQLSdPHVwU5_7iCX-j0jNOp_sb5Y6NtWVe3P3j_ZeC27BLCSbJ3g/viewform?usp=header" target="_blank" rel="noopener" class="kpi-label" style="text-decoration: none; color: var(--text-primary);">Controle de Boas Práticas (BPF)</a></div>
-          <div class="kpi-card requisicao-card"><div class="kpi-value">📦</div><a href="https://docs.google.com/forms/d/e/1FAIpQLSfS0FGuovjr1I8Tk-UxGHwxaIusmHM8XVXM865Bw_gAogQJTQ/viewform?usp=header" target="_blank" rel="noopener" class="kpi-label" style="text-decoration: none; color: var(--text-primary);">Controle de Produção</a></div>
-        </div>
-      </section>
-    </div>
-
-    <!-- ================= ABA: DIRETORIA ================= -->
-    <div id="tab-content-diretoria" class="tab-panel">
-      <div class="presentation-header no-print">
-        <h2><i data-lucide="presentation"></i> Apresentação Executiva para Diretoria</h2>
-        <button id="btn-print-presentation" class="btn btn-primary" type="button"><i data-lucide="printer"></i> Imprimir / Salvar PDF</button>
-      </div>
-      <div class="diretoria-print-wrapper" id="diretoria-print-content">
-        <div class="print-header-logo">
-          <div style="display: flex; align-items: center; gap: 10px;"><span style="font-size: 32px;">🇮🇹</span><div><h2>Mamma Mia</h2><p>Projeto Água - Gestão Inteligente do Consumo</p></div></div>
-          <div style="text-align: right; font-size: 0.85rem; color: #4b5563;"><p>Emitido em: <span id="dir-emission-date">--</span></p><p>Ciclo analisado: <strong id="dir-cycle-label">--</strong></p></div>
-        </div>
-        <div class="main-executive-card diretoria-card-bg">
-          <div class="main-exec-header"><h3>🛰 RELATÓRIO OPERACIONAL DA DIRETORIA</h3><span class="main-exec-period" id="dir-exec-period">--</span></div>
-          <div class="main-exec-body" style="grid-template-columns: repeat(3, 1fr);">
-            <div class="exec-metric"><span class="exec-label">Consumo Acumulado Geral</span><span class="exec-val" id="dir-exec-consumed">0.00 m³</span><span class="dir-exec-sub">Meta Limite: <strong id="dir-exec-meta-val">80.00</strong> m³</span></div>
-            <div class="exec-metric highlight-success"><span class="exec-label">Saldo de Economia Global</span><span class="exec-val text-glow-green" id="dir-exec-balance" style="color: #10b981;">0.00 m³</span><span class="dir-exec-sub" id="dir-exec-balance-sub">Dentro do limite global</span></div>
-            <div class="exec-metric"><span class="exec-label">Projeção Final de Fechamento</span><span class="exec-val" id="dir-exec-projection">0.00 m³</span><span class="dir-exec-sub" id="dir-exec-projection-sub">Com base na média móvel</span></div>
-          </div>
-          <div class="main-exec-progress-track"><div class="main-exec-progress-bar" id="dir-exec-progress-bar" style="width: 0%;"></div></div>
-        </div>
-        <div class="kpi-grid" style="margin-bottom: 2rem;">
-          <div class="kpi-card"><div class="kpi-label">Economia Gerada</div><div class="kpi-value" id="dir-kpi-economy" style="color: var(--color-green);">0.00 <span class="unit">m³</span></div><div class="kpi-subtext" id="dir-kpi-economy-sub">Em relação ao ciclo anterior</div></div>
-          <div class="kpi-card"><div class="kpi-label">Hidrômetros em Alerta</div><div class="kpi-value" id="dir-kpi-alerts">0 <span class="unit">/ 4</span></div><div class="kpi-subtext">Pontos de consumo crítico</div></div>
-          <div class="kpi-card"><div class="kpi-label">Média Geral Diária</div><div class="kpi-value" id="dir-kpi-avg-general">0.00 <span class="unit">m³/d</span></div><div class="kpi-subtext">Meta diária geral de 2.66 m³/d</div></div>
-        </div>
-        <div class="print-charts-row">
-          <div class="panel-card">
-            <div class="panel-header"><h2>🏆 RANKING DE DESEMPENHO E ECONOMIA</h2></div>
-            <div class="ranking-list" id="dir-ranking-list"></div>
-          </div>
-          <div class="panel-card">
-            <div class="panel-header"><h2>📊 DISTRIBUIÇÃO E HISTÓRICO NO PERÍODO</h2></div>
-            <div class="table-responsive">
-              <table style="font-size: 0.8rem;"><thead><tr><th>Hidrômetro</th><th>Apelido</th><th>Consumo</th><th>Meta</th><th>Status</th></tr></thead><tbody id="dir-table-summary"></tbody></table>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- ================= ABA: CICLOS ================= -->
-    <div id="tab-content-ciclos" class="tab-panel">
-      <section class="panel-card" style="margin-bottom: 2rem;">
-        <div class="panel-header"><h2><i data-lucide="history" style="color: var(--color-blue);"></i> Registro Histórico de Ciclos Fechados</h2></div>
-        <div class="table-responsive">
-          <table><thead><tr><th>Ciclo</th><th>Consumo Total (m³)</th><th>Meta Global (m³)</th><th>Economia vs. Anterior (m³)</th><th>Alertas Ativos</th><th>Status Meta</th></tr></thead><tbody id="history-cycles-tbody"></tbody></table>
-        </div>
-      </section>
-      <section class="panel-card">
-        <div class="panel-header"><h2><i data-lucide="arrow-left-right" style="color: var(--color-purple);"></i> Comparador de Ciclos Históricos</h2></div>
-        <div class="filters-row" style="margin-bottom: 1.5rem;">
-          <div class="filter-group"><label for="comp-cycle-1" class="form-label" style="margin-bottom: 0;">Ciclo A (Principal):</label><select id="comp-cycle-1" class="filter-select"></select></div>
-          <div class="filter-group"><label for="comp-cycle-2" class="form-label" style="margin-bottom: 0;">Ciclo B (Comparativo):</label><select id="comp-cycle-2" class="filter-select"></select></div>
-          <button id="btn-run-cycles-comparison" class="btn btn-primary" type="button">Comparar Períodos</button>
-        </div>
-        <div id="cycles-comparison-results" style="display: none;">
-          <div class="comparador-secao-v2" style="background: rgba(255,255,255,0.02); margin-bottom: 1.5rem;">
-            <div class="comparador-info"><div class="comparador-icon"><i data-lucide="info"></i></div><div class="comparador-text"><h3 id="comp-results-title">Balanço do Ciclo A vs. Ciclo B</h3><p id="comp-results-sub">Carregando comparação...</p></div></div>
-            <div id="comp-results-badge" class="comparador-resultado economia"><span>--</span></div>
-          </div>
-          <div class="table-responsive">
-            <table><thead><tr><th>Hidrômetro</th><th>Apelido</th><th>Consumo no Ciclo A (m³)</th><th>Consumo no Ciclo B (m³)</th><th>Diferença (m³)</th><th>Status Comparativo</th></tr></thead><tbody id="comp-results-tbody"></tbody></table>
-          </div>
-        </div>
-      </section>
-    </div>
-
-    <!-- ================= ABA: CONFIGURAÇÕES ================= -->
-    <div id="tab-content-configuracoes" class="tab-panel">
-      <section class="panel-card">
-        <div class="panel-header" style="border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 1rem; margin-bottom: 1.5rem;">
-          <h2><i data-lucide="settings" style="color: var(--color-blue);"></i>⚙️ Painel Administrativo de Controle</h2>
-          <button id="btn-save-admin-settings" class="btn btn-primary" type="button"><i data-lucide="save"></i> Salvar Configurações</button>
-        </div>
-
-        <form id="form-admin-settings">
-
-          <!-- Informações Gerais -->
-          <div class="panel-card" style="margin-bottom:20px;">
-            <div class="panel-header"><h3>👤 Informações Gerais</h3></div>
-            <p><strong>Responsável:</strong> Thalita Campos</p>
-            <p><strong>Contato:</strong> thalita@mammamiasalgados.com.br</p>
-          </div>
-
-          <!-- Formulários Oficiais -->
-          <div class="panel-card" style="margin-bottom:20px;">
-            <div class="panel-header"><h3>📋 Formulários Oficiais</h3></div>
-            <div class="dashboard-grid">
-              <div class="kpi-card"><div class="kpi-value">💧</div><a href="https://docs.google.com/forms/d/e/1FAIpQLSfisK8w1mNz6Z4iR62GEo2l58FEg9EBZQ9vVmRiwdfkXH9Mag/viewform?usp=header" target="_blank" rel="noopener" class="kpi-label" style="text-decoration: none; color: var(--text-primary);">Controle de Água</a></div>
-              <div class="kpi-card"><div class="kpi-value">🔧</div><a href="https://docs.google.com/forms/d/e/1FAIpQLSf3EYS-UrlFKDx-QBudOCF9fP4egxL6wY7RcYnlPI-HEA_6Rw/viewform?usp=header" target="_blank" rel="noopener" class="kpi-label" style="text-decoration: none; color: var(--text-primary);">Ordem de Serviço</a></div>
-              <div class="kpi-card"><div class="kpi-value">📉</div><a href="https://docs.google.com/forms/d/e/1FAIpQLSdGz8GgzVjqK-Zt9fVUXK09Safz0eQIqc4rM0_Q7PEE9HKmCg/viewform?usp=header" target="_blank" rel="noopener" class="kpi-label" style="text-decoration: none; color: var(--text-primary);">Controle de Perdas</a></div>
-              <div class="kpi-card" style="position: relative;">
-                <div class="kpi-value">📦</div>
-                <span class="kpi-label" id="formularios-requisicoes-toggle" style="cursor: pointer; text-decoration: underline; text-decoration-style: dotted;">Requisições</span>
-                <div id="formularios-requisicoes-menu" style="display:none; position:absolute; top:100%; left:0; right:0; background: var(--card-bg); border:1px solid var(--card-border); border-radius: var(--border-radius-md); box-shadow: 0 8px 20px rgba(0,0,0,0.15); z-index: 10; margin-top: 6px; overflow:hidden;">
-                  <a href="https://docs.google.com/forms/d/e/1FAIpQLScOLcHL8fFQpXg3LMPZTmlYfmmfdJ-PX8GqmQyIbKDb5iM-RA/viewform?usp=header" target="_blank" rel="noopener" style="display:block; padding: 0.6rem 0.9rem; color: var(--text-primary); text-decoration:none; font-size:0.85rem; border-bottom: 1px solid var(--card-border);">🧹 Limpeza e EPIs</a>
-                  <a href="https://docs.google.com/forms/d/e/1FAIpQLSeEPlg0wMPk-zwtOPa5p8fnl3_J0wwjWSGPRGpZNw-1nscWbw/viewform?usp=header" target="_blank" rel="noopener" style="display:block; padding: 0.6rem 0.9rem; color: var(--text-primary); text-decoration:none; font-size:0.85rem;">🥩 Matéria-prima e Recheio</a>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <!-- Parâmetros de Água -->
-          <h3 style="font-size: 1.1rem; font-weight: 700; color: white; margin-top: 2rem; margin-bottom: 1rem; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 0.5rem;">💧 Água</h3>
-          <div class="admin-settings-grid">
-            <div class="form-group"><label for="admin-meta-global" class="form-label">Meta Global</label><input type="number" id="admin-meta-global" class="form-control" step="1" required><span class="form-help">Consumo máximo somado dos 4 hidrômetros (Padrão: 80 m³).</span></div>
-            <div class="form-group"><label for="admin-meta-individual" class="form-label">Meta Individual</label><input type="number" id="admin-meta-individual" class="form-control" step="1" required><span class="form-help">Consumo máximo permitido para cada hidrômetro (Padrão: 20 m³).</span></div>
-            <div class="form-group"><label for="admin-alert-threshold" class="form-label">Limite de Alerta (%)</label><input type="number" id="admin-alert-threshold" class="form-control" step="1" max="100" min="50" required><span class="form-help">Percentual de uso da meta individual para alertar o painel (Padrão: 75%).</span></div>
-            <div class="form-group"><label for="admin-leak-threshold" class="form-label">Limite de Vazamento (m³/dia)</label><input type="number" id="admin-leak-threshold" class="form-control" step="0.1" required><span class="form-help">Consumo diário máximo aceitável antes de alertar possível vazamento (Padrão: 3 m³).</span></div>
-          </div>
-
-          <!-- Parâmetros de OS -->
-          <h3 style="font-size: 1.1rem; font-weight: 700; color: white; margin-top: 2rem; margin-bottom: 1rem; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 0.5rem;">🔧 Ordens de Serviço</h3>
-          <div class="admin-settings-grid">
-            <div class="form-group"><label for="admin-os-dias-aberta" class="form-label">Dias para alerta OS aberta</label><input type="number" id="admin-os-dias-aberta" class="form-control" step="1" min="1" required><span class="form-help">OS aberta há mais de X dias gera alerta CRÍTICO (Padrão: 7 dias).</span></div>
-            <div class="form-group"><label for="admin-os-dias-aguardando" class="form-label">Dias para alerta Aguardando Peça</label><input type="number" id="admin-os-dias-aguardando" class="form-control" step="1" min="1" required><span class="form-help">OS aguardando peça há mais de X dias gera alerta ATENÇÃO (Padrão: 3 dias).</span></div>
-          </div>
-
-          <!-- Parâmetros de Perdas -->
-          <h3 style="font-size: 1.1rem; font-weight: 700; color: white; margin-top: 2rem; margin-bottom: 1rem; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 0.5rem;">📉 Perdas</h3>
-          <div class="admin-settings-grid">
-            <div class="form-group"><label for="admin-perdas-limite" class="form-label">Limite máximo de Perdas (registros)</label><input type="number" id="admin-perdas-limite" class="form-control" step="1" min="1" required><span class="form-help">Número máximo de registros de perdas antes de gerar alerta CRÍTICO (Padrão: 5).</span></div>
-          </div>
-
-          <!-- Parâmetros de Operação -->
-          <h3 style="font-size: 1.1rem; font-weight: 700; color: white; margin-top: 2rem; margin-bottom: 1rem; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 0.5rem;">📋 Operação</h3>
-          <div class="admin-settings-grid">
-            <div class="form-group"><label for="admin-checklist-horas" class="form-label">Tempo máximo sem checklist (horas)</label><input type="number" id="admin-checklist-horas" class="form-control" step="1" min="1" required><span class="form-help">Horas sem preenchimento de checklist para gerar alerta (Padrão: 12h). Monitoramento automático será ativado quando a planilha de respostas estiver integrada.</span></div>
-          </div>
-
-          <!-- Hidrômetros -->
-          <h3 style="font-size: 1.1rem; font-weight: 700; color: white; margin-top: 2.5rem; margin-bottom: 1rem; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 0.5rem;">🛰 Cadastro de Hidrômetros</h3>
-          <div class="hydrometer-settings-list" id="admin-meters-list"></div>
-
-          <!-- Multi-Unidade -->
-          <h3 style="font-size: 1.1rem; font-weight: 700; color: white; margin-top: 2.5rem; margin-bottom: 1rem; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 0.5rem;">Estrutura e Multi-Unidade (Preparação Futura)</h3>
-          <div class="admin-settings-grid">
-            <div class="form-group">
-              <label class="form-label">Unidade Ativa</label>
-              <select class="form-control" disabled style="background: rgba(255,255,255,0.02); cursor: not allowed;"><option>YUKA (Ativo)</option></select>
-              <span class="form-help">Outras unidades como 'TC' ou 'Unidade 3' estão preparadas no banco e serão liberadas na interface operacional assim que novos hidrômetros físicos forem instalados.</span>
-            </div>
-          </div>
-        </form>
-      </section>
-    </div>
-
-    <!-- ================= ABA: CAMINHÃO PIPA ================= -->
-    <div id="tab-content-pipa" class="tab-panel">
-
-      <!-- Card: Último Abastecimento -->
-      <section class="panel-card" id="pipa-ultimo-card">
-        <div class="panel-header">
-          <h2>🚚 Último Abastecimento – Caminhão Pipa</h2>
-          <button id="btn-atualizar-pipa" class="btn btn-sm btn-secondary" style="margin-left:auto;">
-            <i data-lucide="refresh-cw"></i> Atualizar
+    <!-- Tabela completa com filtros -->
+    <div class="panel-card" style="margin-top:1.5rem;">
+      <div class="panel-header" style="flex-wrap:wrap; gap:0.5rem;">
+        <h3 style="font-size:1rem;">📋 Todos os Alertas</h3>
+        <div style="display:flex; gap:0.5rem; flex-wrap:wrap; align-items:center;">
+          <select id="alerta-filtro-prioridade" class="filter-select" style="font-size:0.8rem;">
+            <option value="todos">Todas as Prioridades</option>
+            <option value="critico">🔴 Crítico</option>
+            <option value="atencao">🟡 Atenção</option>
+            <option value="informativo">🟢 Informativo</option>
+          </select>
+          <select id="alerta-filtro-categoria" class="filter-select" style="font-size:0.8rem;">
+            <option value="todos">Todas as Categorias</option>
+            <option value="agua">💧 Água</option>
+            <option value="os">🔧 OS</option>
+            <option value="perdas">📉 Perdas</option>
+            <option value="operacao">📋 Operação</option>
+          </select>
+          <button id="btn-atualizar-alertas" class="btn btn-secondary" style="font-size:0.8rem; padding:0.35rem 0.75rem;">
+            <i data-lucide="refresh-cw" style="width:13px;height:13px;"></i> Atualizar
           </button>
         </div>
-        <div id="pipa-ultimo-conteudo" style="padding: 1rem 0;">
-          <p style="color:var(--text-muted);">Carregando...</p>
-        </div>
-      </section>
+      </div>
 
-      <!-- Card: Histórico -->
-      <section class="panel-card">
-        <div class="panel-header" style="display:flex;align-items:center;gap:1rem;flex-wrap:wrap;">
-          <h2>📋 Histórico de Abastecimentos</h2>
-          <div style="display:flex;gap:0.5rem;align-items:center;margin-left:auto;flex-wrap:wrap;">
-            <label style="font-size:0.85rem;color:var(--text-muted);">Filtrar por placa:</label>
-            <select id="pipa-filtro-placa" class="form-control" style="width:auto;min-width:140px;">
-              <option value="">Todas as placas</option>
-            </select>
-            <label style="font-size:0.85rem;color:var(--text-muted);">Período:</label>
-            <input type="date" id="pipa-filtro-de" class="form-control" style="width:auto;">
-            <input type="date" id="pipa-filtro-ate" class="form-control" style="width:auto;">
-            <button id="btn-pipa-filtrar" class="btn btn-sm btn-primary">Filtrar</button>
-            <button id="btn-pipa-limpar" class="btn btn-sm btn-secondary">Limpar</button>
+      <div class="table-responsive" style="margin-top:1rem;">
+        <table class="modern-table">
+          <thead>
+            <tr>
+              <th style="width:110px;">Prioridade</th>
+              <th style="width:100px;">Categoria</th>
+              <th>Mensagem</th>
+              <th style="width:120px;">Data</th>
+            </tr>
+          </thead>
+          <tbody id="alerta-tabela-body">
+            ${filtrados.length === 0 ? '<tr><td colspan="4" style="text-align:center; color:var(--text-muted); padding:2rem;">Nenhum alerta encontrado para os filtros selecionados.</td></tr>' :
+              filtrados.map(a => {
+                const badgeClass = a.prioridade === 'critico' ? 'badge-alerta-critico' : (a.prioridade === 'atencao' ? 'badge-alerta-atencao' : 'badge-alerta-info');
+                const emoji = a.prioridade === 'critico' ? '🔴' : (a.prioridade === 'atencao' ? '🟡' : '🟢');
+                const catLabel = { agua: '💧 Água', os: '🔧 OS', perdas: '📉 Perdas', operacao: '📋 Operação' }[a.categoria] || a.categoria;
+                return `<tr>
+                  <td><span class="${badgeClass}">${emoji} ${a.prioridade.charAt(0).toUpperCase() + a.prioridade.slice(1)}</span></td>
+                  <td><span class="badge-categoria">${catLabel}</span></td>
+                  <td style="font-size:0.85rem;">${a.mensagem}</td>
+                  <td style="font-size:0.78rem; color:var(--text-muted);">${formatDate(a.data, true)}</td>
+                </tr>`;
+              }).join('')}
+          </tbody>
+        </table>
+      </div>
+
+      <p style="font-size:0.75rem; color:var(--text-muted); margin-top:1rem; padding-top:0.75rem; border-top:1px solid var(--card-border);">
+        💡 Expansão futura: envio automático via Telegram, WhatsApp, Push e E-mail para alertas críticos.
+      </p>
+    </div>
+  `;
+
+  // Listeners dos filtros da tabela
+  const filtroPrioEl = document.getElementById('alerta-filtro-prioridade');
+  const filtroCatEl = document.getElementById('alerta-filtro-categoria');
+  const btnAtualizar = document.getElementById('btn-atualizar-alertas');
+
+  if (filtroPrioEl) filtroPrioEl.value = filtroPrioridade;
+  if (filtroCatEl) filtroCatEl.value = filtroCategoria;
+
+  if (filtroPrioEl) filtroPrioEl.addEventListener('change', () => renderizarAlertas(state.alertasCache || [], filtroPrioEl.value, filtroCatEl?.value || 'todos'));
+  if (filtroCatEl) filtroCatEl.addEventListener('change', () => renderizarAlertas(state.alertasCache || [], filtroPrioEl?.value || 'todos', filtroCatEl.value));
+  if (btnAtualizar) btnAtualizar.addEventListener('click', () => { state.alertasCache = null; carregarAlertas(); });
+
+  if (typeof lucide !== 'undefined') lucide.createIcons();
+}
+
+// ================= ABA DASHBOARD =================
+
+function renderDashboardTab(stats, prevStats) {
+  const settings = getAppSettings();
+  DOM.mainExecPeriodLabel.textContent = `${formatDate(stats.startDate)} a ${formatDate(stats.endDate)}`;
+  DOM.mainExecMeta.innerHTML = `${stats.metaGlobal.toFixed(2)} <span class="exec-unit">m³</span>`;
+  DOM.mainExecConsumed.innerHTML = `${stats.totalConsumption.toFixed(2)} <span class="exec-unit">m³</span>`;
+  const isGlobalEconomy = stats.globalBalance >= 0;
+  DOM.mainExecBalance.textContent = `${stats.globalBalance.toFixed(2)} m³`;
+  DOM.mainExecBalance.className = isGlobalEconomy ? 'exec-val text-glow-green' : 'exec-val text-glow-red';
+  DOM.mainExecPercent.textContent = `${stats.globalPercentUsed}%`;
+  DOM.mainExecDaysLeft.innerHTML = `${stats.remainingDays} <span class="exec-unit">dias</span>`;
+  DOM.mainExecProgressBar.style.width = `${Math.min(100, stats.globalPercentUsed)}%`;
+  if (stats.totalConsumption > stats.metaGlobal) DOM.mainExecProgressBar.style.background = 'var(--grad-danger)';
+  else if (stats.totalConsumption > (stats.metaGlobal * (settings.alertThreshold / 100))) DOM.mainExecProgressBar.style.background = 'var(--grad-warning)';
+  else DOM.mainExecProgressBar.style.background = 'var(--grad-primary)';
+
+  DOM.valAlertsV2.textContent = stats.alertMetersCount;
+  if (stats.alertMetersCount > 0) { DOM.valAlertsV2.parentElement.style.color = 'var(--color-red)'; DOM.valAlertsSubtextV2.innerHTML = `<span class="pulse-red"></span> Contém hidrômetro crítico`; }
+  else { DOM.valAlertsV2.parentElement.style.color = 'var(--color-green)'; DOM.valAlertsSubtextV2.textContent = 'Consumos sob controle'; }
+
+  DOM.valAvgGeneral.innerHTML = `${stats.generalDailyAverage.toFixed(2)} <span class="unit">m³/d</span>`;
+  DOM.valHighestConsumer.textContent = stats.highestConsumer.name;
+  DOM.valHighestConsumerSub.textContent = `Consumido: ${stats.highestConsumer.consumption.toFixed(2)} m³`;
+  DOM.valLowestConsumer.textContent = stats.lowestConsumer.name;
+  DOM.valLowestConsumerSub.textContent = `Consumido: ${stats.lowestConsumer.consumption.toFixed(2)} m³`;
+  DOM.valProjGlobal.innerHTML = `${stats.totalProjection.toFixed(2)} <span class="unit">m³</span>`;
+  if (stats.totalProjection > stats.metaGlobal) DOM.valProjGlobalSub.innerHTML = `<span class="badge-alert" style="padding:1px 4px; font-size:0.75rem;">Excederá limite</span>`;
+  else DOM.valProjGlobalSub.textContent = 'Dentro da meta projetada';
+  DOM.valEconomyProjected.innerHTML = `${Math.max(0, stats.projectedEconomy).toFixed(2)} <span class="unit">m³</span>`;
+  DOM.valEconomyProjectedSub.textContent = stats.projectedEconomy >= 0 ? 'Economia prevista' : 'Nenhuma economia prevista';
+
+  if (prevStats) {
+    const comp = compareCycles(state.readings, stats.cycleKey, prevStats.cycleKey);
+    DOM.comparadorDetailsV2.textContent = `Consumo Atual: ${stats.totalConsumption.toFixed(2)} m³ | Anterior: ${prevStats.totalConsumption.toFixed(2)} m³`;
+    if (comp.isEconomy) { DOM.comparadorBadgeV2.className = 'comparador-resultado economia'; DOM.comparadorBadgeV2.innerHTML = `<i data-lucide="arrow-down"></i>Economia de ${comp.diff.toFixed(2)} m³ (-${comp.percentDiff}%)`; }
+    else { DOM.comparadorBadgeV2.className = 'comparador-resultado aumento'; DOM.comparadorBadgeV2.innerHTML = `<i data-lucide="arrow-up"></i>Aumento de ${comp.diff.toFixed(2)} m³ (+${comp.percentDiff}%)`; }
+  } else {
+    DOM.comparadorDetailsV2.textContent = 'Sem dados do ciclo anterior para comparação.';
+    DOM.comparadorBadgeV2.className = 'comparador-resultado economia';
+    DOM.comparadorBadgeV2.innerHTML = 'Primeiro Ciclo';
+  }
+
+  let hasGlobalLeak = false; let allOperationalAlerts = [];
+  Object.keys(stats.meters).forEach(id => {
+    const m = stats.meters[id];
+    if (m.hasLeak) hasGlobalLeak = true;
+    if (m.operationalAlerts.length > 0) allOperationalAlerts.push({ id, alias: m.alias, alerts: m.operationalAlerts });
+  });
+
+  if (hasGlobalLeak) {
+    DOM.leakAlertBanner.style.display = 'flex';
+    const leakMeters = Object.values(stats.meters).filter(m => m.hasLeak).map(m => m.alias || m.id).join(', ');
+    DOM.leakAlertDesc.textContent = `Pico anômalo diário detectado em: ${leakMeters}. Limiar: >${settings.leakThreshold} m³/dia.`;
+  } else { DOM.leakAlertBanner.style.display = 'none'; }
+
+  if (allOperationalAlerts.length > 0) {
+    DOM.operationalAlertsPanel.style.display = 'block';
+    DOM.operationalAlertsList.innerHTML = '';
+    allOperationalAlerts.forEach(item => {
+      item.alerts.forEach(alertText => {
+        const box = document.createElement('div');
+        box.className = alertText.includes('Vazamento') ? 'alert-item-box danger' : 'alert-item-box';
+        box.innerHTML = `<i data-lucide="${alertText.includes('Vazamento') ? 'droplet-off' : 'alert-triangle'}" style="width:14px; height:14px; flex-shrink:0;"></i><span><strong>${item.id} (${item.alias})</strong>: ${alertText}</span>`;
+        DOM.operationalAlertsList.appendChild(box);
+      });
+    });
+  } else { DOM.operationalAlertsPanel.style.display = 'none'; }
+
+  renderIndividualMeterCards(stats);
+  const processedReadings = calculateConsumptions(state.readings);
+  renderTrendChart(DOM.trendChartCanvas, stats, processedReadings);
+  renderComparisonChart(DOM.comparisonChartCanvas, stats, prevStats);
+}
+
+function renderIndividualMeterCards(stats) {
+  DOM.metersCardsContainer.innerHTML = '';
+  const settings = getAppSettings();
+  Object.keys(settings.hydrometers).forEach(id => {
+    const m = stats.meters[id];
+    if (!m) return;
+    let statusClass = 'badge-success', statusText = 'Normal', cardGlow = '', barGradient = 'linear-gradient(90deg, #3b82f6 0%, #10b981 100%)';
+    if (m.status === 'danger') { statusClass = 'badge-alert'; statusText = 'Excedido'; cardGlow = 'border-color: rgba(239, 68, 68, 0.4); box-shadow: 0 10px 25px rgba(239, 68, 68, 0.08);'; barGradient = 'var(--grad-danger)'; }
+    else if (m.status === 'warning') { statusClass = 'badge-warning'; statusText = 'Atenção'; cardGlow = 'border-color: rgba(245, 158, 11, 0.4);'; barGradient = 'var(--grad-warning)'; }
+    let textFaltam = '', faltamClass = 'success';
+    if (m.balance >= 0) { textFaltam = `🎯 Faltam ${m.balance.toFixed(2)} m³ para meta`; faltamClass = m.balance < (m.limit * 0.25) ? 'warning' : 'success'; }
+    else { textFaltam = `🎯 Limite excedido em ${Math.abs(m.balance).toFixed(2)} m³`; faltamClass = 'danger'; }
+    let dailyDotClass = 'success', dailyStatusTitle = 'Abaixo da meta esperada';
+    if (m.dailyGoalStatus === 'danger') { dailyDotClass = 'danger'; dailyStatusTitle = 'Acima da meta esperada'; }
+    else if (m.dailyGoalStatus === 'warning') { dailyDotClass = 'warning'; dailyStatusTitle = 'Próximo da meta esperada'; }
+    const card = document.createElement('div');
+    card.className = 'hidrometro-card'; card.style = cardGlow;
+    card.innerHTML = `
+      <div class="card-header-meter">
+        <div class="meter-alias-row">
+          <span class="meter-alias" id="card-alias-${id}">${m.alias}</span>
+          <button class="btn-edit-alias no-print" data-id="${id}" title="Alterar apelido"><i data-lucide="edit-3"></i></button>
+        </div>
+        <span class="${statusClass}">${statusText}</span>
+      </div>
+      <div class="meter-title-block">
+        <h3 title="${m.name}">${m.name.split(' & ')[0]}</h3>
+        <span class="meter-id-label">${id}</span>
+      </div>
+      <div class="faltam-indicator-tag ${faltamClass}">${textFaltam}</div>
+      <div class="progress-container">
+        <div class="progress-label-row">
+          <span>${m.consumption.toFixed(2)} m³</span>
+          <span style="color: var(--text-muted);">Meta: ${m.limit} m³</span>
+        </div>
+        <div class="progress-track">
+          <div class="progress-bar" style="width: ${Math.min(100, m.percentUsed)}%; background: ${barGradient};"></div>
+          <div class="progress-marker" style="left: ${settings.alertThreshold}%;" title="Aviso (${settings.alertThreshold}%)"></div>
+        </div>
+      </div>
+      <div class="meter-stats-list">
+        <div class="stat-item"><span class="stat-label">Meta Diária Esperada</span><span class="stat-val meta-diaria-val" title="${dailyStatusTitle}"><span class="daily-status-dot ${dailyDotClass}"></span>${m.dailyGoal.toFixed(3)} m³</span></div>
+        <div class="stat-item"><span class="stat-label">Consumo Médio Real</span><span class="stat-val">${m.dailyAverage.toFixed(3)} m³</span></div>
+        <div class="stat-item full-width" style="border-top: 1px dashed rgba(255,255,255,0.05); padding-top: 0.5rem; margin-top: 0.5rem;">
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <span class="stat-label">Projeção Fechamento</span>
+            <span class="stat-val" style="font-weight: 700; color: ${m.projection > m.limit ? 'var(--color-red)' : 'var(--text-primary)'};">${m.projection.toFixed(2)} m³</span>
           </div>
         </div>
-        <div id="pipa-historico-count" style="font-size:0.85rem;color:var(--text-muted);margin-bottom:0.75rem;padding:0 0.25rem;"></div>
-        <div style="overflow-x:auto;">
-          <table class="data-table" id="pipa-historico-table">
-            <thead>
-              <tr>
-                <th>Pedido</th>
-                <th>Qtd. Requisitada</th>
-                <th>Qtd. Recebida</th>
-                <th>Placa do Veículo</th>
-                <th>Relógio Início</th>
-                <th>Relógio Fim</th>
-                <th>Nº do Recibo</th>
-              </tr>
-            </thead>
-            <tbody id="pipa-historico-body">
-              <tr><td colspan="7" style="text-align:center;color:var(--text-muted);">Carregando...</td></tr>
-            </tbody>
-          </table>
+      </div>`;
+    DOM.metersCardsContainer.appendChild(card);
+  });
+  DOM.metersCardsContainer.querySelectorAll('.btn-edit-alias').forEach(btn => {
+    btn.addEventListener('click', (e) => { const id = e.currentTarget.getAttribute('data-id'); editHydrometerAlias(id); });
+  });
+}
+
+// ================= ABA DIRETORIA =================
+
+function renderDiretoriaTab(stats, prevStats) {
+  DOM.dirEmissionDate.textContent = formatDate(new Date(), true);
+  DOM.dirCycleLabel.textContent = stats.label;
+  DOM.dirExecPeriod.textContent = `${formatDate(stats.startDate)} a ${formatDate(stats.endDate)}`;
+  DOM.dirExecConsumed.textContent = `${stats.totalConsumption.toFixed(2)} m³`;
+  DOM.dirExecMetaVal.textContent = `${stats.metaGlobal.toFixed(2)} m³`;
+  const isGlobalEconomy = stats.globalBalance >= 0;
+  DOM.dirExecBalance.textContent = `${stats.globalBalance.toFixed(2)} m³`;
+  DOM.dirExecBalance.className = isGlobalEconomy ? 'exec-val text-glow-green' : 'exec-val text-glow-red';
+  DOM.dirExecBalanceSub.textContent = isGlobalEconomy ? 'Dentro do limite global combinado' : 'Meta global ultrapassada';
+  DOM.dirExecProjection.textContent = `${stats.totalProjection.toFixed(2)} m³`;
+  DOM.dirExecProjectionSub.textContent = stats.totalProjection > stats.metaGlobal ? 'Possível excesso ao fechar o ciclo' : 'Projeção dentro do esperado';
+  DOM.dirExecProgressBar.style.width = `${Math.min(100, stats.globalPercentUsed)}%`;
+  if (prevStats) {
+    const comp = compareCycles(state.readings, stats.cycleKey, prevStats.cycleKey);
+    DOM.dirKpiEconomy.textContent = `${comp.diff.toFixed(2)} m³`;
+    DOM.dirKpiEconomySub.textContent = comp.isEconomy ? `Economia de -${comp.percentDiff}%` : `Aumento de +${comp.percentDiff}%`;
+    DOM.dirKpiEconomy.style.color = comp.isEconomy ? 'var(--color-green)' : 'var(--color-red)';
+  } else { DOM.dirKpiEconomy.textContent = '0.00 m³'; DOM.dirKpiEconomySub.textContent = 'Primeiro Ciclo'; }
+  DOM.dirKpiAlerts.textContent = `${stats.alertMetersCount} / 4`;
+  DOM.dirKpiAvgGeneral.textContent = `${stats.generalDailyAverage.toFixed(2)} m³/d`;
+  DOM.dirRankingList.innerHTML = '';
+  stats.ranking.forEach(r => {
+    let medal = '🥉';
+    if (r.position === 1) medal = '🥇';
+    else if (r.position === 2) medal = '🥈';
+    const div = document.createElement('div');
+    div.className = 'ranking-item';
+    div.innerHTML = `<div class="ranking-left"><div class="ranking-position">${r.position}</div><div class="ranking-details"><span class="ranking-name">${r.name.split(' & ')[0]} ${medal}</span><span class="ranking-alias">${r.id} (${r.alias})</span></div></div><div class="ranking-value"><span>${r.consumption.toFixed(2)} m³</span><div style="font-size: 0.75rem; color: var(--text-muted); font-weight: 500;">${r.percentUsed}% da meta</div></div>`;
+    DOM.dirRankingList.appendChild(div);
+  });
+  DOM.dirTableSummary.innerHTML = '';
+  Object.keys(stats.meters).forEach(id => {
+    const m = stats.meters[id];
+    const indicatorColor = m.status === 'danger' ? 'var(--color-red)' : (m.status === 'warning' ? 'var(--color-orange)' : 'var(--color-green)');
+    const indicatorText = m.status === 'danger' ? 'Excedido' : (m.status === 'warning' ? 'Atenção' : 'Normal');
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td>${id}</td><td style="font-weight:600;">${m.alias}</td><td style="font-weight:700;">${m.consumption.toFixed(2)} m³</td><td>${m.limit} m³</td><td><span style="color: ${indicatorColor}; font-weight:700;">${indicatorText}</span></td>`;
+    DOM.dirTableSummary.appendChild(tr);
+  });
+}
+
+// ================= ABA CICLOS =================
+
+function renderCyclesTab(cycles) {
+  DOM.historyCyclesTbody.innerHTML = '';
+  if (cycles.length === 0) { DOM.historyCyclesTbody.innerHTML = '<tr><td colspan="6" style="text-align:center; color:var(--text-muted); padding:2rem;">Nenhum ciclo registrado.</td></tr>'; return; }
+  cycles.forEach((c, index) => {
+    const stats = getCycleStats(state.readings, c);
+    let economyText = '0.00 m³';
+    if (index < cycles.length - 1) { const prevC = cycles[index + 1]; const comp = compareCycles(state.readings, c, prevC); const sign = comp.isEconomy ? '-' : '+'; economyText = `${sign}${comp.diff.toFixed(2)} m³ (${sign}${comp.percentDiff}%)`; }
+    else economyText = 'Leitura Base';
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td style="font-weight: 700; color: var(--color-blue);">${stats.label}</td><td style="font-weight: 600;">${stats.totalConsumption.toFixed(2)} m³</td><td>${stats.metaGlobal} m³</td><td style="color: ${economyText.includes('-') ? 'var(--color-green)' : (economyText.includes('+') ? 'var(--color-red)' : 'inherit')};">${economyText}</td><td style="text-align:center;">${stats.alertMetersCount} / 4</td><td><span class="${stats.globalStatus === 'danger' ? 'badge-alert' : (stats.globalStatus === 'warning' ? 'badge-warning' : 'badge-success')}">${stats.globalStatus === 'danger' ? 'Excedida' : (stats.globalStatus === 'warning' ? 'Alerta' : 'Abaixo da Meta')}</span></td>`;
+    DOM.historyCyclesTbody.appendChild(tr);
+  });
+  DOM.compCycle1.innerHTML = ''; DOM.compCycle2.innerHTML = '';
+  cycles.forEach(c => {
+    const stats = getCycleStats(state.readings, c);
+    const opt1 = document.createElement('option'); opt1.value = c; opt1.textContent = stats.label; DOM.compCycle1.appendChild(opt1);
+    const opt2 = document.createElement('option'); opt2.value = c; opt2.textContent = stats.label; DOM.compCycle2.appendChild(opt2);
+  });
+  if (cycles.length > 1) DOM.compCycle2.value = cycles[1];
+}
+
+// ================= ABA CONFIGURAÇÕES =================
+
+function renderConfiguracoesTab() {
+  const settings = getAppSettings();
+  DOM.adminMetaGlobal.value = settings.metaGlobal;
+  DOM.adminMetaIndividual.value = settings.metaIndividual;
+  DOM.adminAlertThreshold.value = settings.alertThreshold;
+  DOM.adminLeakThreshold.value = settings.leakThreshold;
+  if (DOM.adminOsDiasAberta) DOM.adminOsDiasAberta.value = settings.alertOsDiasAberta;
+  if (DOM.adminOsDiasAguardando) DOM.adminOsDiasAguardando.value = settings.alertOsDiasAguardando;
+  if (DOM.adminPerdasLimite) DOM.adminPerdasLimite.value = settings.alertPerdasLimite;
+  if (DOM.adminChecklistHoras) DOM.adminChecklistHoras.value = settings.alertChecklistHoras;
+
+  DOM.adminMetersList.innerHTML = '';
+  Object.keys(settings.hydrometers).forEach(id => {
+    const h = settings.hydrometers[id];
+    const div = document.createElement('div'); div.className = 'meter-config-item';
+    div.innerHTML = `<div class="meter-config-header"><h4>${id}</h4><span>${h.name}</span></div><div class="form-group" style="margin-bottom: 0;"><label class="form-label" style="font-size:0.75rem;">Apelido</label><input type="text" class="form-control admin-meter-alias-input" data-id="${id}" value="${h.alias}" required></div><div class="form-group" style="margin-bottom: 0;"><label class="form-label" style="font-size:0.75rem;">Cor do Indicador</label><input type="color" class="form-control" data-id="${id}" value="${h.color}" style="height:38px; padding:2px; cursor:pointer;" required></div>`;
+    DOM.adminMetersList.appendChild(div);
+  });
+}
+
+// ================= TABELA DE LEITURAS =================
+
+function renderReadingsTable() {
+  const meterFilter = state.filters.meter;
+  const cycleFilter = state.selectedCycleKey;
+  const processed = calculateConsumptions(state.readings);
+  const settings = getAppSettings();
+  const filtered = processed.filter(r => {
+    if (meterFilter !== 'all' && r.meterId !== meterFilter) return false;
+    if (cycleFilter) { const info = getCycleStats(state.readings, cycleFilter); const rDate = new Date(r.date); if (rDate < info.startDate || rDate > info.endDate) return false; }
+    return true;
+  });
+  DOM.tableRecordCount.textContent = `${filtered.length} registro(s) no ciclo`;
+  DOM.readingsTableBody.innerHTML = '';
+  if (filtered.length === 0) { DOM.readingsTableBody.innerHTML = `<tr><td colspan="5" style="text-align: center; color: var(--text-muted); padding: 2rem;">Nenhum lançamento encontrado para os filtros selecionados neste ciclo.</td></tr>`; return; }
+  filtered.forEach(r => {
+    const meterInfo = settings.hydrometers[r.meterId] || { alias: 'Desconhecido', color: '#6b7280', name: 'N/A' };
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td>${formatDate(r.date, true)}</td><td><span class="cell-indicator" style="background-color: ${meterInfo.color};"></span><span class="cell-meter"><span class="cell-meter-name">${meterInfo.name.split(' & ')[0]}</span><span class="cell-meter-id">${r.meterId} (${meterInfo.alias})</span></span></td><td style="font-weight: 500;">${r.index.toLocaleString('pt-BR', { minimumFractionDigits: 3 })} m³</td><td style="font-weight: 600;">${r.isInitial ? '<span style="color: var(--text-muted); font-size: 0.8rem; font-weight: normal;">Leitura Inicial</span>' : `+${r.consumption.toLocaleString('pt-BR', { minimumFractionDigits: 3 })} m³`}</td><td>${!r.isInitial ? `<button class="btn btn-danger btn-icon-only btn-delete-reading-v2" data-id="${r.id}" title="Excluir Leitura" type="button"><i data-lucide="x" style="width: 14px; height: 14px;"></i></button>` : '<span style="color: var(--text-muted); font-size: 0.8rem;">-</span>'}</td>`;
+    DOM.readingsTableBody.appendChild(tr);
+  });
+  DOM.readingsTableBody.querySelectorAll('.btn-delete-reading-v2').forEach(btn => {
+    btn.addEventListener('click', (e) => { const id = e.currentTarget.getAttribute('data-id'); deleteReading(id); });
+  });
+}
+
+// ================= EVENTOS =================
+
+function initEventListeners() {
+  DOM.tabButtons.forEach(btn => { btn.addEventListener('click', (e) => { const tab = e.currentTarget.getAttribute('data-tab'); switchTab(tab); }); });
+  if (DOM.cycleSelect) { DOM.cycleSelect.addEventListener('change', (e) => { state.selectedCycleKey = e.target.value; refreshApp(); }); }
+  if (DOM.filterMeter) { DOM.filterMeter.addEventListener('change', (e) => { state.filters.meter = e.target.value; renderReadingsTable(); if (typeof lucide !== 'undefined') lucide.createIcons(); }); }
+  if (DOM.btnOpenReadingModal) { DOM.btnOpenReadingModal.addEventListener('click', () => { resetReadingFormDate(); updateLastReadingHelp(); openModal(DOM.modalReading); }); }
+  if (DOM.btnCloseReadingModal) DOM.btnCloseReadingModal.addEventListener('click', () => closeModal(DOM.modalReading));
+  if (DOM.btnCancelReading) DOM.btnCancelReading.addEventListener('click', () => closeModal(DOM.modalReading));
+  if (DOM.inputMeter) DOM.inputMeter.addEventListener('change', updateLastReadingHelp);
+  if (DOM.formReading) { DOM.formReading.addEventListener('submit', (e) => { e.preventDefault(); submitReadingForm(); }); }
+  if (DOM.btnOpenCsvModal) { DOM.btnOpenCsvModal.addEventListener('click', () => { DOM.csvErrorsContainer.style.display = 'none'; DOM.csvFileInput.value = ''; openModal(DOM.modalCsv); }); }
+  if (DOM.btnCloseCsvModal) DOM.btnCloseCsvModal.addEventListener('click', () => closeModal(DOM.modalCsv));
+  if (DOM.btnCloseCsvModalFooter) DOM.btnCloseCsvModalFooter.addEventListener('click', () => closeModal(DOM.modalCsv));
+  if (DOM.csvDragZone && DOM.csvFileInput) {
+    DOM.csvDragZone.addEventListener('click', () => DOM.csvFileInput.click());
+    DOM.csvFileInput.addEventListener('change', handleCsvFileSelect);
+    DOM.csvDragZone.addEventListener('dragover', (e) => { e.preventDefault(); DOM.csvDragZone.classList.add('dragover'); });
+    DOM.csvDragZone.addEventListener('dragleave', () => { DOM.csvDragZone.classList.remove('dragover'); });
+    DOM.csvDragZone.addEventListener('drop', (e) => { e.preventDefault(); DOM.csvDragZone.classList.remove('dragover'); if (e.dataTransfer.files.length > 0) processCsvFile(e.dataTransfer.files[0]); });
+  }
+  if (DOM.btnGoogleSheetsImport) { DOM.btnGoogleSheetsImport.addEventListener('click', () => { alert('Funcionalidade em desenvolvimento.'); syncGoogleSheetsFuture(state.readings); }); }
+  DOM.btnExportPdf.addEventListener('click', () => {
+    showToast('Gerando relatório PDF...', 'info');
+    const stats = getCycleStats(state.readings, state.selectedCycleKey);
+    const availableCycles = getAvailableCycles(state.readings);
+    const currentIndex = availableCycles.indexOf(state.selectedCycleKey);
+    const prevCycleKey = currentIndex !== -1 && currentIndex < availableCycles.length - 1 ? availableCycles[currentIndex + 1] : null;
+    const comparison = compareCycles(state.readings, stats.cycleKey, prevCycleKey);
+    exportToPDF(stats, comparison, DOM.trendChartCanvas, DOM.comparisonChartCanvas);
+  });
+  DOM.btnExportXlsx.addEventListener('click', () => { try { exportToExcel(state.readings); showToast('Planilha Excel (.xlsx) baixada!', 'success'); } catch (e) { showToast(e.message, 'error'); } });
+  DOM.btnExportCsv.addEventListener('click', () => { exportToCSV(state.readings); showToast('Arquivo CSV baixado!', 'success'); });
+  DOM.btnExportJson.addEventListener('click', () => { exportToJSON(state.readings); showToast('Backup JSON baixado!', 'success'); });
+  if (DOM.btnPrintPresentation) DOM.btnPrintPresentation.addEventListener('click', () => { window.print(); });
+  if (DOM.btnRunCyclesComparison) DOM.btnRunCyclesComparison.addEventListener('click', runCyclesComparison);
+  if (DOM.btnSaveAdminSettings) DOM.btnSaveAdminSettings.addEventListener('click', submitAdminSettings);
+
+  const reqFormToggle = document.getElementById('formularios-requisicoes-toggle');
+  const reqFormMenu = document.getElementById('formularios-requisicoes-menu');
+  if (reqFormToggle && reqFormMenu) {
+    reqFormToggle.addEventListener('click', (e) => { e.stopPropagation(); reqFormMenu.style.display = reqFormMenu.style.display === 'none' ? 'block' : 'none'; });
+    document.addEventListener('click', (e) => { if (!reqFormMenu.contains(e.target) && e.target !== reqFormToggle) reqFormMenu.style.display = 'none'; });
+  }
+
+  const osFilterStatus = document.getElementById('os-filter-status');
+  if (osFilterStatus) osFilterStatus.addEventListener('change', () => { carregarOS(); });
+}
+
+function switchTab(tabName) {
+  state.currentTab = tabName;
+  DOM.tabButtons.forEach(btn => { btn.getAttribute('data-tab') === tabName ? btn.classList.add('active') : btn.classList.remove('active'); });
+  DOM.tabPanels.forEach(panel => { panel.getAttribute('id') === `tab-content-${tabName}` ? panel.classList.add('active') : panel.classList.remove('active'); });
+  if (tabName === 'configuracoes') populateMetersSelectInputs();
+  refreshApp();
+}
+
+function openModal(modal) { modal.classList.add('active'); modal.setAttribute('aria-hidden', 'false'); }
+function closeModal(modal) { modal.classList.remove('active'); modal.setAttribute('aria-hidden', 'true'); }
+
+function resetReadingFormDate() {
+  const now = new Date();
+  DOM.inputDate.value = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}T${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+}
+
+function populateMetersSelectInputs() {
+  const settings = getAppSettings();
+  DOM.inputMeter.innerHTML = '';
+  Object.keys(settings.hydrometers).forEach(id => {
+    const h = settings.hydrometers[id];
+    const option = document.createElement('option'); option.value = id; option.textContent = `${id} - ${h.name} (${h.alias})`;
+    DOM.inputMeter.appendChild(option);
+  });
+}
+
+function updateLastReadingHelp() {
+  const meterId = DOM.inputMeter.value;
+  if (!meterId) return;
+  const meterReadings = state.readings.filter(r => r.meterId === meterId).sort((a, b) => new Date(b.date) - new Date(a.date));
+  if (meterReadings.length > 0) {
+    const last = meterReadings[0];
+    DOM.lastReadingHelp.textContent = `Última leitura: ${last.index.toLocaleString('pt-BR')} m³ em ${formatDate(last.date, true)}`;
+    DOM.inputIndex.min = last.index; DOM.inputIndex.placeholder = `Mínimo: ${last.index.toFixed(3)}`;
+  } else { DOM.lastReadingHelp.textContent = 'Sem leituras registradas.'; DOM.inputIndex.removeAttribute('min'); DOM.inputIndex.placeholder = 'Ex: 100.000'; }
+}
+
+function submitReadingForm() {
+  const meterId = DOM.inputMeter.value; const index = parseFloat(DOM.inputIndex.value); const dateStr = DOM.inputDate.value;
+  if (isNaN(index) || index < 0) { showToast('Leitura acumulada inválida.', 'error'); return; }
+  const newDate = new Date(dateStr);
+  if (isNaN(newDate.getTime())) { showToast('Data e hora inválidas.', 'error'); return; }
+  if (checkDuplicateDayReading(state.readings, meterId, newDate)) { showToast(`Bloqueado: O hidrômetro ${meterId} já possui uma leitura registrada para o dia civil ${formatDate(newDate)}. Limite de 1 por dia.`, 'error'); return; }
+  const previousReading = state.readings.filter(r => r.meterId === meterId && new Date(r.date) < newDate).sort((a, b) => new Date(b.date) - new Date(a.date))[0];
+  if (previousReading && index < previousReading.index) { showToast(`Erro: Leitura (${index} m³) menor que o registro anterior (${previousReading.index} m³) do dia ${formatDate(previousReading.date, true)}.`, 'error'); return; }
+  const nextReading = state.readings.filter(r => r.meterId === meterId && new Date(r.date) > newDate).sort((a, b) => new Date(a.date) - new Date(b.date))[0];
+  if (nextReading && index > nextReading.index) { showToast(`Erro: Leitura (${index} m³) maior que o registro posterior (${nextReading.index} m³) do dia ${formatDate(nextReading.date, true)}.`, 'error'); return; }
+  const newReading = { id: `reading-${meterId}-${newDate.getTime()}-${Math.floor(Math.random() * 1000)}`, meterId, date: newDate.toISOString(), index: Number(index.toFixed(3)) };
+  state.readings.push(newReading); state.readings.sort((a, b) => new Date(b.date) - new Date(a.date));
+  saveReadings(state.readings); updateAppSelectors(); refreshApp();
+  closeModal(DOM.modalReading); DOM.formReading.reset(); showToast('Leitura adicionada com sucesso!', 'success');
+}
+
+function deleteReading(id) {
+  if (confirm('Tem certeza que deseja excluir esta leitura? O consumo será recalculado.')) {
+    state.readings = state.readings.filter(r => r.id !== id);
+    saveReadings(state.readings); updateAppSelectors(); refreshApp(); showToast('Leitura excluída.', 'success');
+  }
+}
+
+function editHydrometerAlias(id) {
+  const settings = getAppSettings(); const h = settings.hydrometers[id]; if (!h) return;
+  const newAlias = prompt(`Digite o novo apelido para o Hidrômetro ${id} (Atual: ${h.alias}):`, h.alias);
+  if (newAlias === null) return;
+  const cleanAlias = newAlias.trim().toUpperCase();
+  if (!cleanAlias) { alert('Apelido não pode ser vazio!'); return; }
+  h.alias = cleanAlias; saveAppSettings(settings); updateAppSelectors(); refreshApp();
+  showToast(`Apelido do hidrômetro ${id} atualizado para "${cleanAlias}".`, 'success');
+}
+
+// ================= CSV IMPORTER =================
+
+function handleCsvFileSelect(e) { if (e.target.files.length > 0) processCsvFile(e.target.files[0]); }
+
+function processCsvFile(file) {
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    const csvText = e.target.result;
+    try {
+      const result = parseCSV(csvText, state.readings);
+      state.readings = result.mergedReadings; saveReadings(state.readings);
+      updateAppSelectors(); refreshApp();
+      let msg = `${result.importedCount} novas leituras importadas.`;
+      if (result.overwrittenCount > 0) msg += ` ${result.overwrittenCount} leituras diárias atualizadas para o valor mais recente.`;
+      showToast(msg, 'success');
+      if (result.errorsCount > 0) {
+        DOM.csvErrorsContainer.style.display = 'block'; DOM.csvErrorsList.innerHTML = '';
+        result.errors.forEach(err => { const li = document.createElement('li'); li.textContent = err; DOM.csvErrorsList.appendChild(li); });
+        showToast(`Importação com ${result.errorsCount} inconsistências ignoradas.`, 'warning');
+      } else { DOM.csvErrorsContainer.style.display = 'none'; closeModal(DOM.modalCsv); }
+    } catch (err) { showToast(err.message, 'error'); }
+  };
+  reader.onerror = () => { showToast('Falha na leitura do arquivo CSV.', 'error'); };
+  reader.readAsText(file);
+}
+
+// ================= COMPARAÇÃO HISTÓRICA =================
+
+function runCyclesComparison() {
+  const cycleA = DOM.compCycle1.value; const cycleB = DOM.compCycle2.value;
+  if (cycleA === cycleB) { showToast('Selecione dois ciclos diferentes para comparar.', 'warning'); return; }
+  const comparison = compareCycles(state.readings, cycleA, cycleB);
+  DOM.cyclesComparisonResults.style.display = 'block';
+  DOM.compResultsTitle.textContent = `Balanço Geral: Ciclo ${comparison.currentLabel} vs. Ciclo ${comparison.prevLabel}`;
+  if (comparison.isEconomy) { DOM.compResultsBadge.className = 'comparador-resultado economia'; DOM.compResultsBadge.innerHTML = `<i data-lucide="arrow-down"></i>Economia de ${comparison.diff.toFixed(2)} m³ (-${comparison.percentDiff}%)`; DOM.compResultsSub.textContent = `O consumo geral caiu de ${comparison.prevConsumption.toFixed(2)} m³ para ${comparison.currentConsumption.toFixed(2)} m³.`; }
+  else { DOM.compResultsBadge.className = 'comparador-resultado aumento'; DOM.compResultsBadge.innerHTML = `<i data-lucide="arrow-up"></i>Aumento de ${comparison.diff.toFixed(2)} m³ (+${comparison.percentDiff}%)`; DOM.compResultsSub.textContent = `O consumo geral subiu de ${comparison.prevConsumption.toFixed(2)} m³ para ${comparison.currentConsumption.toFixed(2)} m³.`; }
+  DOM.compResultsTbody.innerHTML = '';
+  const settings = getAppSettings();
+  Object.keys(settings.hydrometers).forEach(id => {
+    const compMeter = comparison.meters[id]; if (!compMeter) return;
+    const meterInfo = settings.hydrometers[id];
+    const economyStatusClass = compMeter.isEconomy ? 'badge-success' : 'badge-alert';
+    const economyStatusText = compMeter.isEconomy ? `Economia (-${Math.abs(compMeter.percentDiff)}%)` : `Aumento (+${Math.abs(compMeter.percentDiff)}%)`;
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td style="font-family:monospace;">${id}</td><td style="font-weight:600;">${meterInfo.alias}</td><td>${compMeter.current.toFixed(3)} m³</td><td>${compMeter.previous.toFixed(3)} m³</td><td style="font-weight:700; color: ${compMeter.isEconomy ? 'var(--color-green)' : 'var(--color-red)'}">${compMeter.diff > 0 ? '+' : ''}${compMeter.diff.toFixed(3)} m³</td><td><span class="${economyStatusClass}">${economyStatusText}</span></td>`;
+    DOM.compResultsTbody.appendChild(tr);
+  });
+  if (typeof lucide !== 'undefined') lucide.createIcons();
+}
+
+// ================= SALVAR CONFIGURAÇÕES =================
+
+function submitAdminSettings() {
+  const settings = getAppSettings();
+  const metaGlobal = parseFloat(DOM.adminMetaGlobal.value);
+  const metaIndividual = parseFloat(DOM.adminMetaIndividual.value);
+  const alertThreshold = parseInt(DOM.adminAlertThreshold.value);
+  const leakThreshold = parseFloat(DOM.adminLeakThreshold.value);
+  const alertOsDiasAberta = parseInt(DOM.adminOsDiasAberta?.value || settings.alertOsDiasAberta);
+  const alertOsDiasAguardando = parseInt(DOM.adminOsDiasAguardando?.value || settings.alertOsDiasAguardando);
+  const alertPerdasLimite = parseInt(DOM.adminPerdasLimite?.value || settings.alertPerdasLimite);
+  const alertChecklistHoras = parseInt(DOM.adminChecklistHoras?.value || settings.alertChecklistHoras);
+
+  if (isNaN(metaGlobal) || metaGlobal <= 0 || isNaN(metaIndividual) || metaIndividual <= 0) { showToast('Valores de metas devem ser maiores que zero.', 'error'); return; }
+  if (isNaN(alertThreshold) || alertThreshold < 50 || alertThreshold > 100) { showToast('O percentual de alerta deve estar entre 50% e 100%.', 'error'); return; }
+  if (isNaN(leakThreshold) || leakThreshold <= 0) { showToast('O limite de vazamento diário deve ser maior que zero.', 'error'); return; }
+
+  settings.metaGlobal = metaGlobal; settings.metaIndividual = metaIndividual;
+  settings.alertThreshold = alertThreshold; settings.leakThreshold = leakThreshold;
+  settings.alertOsDiasAberta = alertOsDiasAberta; settings.alertOsDiasAguardando = alertOsDiasAguardando;
+  settings.alertPerdasLimite = alertPerdasLimite; settings.alertChecklistHoras = alertChecklistHoras;
+
+  const aliasInputs = DOM.adminMetersList.querySelectorAll('.admin-meter-alias-input');
+  aliasInputs.forEach(input => { const id = input.getAttribute('data-id'); const aliasValue = input.value.trim().toUpperCase(); if (aliasValue && settings.hydrometers[id]) settings.hydrometers[id].alias = aliasValue; });
+  const colorInputs = DOM.adminMetersList.querySelectorAll('input[type="color"]');
+  colorInputs.forEach(input => { const id = input.getAttribute('data-id'); const colorValue = input.value; if (colorValue && settings.hydrometers[id]) settings.hydrometers[id].color = colorValue; });
+
+  saveAppSettings(settings);
+  // Invalida cache de alertas para recalcular com novos parâmetros
+  state.alertasCache = null;
+  updateAppSelectors(); refreshApp();
+  showToast('Configurações salvas e aplicadas com sucesso!', 'success');
+}
+
+// ================= MÓDULO REQUISIÇÕES =================
+
+function carregarRequisicoes() {
+  const btnLimpeza = document.getElementById('btn-limpeza');
+  const btnMP = document.getElementById('btn-mp');
+  const conteudo = document.getElementById('requisicoes-conteudo');
+  if (!conteudo) return;
+
+  if (btnLimpeza) {
+    btnLimpeza.onclick = async () => {
+      try {
+        conteudo.innerHTML = `<div class="panel-header"><h2>🧹 Limpeza e EPI</h2></div><p>Carregando requisições...</p>`;
+        const response = await fetch(LIMPEZA_CSV_URL);
+        const csv = await response.text();
+        const linhas = csv.split('\n');
+        let yuka = 0, tc = 0, cd = 0;
+        for (let i = 1; i < linhas.length; i++) {
+          const linha = linhas[i].toUpperCase();
+          if (linha.includes(',YUKA,')) yuka++;
+          if (linha.includes(',TC,')) tc++;
+          if (linha.includes(',CD,')) cd++;
+        }
+        conteudo.innerHTML = `<div class="panel-header"><h2>🧹 Limpeza e EPI</h2></div><p><strong>Total:</strong> ${linhas.length - 1}</p><p>🏢 YUKA: <strong>${yuka}</strong></p><p>🏢 TC: <strong>${tc}</strong></p><p>🏢 CD: <strong>${cd}</strong></p>`;
+      } catch (erro) { console.error(erro); conteudo.innerHTML = `<div class="panel-header"><h2>🧹 Limpeza e EPI</h2></div><p>Erro ao carregar requisições.</p>`; }
+    };
+  }
+
+  if (btnMP) {
+    btnMP.onclick = async () => {
+      try {
+        conteudo.innerHTML = `<div class="panel-header"><h2>🥩 MP e Recheios</h2></div><p>Carregando...</p>`;
+        const response = await fetch(MP_CSV_URL);
+        const csv = await response.text();
+        const linhas = parseCSVLinhas(csv);
+        if (linhas.length < 2) { conteudo.innerHTML = `<div class="panel-header"><h2>🥩 MP e Recheios</h2></div><p>Nenhuma requisição encontrada.</p>`; return; }
+
+        const cabecalho = linhas[0];
+        const CAMPOS_FIXOS_MP = ['Timestamp', 'Nome do requisitante', 'Unidade solicitante', 'Setor solicitante', 'Tipo de item requisitado', 'Prioridade', 'Finalidade da requisição', 'Observações', 'STATUS', 'REQUISICOES'];
+        const colunasProduto = cabecalho.filter(c => !CAMPOS_FIXOS_MP.includes(c.trim()));
+
+        const registros = [];
+        for (let i = 1; i < linhas.length; i++) {
+          const cols = linhas[i];
+          if (cols.every(c => !c || !c.trim())) continue;
+          const registro = {};
+          cabecalho.forEach((nomeCol, idx) => { registro[nomeCol.trim()] = (cols[idx] || '').trim(); });
+          registros.push(registro);
+        }
+
+        renderTabelaRequisicoesMP(cabecalho, colunasProduto, registros, conteudo);
+
+      } catch (erro) { console.error(erro); conteudo.innerHTML = `<div class="panel-header"><h2>🥩 MP e Recheios</h2></div><p>Erro ao carregar dados.</p>`; }
+    };
+  }
+}
+
+// Parser simples de CSV que respeita aspas e vírgulas dentro de campos
+function parseCSVLinhas(csvText) {
+  const linhas = csvText.split(/\r?\n/).filter(l => l.length > 0);
+  return linhas.map(linha => {
+    const campos = [];
+    let atual = '';
+    let dentroAspas = false;
+    for (let i = 0; i < linha.length; i++) {
+      const char = linha[i];
+      if (char === '"') { dentroAspas = !dentroAspas; continue; }
+      if (char === ',' && !dentroAspas) { campos.push(atual); atual = ''; continue; }
+      atual += char;
+    }
+    campos.push(atual);
+    return campos;
+  });
+}
+
+// Converte um Timestamp do Google Sheets/Forms (geralmente mm/dd/yyyy hh:mm:ss
+// ou variações) para o formato brasileiro dd/mm/yyyy hh:mm. Mantém o texto
+// original se não conseguir interpretar como data válida.
+function formatarTimestampBR(valorOriginal) {
+  if (!valorOriginal || !valorOriginal.trim()) return '-';
+
+  const texto = valorOriginal.trim();
+
+  // Tenta separar "data" de "hora", caso existam ambos
+  const partes = texto.split(' ');
+  const partedata = partes[0];
+  const partehora = partes.length > 1 ? partes.slice(1).join(' ') : '';
+
+  // Espera algo como m/d/yyyy ou mm/dd/yyyy
+  const match = partedata.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+
+  if (!match) return texto; // não reconheceu o padrão, devolve como veio
+
+  const mes = match[1].padStart(2, '0');
+  const dia = match[2].padStart(2, '0');
+  const ano = match[3];
+
+  const dataFormatada = `${dia}/${mes}/${ano}`;
+
+  return partehora ? `${dataFormatada} ${partehora}` : dataFormatada;
+}
+
+function renderTabelaRequisicoesMP(cabecalho, colunasProduto, registros, conteudo) {
+  const empresas = new Set();
+  registros.forEach(r => { const u = (r['Unidade solicitante'] || '').toUpperCase(); if (u) empresas.add(u); });
+  const empresasOrdenadas = ['TODOS', ...Array.from(empresas).sort()];
+
+  function getItensDoRegistro(registro) {
+    const itens = [];
+    colunasProduto.forEach(produto => {
+      const valor = registro[produto.trim()];
+      if (valor && valor !== '0') itens.push(`${produto.trim()}: ${valor}`);
+    });
+    return itens;
+  }
+
+  function filtrarRegistros(filtro) {
+    if (filtro === 'TODOS') return registros;
+    return registros.filter(r => (r['Unidade solicitante'] || '').toUpperCase() === filtro);
+  }
+
+  function getLinhasTabela(filtro) {
+    const filtrados = filtrarRegistros(filtro);
+    return filtrados.map((r, idx) => {
+      const itens = getItensDoRegistro(r);
+      const itensTexto = itens.length > 0 ? itens.join(' • ') : '<span style="color:var(--text-muted);">Nenhum item</span>';
+      return `<tr>
+        <td style="font-size:0.8rem;">${formatarTimestampBR(r['Timestamp'])}</td>
+        <td>${r['Nome do requisitante'] || '-'}</td>
+        <td>${r['Unidade solicitante'] || '-'}</td>
+        <td>${r['Setor solicitante'] || '-'}</td>
+        <td>${r['Prioridade'] || '-'}</td>
+        <td>${r['STATUS'] || '-'}</td>
+        <td style="font-size:0.78rem; max-width:320px;">${itensTexto}</td>
+      </tr>`;
+    }).join('');
+  }
+
+  conteudo.innerHTML = `
+    <div class="panel-header">
+      <h2>🥩 MP e Recheios</h2>
+      <button id="btn-pdf-req-mp" class="btn btn-primary" style="font-size:0.82rem;">
+        <i data-lucide="file-text"></i> Gerar PDF
+      </button>
+    </div>
+
+    <div style="display:flex; align-items:center; gap:1rem; margin-bottom:1rem; flex-wrap:wrap;">
+      <div class="filter-group">
+        <label class="form-label" style="margin-bottom:0;">🏢 Empresa:</label>
+        <select id="filtro-empresa-mp" class="filter-select">
+          ${empresasOrdenadas.map(e => `<option value="${e}">${e === 'TODOS' ? 'Todas as empresas' : e}</option>`).join('')}
+        </select>
+      </div>
+      <span id="mp-contagem" style="font-size:0.85rem; color:var(--text-muted);">${registros.length} registro(s)</span>
+    </div>
+
+    <div class="dashboard-grid" style="margin-bottom:1rem;">
+      ${Array.from(empresas).sort().map(e => `
+        <div class="kpi-card"><div class="kpi-label">🏢 ${e}</div><div class="kpi-value">${filtrarRegistros(e).length}</div></div>`).join('')}
+      <div class="kpi-card"><div class="kpi-label">📋 Total</div><div class="kpi-value">${registros.length}</div></div>
+    </div>
+
+    <div class="table-responsive">
+      <table class="modern-table">
+        <thead><tr><th>Data/Hora</th><th>Requisitante</th><th>Unidade</th><th>Setor</th><th>Prioridade</th><th>Status</th><th>Itens</th></tr></thead>
+        <tbody id="mp-tabela-body">${getLinhasTabela('TODOS')}</tbody>
+      </table>
+    </div>`;
+
+  if (typeof lucide !== 'undefined') lucide.createIcons();
+
+  const selectEmpresa = document.getElementById('filtro-empresa-mp');
+  const tabelaBody = document.getElementById('mp-tabela-body');
+  const contagem = document.getElementById('mp-contagem');
+
+  selectEmpresa?.addEventListener('change', () => {
+    const filtro = selectEmpresa.value;
+    tabelaBody.innerHTML = getLinhasTabela(filtro);
+    contagem.textContent = `${filtrarRegistros(filtro).length} registro(s)`;
+  });
+
+  document.getElementById('btn-pdf-req-mp')?.addEventListener('click', () => {
+    const filtro = selectEmpresa?.value || 'TODOS';
+    const registrosFiltrados = filtrarRegistros(filtro);
+    const labelEmpresa = filtro === 'TODOS' ? 'Todas as empresas' : filtro;
+    gerarPDFRequisicaoMP(registrosFiltrados, colunasProduto, labelEmpresa);
+  });
+}
+
+function gerarPDFRequisicaoMP(registros, colunasProduto, labelEmpresa) {
+  const agora = new Date().toLocaleString('pt-BR');
+
+  function getItensDoRegistro(registro) {
+    const itens = [];
+    colunasProduto.forEach(produto => {
+      const valor = registro[produto.trim()];
+      if (valor && valor !== '0') itens.push(`${produto.trim()}: ${valor}`);
+    });
+    return itens;
+  }
+
+  const blocosRequisicao = registros.map((r, idx) => {
+    const itens = getItensDoRegistro(r);
+    return `
+      <div style="background:#f9f5f0;border:1px solid #e8ddd0;border-radius:8px;padding:12px;margin-bottom:10px;">
+        <div style="font-weight:700;font-size:12px;margin-bottom:6px;color:#4b433c;">
+          #${idx + 1} — ${r['Nome do requisitante'] || '-'} | ${r['Unidade solicitante'] || '-'} | ${r['Setor solicitante'] || '-'} | ${formatarTimestampBR(r['Timestamp'])}
         </div>
-      </section>
+        <div style="font-size:11px;color:#7b6f63;margin-bottom:4px;">Prioridade: ${r['Prioridade'] || '-'} | Status: ${r['STATUS'] || '-'} | Finalidade: ${r['Finalidade da requisição'] || '-'}</div>
+        ${itens.length > 0
+          ? `<div style="font-size:11px;color:#5a4e45;line-height:1.8;">${itens.join(' &nbsp;•&nbsp; ')}</div>`
+          : `<div style="font-size:11px;color:#a09284;font-style:italic;">Nenhum item informado.</div>`}
+      </div>`;
+  }).join('');
 
+  const html = `
+    <div style="font-family:Arial,sans-serif;max-width:820px;margin:0 auto;padding:28px;background:#fff;color:#4b433c;">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid #b79b6c;padding-bottom:14px;margin-bottom:20px;">
+        <div>
+          <h1 style="margin:0;font-size:20px;font-weight:800;color:#4b433c;">Mamma Mia Control</h1>
+          <p style="margin:4px 0 0;font-size:13px;color:#8a8570;">🥩 Requisição de MP e Recheios</p>
+          <p style="margin:2px 0 0;font-size:12px;color:#b79b6c;font-weight:600;">Empresa: ${labelEmpresa}</p>
+        </div>
+        <div style="text-align:right;font-size:11px;color:#a09284;">
+          <div>Emitido em:</div>
+          <div style="font-weight:600;color:#4b433c;">${agora}</div>
+        </div>
+      </div>
+
+      <div style="background:#f9f5f0;border:1px solid #e8ddd0;border-radius:8px;padding:12px;text-align:center;margin-bottom:20px;display:inline-block;min-width:140px;">
+        <div style="font-size:10px;color:#8a8570;font-weight:600;text-transform:uppercase;">Total de Requisições</div>
+        <div style="font-size:24px;font-weight:800;color:#4b433c;">${registros.length}</div>
+      </div>
+
+      <h2 style="font-size:13px;font-weight:700;color:#4b433c;margin-bottom:10px;border-left:3px solid #b79b6c;padding-left:8px;">
+        Detalhes por Requisição
+      </h2>
+      ${blocosRequisicao}
+
+      <div style="margin-top:24px;padding-top:12px;border-top:1px solid #e8ddd0;font-size:10px;color:#a09284;text-align:center;">
+        Mamma Mia Control — Gestão Inteligente de Operações • © 2026 Mamma Mia Salgados
+      </div>
+    </div>`;
+
+  const iframe = document.createElement('iframe');
+  iframe.style.cssText = 'position:fixed;top:-9999px;left:-9999px;width:900px;height:600px;border:none;';
+  document.body.appendChild(iframe);
+  iframe.contentDocument.open();
+  iframe.contentDocument.write(html);
+  iframe.contentDocument.close();
+  setTimeout(() => {
+    iframe.contentWindow.print();
+    setTimeout(() => document.body.removeChild(iframe), 1000);
+  }, 400);
+}
+
+function updateAppSelectors() { console.log('updateAppSelectors executado'); }
+
+// ================= MÓDULO PERDAS =================
+
+async function carregarPerdas() {
+  try {
+    const response = await fetch(PERDAS_CSV_URL);
+    const csv = await response.text();
+    const linhas = csv.split('\n');
+    let totalPerdas = linhas.length - 1;
+    const conteudo = document.getElementById('perdas-conteudo');
+    if (!conteudo) return;
+
+    const primeiraLinha = linhas[1].split(',');
+    const setor = primeiraLinha[4] || '-';
+    const motivos = {}; const produtos = {};
+    for (let i = 1; i < linhas.length; i++) {
+      const colunas = linhas[i].split(',');
+      const motivo = (colunas[7] || 'OUTRO').trim();
+      const produto = (colunas[5] || 'SEM PRODUTO').trim();
+      const quantidade = parseFloat(colunas[6]) || 0;
+      motivos[motivo] = (motivos[motivo] || 0) + quantidade;
+      produtos[produto] = (produtos[produto] || 0) + quantidade;
+    }
+    const rankingMotivos = Object.entries(motivos).sort((a, b) => b[1] - a[1]);
+    const rankingProdutos = Object.entries(produtos).sort((a, b) => b[1] - a[1]);
+    const maiorMotivo = rankingMotivos[0]?.[0] || '-';
+    const produtoMaisPerdido = rankingProdutos[0]?.[0] || '-';
+    const labelsMotivos = rankingMotivos.slice(0, 10).map(item => item[0]);
+    const valoresMotivos = rankingMotivos.slice(0, 10).map(item => item[1]);
+    const labelsProdutos = rankingProdutos.slice(0, 10).map(item => item[0]);
+    const valoresProdutos = rankingProdutos.slice(0, 10).map(item => item[1]);
+
+    conteudo.innerHTML = `
+      <div class="panel-header"><h2>📉 Gestão de Perdas YUKA</h2></div>
+      <div class="dashboard-grid">
+        <div class="kpi-card"><div class="kpi-label">📦 REGISTROS</div><div class="kpi-value">${totalPerdas}</div></div>
+        <div class="kpi-card"><div class="kpi-label">⚠️ MAIOR MOTIVO</div><div class="kpi-value">${maiorMotivo}</div></div>
+        <div class="kpi-card"><div class="kpi-label">🥟 PRODUTO TOP</div><div class="kpi-value">${produtoMaisPerdido}</div></div>
+        <div class="kpi-card"><div class="kpi-label">🏭 SETOR</div><div class="kpi-value">${setor}</div></div>
+      </div>
+      <div class="panel-card"><h3>🚨 Perdas por Motivo</h3><canvas id="graficoMotivos"></canvas></div>
+      <div class="panel-card"><h3>🏆 Ranking de Produtos Perdidos</h3><canvas id="graficoProdutos"></canvas></div>`;
+
+    const ctxMotivos = document.getElementById('graficoMotivos');
+    if (ctxMotivos) new Chart(ctxMotivos, { type: 'bar', data: { labels: labelsMotivos, datasets: [{ label: 'Perdas', data: valoresMotivos }] }, options: { indexAxis: 'y', responsive: true } });
+    const ctxProdutos = document.getElementById('graficoProdutos');
+    if (ctxProdutos) new Chart(ctxProdutos, { type: 'bar', data: { labels: labelsProdutos, datasets: [{ label: 'Perdas', data: valoresProdutos }] }, options: { indexAxis: 'y', responsive: true } });
+  } catch (erro) { console.error(erro); }
+}
+let canalAtual = null;
+const filtrosCentral = {
+
+  dataInicial: '',
+
+  dataFinal: '',
+
+  unidade: 'TODOS',
+
+  status: 'TODOS'
+
+};
+const mensagensPorCanal = {
+  "Geral Operacional": [],
+  "Diretoria": [],
+  "TC": [],
+  "YUKA": [],
+  "CD": []
+};
+// ================= MÓDULO CENTRAL OPERACIONAL =================
+
+async function carregarCentralOperacional() {
+
+try {
+
+const conteudo = document.getElementById('central-conteudo');
+
+if (!conteudo) return;
+
+const response = await fetch(MP_CSV_URL);
+const csv = await response.text();
+
+const linhas = parseCSVLinhas(csv);
+
+if (linhas.length < 2) {
+  conteudo.innerHTML = `
+    <div class="panel-card">
+      <h3>📡 Central Operacional</h3>
+      <p>Nenhuma requisição encontrada.</p>
+    </div>
+  `;
+  return;
+}
+
+const cabecalho = linhas[0];
+const registros = [];
+
+for (let i = 1; i < linhas.length; i++) {
+
+  const cols = linhas[i];
+
+  if (cols.every(c => !c || !c.trim())) continue;
+
+  const registro = {};
+
+  cabecalho.forEach((nomeCol, idx) => {
+    registro[nomeCol.trim()] = (cols[idx] || '').trim();
+  });
+
+  registros.push(registro);
+}
+
+const aguardando = registros.filter(r =>
+  ['ABERTO', 'AGUARDANDO'].includes(
+    (r['STATUS'] || '').toUpperCase()
+  )
+).length;
+
+const separacao = registros.filter(r =>
+  (r['STATUS'] || '').toUpperCase() === 'EM SEPARAÇÃO'
+).length;
+
+const concluido = registros.filter(r =>
+  (r['STATUS'] || '').toUpperCase() === 'CONCLUÍDO'
+).length;
+
+const cancelado = registros.filter(r =>
+  (r['STATUS'] || '').toUpperCase() === 'CANCELADO'
+).length;
+
+conteudo.innerHTML = `
+
+  <div class="dashboard-grid">
+
+    <div class="kpi-card">
+      <div class="kpi-value">${aguardando}</div>
+      <div class="kpi-label">🟡 AGUARDANDO</div>
     </div>
 
-  </main>
-
-  <!-- FOOTER -->
-  <footer class="system-footer">
-    <p>Mamma Mia Control - Gestão Inteligente</p>
-    <p>© 2026 Mamma Mia Salgados - By Thalita Campos - Processos e Automações</p>
-  </footer>
-
-  <!-- MODAL: NOVA LEITURA -->
-  <div id="modal-reading-v2" class="modal-overlay" aria-hidden="true" role="dialog">
-    <div class="modal-content">
-      <div class="modal-header"><h3>Lançar Nova Leitura</h3><button id="btn-close-reading-modal-v2" class="modal-close" type="button">&times;</button></div>
-      <form id="form-reading-v2">
-        <div class="form-group"><label for="input-meter-v2" class="form-label">Selecione o Hidrômetro</label><select id="input-meter-v2" class="form-control" required></select></div>
-        <div class="form-group"><label for="input-index-v2" class="form-label">Leitura Acumulada Atual (m³)</label><input type="number" id="input-index-v2" class="form-control" step="0.001" min="0" placeholder="Ex: 1254.450" required><span class="form-help" id="last-reading-help-v2">Última leitura registrada: --</span></div>
-        <div class="form-group"><label for="input-date-v2" class="form-label">Data e Hora do Registro</label><input type="datetime-local" id="input-date-v2" class="form-control" required></div>
-        <div class="modal-footer"><button type="button" id="btn-cancel-reading-v2" class="btn btn-secondary">Cancelar</button><button type="submit" class="btn btn-primary">Salvar Leitura</button></div>
-      </form>
+    <div class="kpi-card">
+      <div class="kpi-value">${separacao}</div>
+      <div class="kpi-label">🔵 EM SEPARAÇÃO</div>
     </div>
+
+    <div class="kpi-card">
+      <div class="kpi-value">${concluido}</div>
+      <div class="kpi-label">🟢 CONCLUÍDO</div>
+    </div>
+
+    <div class="kpi-card">
+      <div class="kpi-value">${cancelado}</div>
+      <div class="kpi-label">🔴 CANCELADO</div>
+    </div>
+
   </div>
 
-  <!-- MODAL: IMPORTAR CSV -->
-  <div id="modal-csv-v2" class="modal-overlay" aria-hidden="true" role="dialog">
-    <div class="modal-content" style="max-width: 550px;">
-      <div class="modal-header"><h3>Importar do Google Sheets (CSV)</h3><button id="btn-close-csv-modal-v2" class="modal-close" type="button">&times;</button></div>
-      <div class="drag-drop-zone" id="csv-drag-zone-v2">
-        <i data-lucide="upload-cloud" class="drag-drop-icon"></i>
-        <div class="drag-drop-text"><h4>Arraste o arquivo CSV aqui</h4><p>ou clique para selecionar do seu dispositivo</p></div>
-        <input type="file" id="csv-file-input-v2" accept=".csv" style="display: none;">
-      </div>
-      <div style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 1.5rem; background: rgba(255,255,255,0.02); padding: 0.75rem; border-radius: var(--border-radius-md); border: 1px solid var(--card-border);">
-        <h4 style="color: var(--color-blue); margin-bottom: 0.25rem; font-weight: 600;">Formatos de CSV Suportados:</h4>
-        <p>1. <strong>Tabela de Colunas (Recomendado Sheets):</strong></p>
-        <p style="font-family: monospace; font-size: 0.7rem; background: rgba(0,0,0,0.2); padding: 0.25rem; border-radius: 4px; margin: 0.25rem 0;">Data/Hora; Y21T156506; A25LM0975882; A25LM0975883; A25LM0975884</p>
-      </div>
-      <div id="csv-errors-container-v2" class="import-errors" style="display: none;"><h5>Alguns registros continham problemas:</h5><ul id="csv-errors-list-v2" style="margin-left: 1rem;"></ul></div>
-      <div class="modal-footer" style="margin-top: 1.5rem;"><button type="button" id="btn-close-csv-modal-footer-v2" class="btn btn-secondary">Fechar</button></div>
-    </div>
+  <section class="panel-card">
+
+  <div class="panel-header">
+    <h2>📦 Requisições</h2>
   </div>
 
-  <!-- CONTAINER DE TOASTS -->
-  <div class="toast-container" id="toast-container-v2"></div>
+  <p>
+    Total de requisições:
+    <strong>${registros.length}</strong>
+  </p>
 
-  <!-- SCRIPT CENTRAL -->
-  <script type="module" src="src/main.js"></script>
-  <script>
-    if ('serviceWorker' in navigator) {
-      window.addEventListener('load', () => {
-        navigator.serviceWorker.register('/sw.js')
-          .then(() => console.log('Service Worker registrado com sucesso.'))
-          .catch((err) => console.error('Erro ao registrar Service Worker:', err));
+  <div
+    style="
+      display:flex;
+      gap:10px;
+      flex-wrap:wrap;
+      margin-top:15px;
+      align-items:center;
+    "
+  >
+
+    <input
+      type="date"
+      id="filtro-data-inicial"
+      value="${filtrosCentral.dataInicial}"
+    >
+
+    <input
+      type="date"
+      id="filtro-data-final"
+      value="${filtrosCentral.dataFinal}"
+    >
+
+    <button
+      class="btn btn-primary"
+      id="btn-filtrar-central"
+    >
+      🔍 Filtrar
+    </button>
+<button
+  class="btn btn-secondary"
+  id="btn-pdf-central"
+>
+  📄 PDF
+</button>
+  </div>
+
+</section>
+
+  </section>
+
+  <section class="panel-card" style="margin-top:20px;">
+
+    <div class="panel-header">
+      <h2>💬 Central Operacional</h2>
+    </div>
+
+    <div style="display:flex; gap:20px; min-height:350px;">
+
+      <div style="
+        width:220px;
+        border-right:1px solid rgba(255,255,255,.1);
+        padding-right:15px;
+      ">
+
+        <button class="btn btn-secondary canal-btn" data-canal="Geral Operacional">
+          # Geral Operacional
+        </button>
+
+        <button class="btn btn-secondary canal-btn" data-canal="Diretoria">
+          # Diretoria
+        </button>
+
+        <button class="btn btn-secondary canal-btn" data-canal="TC">
+          # TC
+        </button>
+
+        <button class="btn btn-secondary canal-btn" data-canal="YUKA">
+          # YUKA
+        </button>
+
+        <button class="btn btn-secondary canal-btn" data-canal="CD">
+          # CD
+        </button>
+
+      </div>
+
+      <div id="chat-conversa" style="flex:1;">
+
+        <h3>📦 Central de Requisições</h3>
+
+        <p style="color:var(--text-muted);">
+          Selecione uma unidade para acompanhar as requisições.
+        </p>
+
+      </div>
+
+    </div>
+
+  </section>
+
+`;
+
+document.querySelectorAll('.canal-btn').forEach(btn => {
+
+  btn.addEventListener('click', () => {
+
+    abrirCanal(btn.dataset.canal);
+
+  });
+
+});
+  const btnFiltro =
+  document.getElementById('btn-filtrar-central');
+
+if (btnFiltro) {
+
+  btnFiltro.addEventListener('click', () => {
+
+    filtrosCentral.dataInicial =
+      document.getElementById('filtro-data-inicial')?.value || '';
+
+    filtrosCentral.dataFinal =
+      document.getElementById('filtro-data-final')?.value || '';
+
+    console.log('Filtros:', filtrosCentral);
+
+    if (canalAtual) {
+
+      abrirCanal(canalAtual);
+
+    }
+
+  });
+
+}
+  const btnPdf =
+  document.getElementById('btn-pdf-central');
+
+if (btnPdf) {
+
+  btnPdf.addEventListener('click', () => {
+
+    gerarRelatorioCentral();
+
+  });
+
+}
+} catch (erro) {
+
+console.error(erro);
+
+const conteudo = document.getElementById('central-conteudo');
+
+if (conteudo) {
+  conteudo.innerHTML = `
+    <div class="panel-card">
+      <h3>📡 Central Operacional</h3>
+      <p>Erro ao carregar dados.</p>
+    </div>
+  `;
+}
+
+}
+
+}
+
+async function abrirCanal(canal) {
+
+  canalAtual = canal;
+
+  const conversa = document.getElementById('chat-conversa');
+
+  if (!conversa) return;
+
+  let titulo = '';
+
+  switch(canal){
+
+    case 'GERAL':
+      titulo = '📦 Geral Operacional';
+      break;
+
+    case 'TC':
+      titulo = '🏭 Requisições TC';
+      break;
+
+    case 'YUKA':
+      titulo = '🥐 Requisições YUKA';
+      break;
+
+    case 'CD':
+      titulo = '🚚 Requisições CD';
+      break;
+
+    default:
+      titulo = `📦 ${canal}`;
+  }
+
+  conversa.innerHTML = `
+    <h3>${titulo}</h3>
+    <p style="color:var(--text-muted);">
+      Carregando requisições...
+    </p>
+  `;
+
+  await carregarRequisicoesCentral(canal);
+
+}
+
+async function carregarRequisicoesCentral(canal) {
+
+  const conversa = document.getElementById('chat-conversa');
+
+  try {
+
+    const response = await fetch(MP_CSV_URL);
+
+    const csv = await response.text();
+
+    const linhas = parseCSVLinhas(csv);
+
+    if (linhas.length < 2) {
+
+      conversa.innerHTML = `
+        <h3>📦 Requisições</h3>
+        <p>Nenhuma requisição encontrada.</p>
+      `;
+
+      return;
+    }
+
+    const cabecalho = linhas[0];
+
+    const registros = [];
+
+    for (let i = 1; i < linhas.length; i++) {
+
+      const cols = linhas[i];
+
+      if (cols.every(c => !c || !c.trim())) continue;
+
+      const registro = {};
+
+      cabecalho.forEach((nomeCol, idx) => {
+
+        registro[nomeCol.trim()] =
+          (cols[idx] || '').trim();
+
+      });
+
+      registros.push(registro);
+
+    }
+
+    let filtradas = registros;
+
+    if (canal !== 'GERAL') {
+
+      filtradas = registros.filter(r =>
+
+        (r['Unidade solicitante'] || '')
+          .toUpperCase()
+          .trim() === canal
+
+      );
+
+    }
+if (
+  filtrosCentral.dataInicial ||
+  filtrosCentral.dataFinal
+) {
+
+  filtradas = filtradas.filter(req => {
+
+    const dataTexto =
+      req['Timestamp'];
+console.log('DATA CSV:', dataTexto);
+    if (!dataTexto) return false;
+
+    const partes = dataTexto.split('/');
+
+const dataReq = new Date(
+  Number(partes[2]),
+  Number(partes[1]) - 1,
+  Number(partes[0])
+);
+console.log('DATA JS:', dataReq);
+    if (
+      filtrosCentral.dataInicial &&
+      dataReq <
+      new Date(filtrosCentral.dataInicial)
+    ) {
+      return false;
+    }
+
+    if (
+      filtrosCentral.dataFinal
+    ) {
+
+      const dataFinal =
+        new Date(filtrosCentral.dataFinal);
+
+      dataFinal.setHours(
+        23,
+        59,
+        59,
+        999
+      );
+
+      if (dataReq > dataFinal) {
+        return false;
+      }
+
+    }
+
+    return true;
+
+  });
+
+}
+    filtradas.sort((a,b) => {
+
+      return (b['REQUISICOES'] || '')
+        .localeCompare(a['REQUISICOES'] || '');
+
+    });
+
+    let html = `
+      <h3>📦 ${canal}</h3>
+
+      <p style="margin-bottom:20px;">
+        Total: <strong>${filtradas.length}</strong>
+      </p>
+    `;
+
+    filtradas.forEach(req => {
+
+      const status =
+        req['STATUS'] || 'AGUARDANDO';
+
+      let cor = '#f59e0b';
+
+      if(status === 'EM SEPARAÇÃO')
+        cor = '#3b82f6';
+
+      if(status === 'CONCLUÍDO')
+        cor = '#22c55e';
+
+      if(status === 'CANCELADO')
+        cor = '#ef4444';
+
+      html += `
+
+        <div class="req-card">
+
+          <div class="req-header">
+
+            <strong>
+              ${req['REQUISICOES'] || '-'}
+            </strong>
+
+          </div>
+
+          <div>
+            👤 ${req['Nome do requisitante'] || '-'}
+          </div>
+
+          <div>
+            📍 ${req['Setor solicitante'] || '-'}
+          </div>
+
+          <div
+            style="
+              margin-top:8px;
+              font-weight:700;
+              color:${cor};
+            "
+          >
+            ${status}
+          </div>
+
+<div class="req-acoes" style="margin-top:10px;display:flex;gap:6px;flex-wrap:wrap;">
+
+  <button
+    onclick="atualizarStatusCentral('${req['REQUISICOES']}', 'EM SEPARAÇÃO')"
+  >
+    ⚙️ EM SEPARAÇÃO
+  </button>
+
+  <button
+    onclick="atualizarStatusCentral('${req['REQUISICOES']}', 'CONCLUÍDO')"
+  >
+    ✅ CONCLUÍDO
+  </button>
+
+  <button
+    onclick="atualizarStatusCentral('${req['REQUISICOES']}', 'CANCELADO')"
+  >
+    ❌ CANCELAR
+  </button>
+
+</div>
+
+        </div>
+
+      `;
+
+    });
+
+    conversa.innerHTML = html;
+
+  } catch (erro) {
+
+    console.error(erro);
+
+    conversa.innerHTML = `
+      <h3>Erro</h3>
+      <p>Não foi possível carregar as requisições.</p>
+    `;
+
+  }
+
+}
+
+async function atualizarStatusCentral(rq, status) {
+
+  try {
+
+    const url =
+      'https://script.google.com/macros/s/AKfycby-80t2GWkm9ZFjgEh93mkCzUHBJpKKFXFSvqvT9Scx3SbhC94iUxG_hN55BsyNrEaEGA/exec';
+
+    const resposta = await fetch(
+      `${url}?rq=${encodeURIComponent(rq)}&status=${encodeURIComponent(status)}`
+    );
+
+    const dados = await resposta.json();
+
+    console.log(dados);
+
+    if (dados.sucesso) {
+
+      alert(`✅ ${rq} atualizada para ${status}`);
+
+      abrirCanal(canalAtual);
+
+    } else {
+
+      alert('❌ Não foi possível atualizar.');
+
+    }
+
+  } catch (erro) {
+
+    console.error(erro);
+
+    alert('❌ Erro ao atualizar status.');
+
+  }
+
+}
+window.atualizarStatusCentral = atualizarStatusCentral;
+async function gerarRelatorioCentral() {
+
+  const janela = window.open('', '_blank');
+
+  const response = await fetch(MP_CSV_URL);
+
+  const csv = await response.text();
+  const linhas = parseCSVLinhas(csv);
+
+const cabecalho = linhas[0];
+
+const registros = [];
+
+for (let i = 1; i < linhas.length; i++) {
+
+  const cols = linhas[i];
+
+  if (cols.every(c => !c || !c.trim())) continue;
+
+  const registro = {};
+
+  cabecalho.forEach((nomeCol, idx) => {
+
+    registro[nomeCol.trim()] =
+      (cols[idx] || '').trim();
+
+  });
+
+  registros.push(registro);
+
+}
+
+  console.log(csv.substring(0, 300));
+janela.document.write(`
+
+<h1>Mamma Mia Control</h1>
+
+<h2>📦 Central Operacional</h2>
+
+<p>
+Período:
+${filtrosCentral.dataInicial || 'Não informado'}
+até
+${filtrosCentral.dataFinal || 'Não informado'}
+</p>
+
+<p>
+Emitido em:
+${new Date().toLocaleString('pt-BR')}
+</p>
+
+<hr>
+
+`);
+  registros.forEach(req => {
+
+  janela.document.write(`
+
+    <div style="
+      border:1px solid #ccc;
+      padding:10px;
+      margin-bottom:10px;
+      border-radius:8px;
+    ">
+
+      <strong>
+        ${req['REQUISICOES'] || '-'}
+      </strong>
+
+      <br>
+
+      👤 ${req['Nome do requisitante'] || '-'}
+
+      <br>
+
+      🏭 ${req['Unidade solicitante'] || '-'}
+
+      <br>
+
+      📍 ${req['Setor solicitante'] || '-'}
+
+      <br>
+
+      Status:
+      ${req['STATUS'] || '-'}
+
+    </div>
+
+  `);
+
+});
+janela.document.close();
+
+}
+// ================= MÓDULO OS =================
+
+async function carregarOS() {
+  try {
+    const response = await fetch(OS_CSV_URL);
+    const csv = await response.text();
+    const linhas = csv.split('\n');
+    const cabecalho = linhas[0].split(',');
+
+    const indiceStatus = cabecalho.findIndex(col => col.trim().replace(/"/g, '').toUpperCase() === 'STATUS');
+    const indicePrioridade = cabecalho.findIndex(col => col.trim().replace(/"/g, '').toUpperCase() === 'PRIORIDADE');
+    const indiceOS = cabecalho.findIndex(col => col.trim().replace(/"/g, '').toUpperCase() === 'OS');
+    const indiceUnidade = cabecalho.findIndex(col => col.trim().replace(/"/g, '').toUpperCase() === 'UNIDADE');
+    const indiceEquipamento = cabecalho.findIndex(col => col.trim().replace(/"/g, '').toUpperCase() === 'EQUIPAMENTO OU LOCAL AFETADO');
+    const indicePDF = cabecalho.findIndex(col => col.trim().replace(/"/g, '').toUpperCase() === 'PDF_OS');
+
+    const tableBody = document.getElementById('os-table-body');
+    const filtroStatus = document.getElementById('os-filter-status')?.value || 'TODOS';
+    if (tableBody) tableBody.innerHTML = '';
+
+    let abertas = 0, aguardando = 0, concluidas = 0, criticas = 0, altas = 0, baixas = 0;
+
+    for (let i = 1; i < linhas.length; i++) {
+      const colunas = linhas[i].split(',');
+      const status = (colunas[indiceStatus] || '').trim().replace(/"/g, '').toUpperCase();
+      const prioridade = (colunas[indicePrioridade] || '').trim().replace(/"/g, '').toUpperCase();
+      const os = (colunas[indiceOS] || '').replace(/"/g, '');
+      const unidade = (colunas[indiceUnidade] || '').replace(/"/g, '');
+      const equipamento = (colunas[indiceEquipamento] || '').replace(/"/g, '');
+      const pdf = (colunas[indicePDF] || '').replace(/"/g, '');
+
+      if (status === 'ABERTO') {
+        abertas++;
+        if (prioridade === 'CRÍTICA' || prioridade === 'CRITICA') criticas++;
+        if (prioridade === 'ALTA') altas++;
+        if (prioridade === 'BAIXA') baixas++;
+      }
+      if (status === 'AGUARDANDO PEÇA') aguardando++;
+      if (status === 'CONCLUÍDO' || status === 'CONCLUIDO') concluidas++;
+
+      if (filtroStatus !== 'TODOS' && status !== filtroStatus) continue;
+
+      if (tableBody) {
+        tableBody.innerHTML += `<tr><td>${os}</td><td>${status}</td><td>${prioridade}</td><td>${unidade}</td><td>${equipamento}</td><td>${pdf ? `<a href="${pdf}" target="_blank">📄 Abrir</a>` : '-'}</td></tr>`;
+      }
+    }
+
+    const openCard = document.getElementById('os-open-count'); if (openCard) openCard.textContent = abertas;
+    const waitingCard = document.getElementById('os-parts-count'); if (waitingCard) waitingCard.textContent = aguardando;
+    const closedCard = document.getElementById('os-closed-count'); if (closedCard) closedCard.textContent = concluidas;
+    const criticalCard = document.getElementById('os-critical-count'); if (criticalCard) criticalCard.textContent = criticas;
+    const highCard = document.getElementById('os-high-count'); if (highCard) highCard.textContent = altas;
+    const lowCard = document.getElementById('os-low-count'); if (lowCard) lowCard.textContent = baixas;
+  } catch (error) { console.error('Erro ao carregar OS:', error); }
+}
+
+// ================= MÓDULO CAMINHÃO PIPA =================
+
+const PIPA_CSV_URL =
+  'https://docs.google.com/spreadsheets/d/e/2PACX-1vQuFNjTMhQ3Z1QzmEXW6scCk4UkMTYRLBV0z6QSczCDZO4AyjaneybI1Xwj0LWBdNHiYf95TB6JbDHz/pub?gid=1113385596&single=true&output=csv';
+
+let _pipaHistoricoCompleto = [];
+
+function _parseCSVRobusto(texto) {
+  const linhas = [];
+  const rows = texto.replace(/
+/g, '
+').replace(/
+/g, '
+').split('
+');
+  for (const row of rows) {
+    if (row.trim() === '') continue;
+    const campos = [];
+    let i = 0;
+    while (i < row.length) {
+      if (row[i] === '"') {
+        let val = '';
+        i++;
+        while (i < row.length) {
+          if (row[i] === '"' && row[i + 1] === '"') { val += '"'; i += 2; }
+          else if (row[i] === '"') { i++; break; }
+          else { val += row[i++]; }
+        }
+        campos.push(val.trim());
+        if (row[i] === ',') i++;
+      } else {
+        let val = '';
+        while (i < row.length && row[i] !== ',') val += row[i++];
+        campos.push(val.trim());
+        if (row[i] === ',') i++;
+      }
+    }
+    linhas.push(campos);
+  }
+  return linhas;
+}
+
+async function carregarPipa() {
+  const ultimoConteudo = document.getElementById('pipa-ultimo-conteudo');
+  const historicoBody  = document.getElementById('pipa-historico-body');
+  const filtroPlaca    = document.getElementById('pipa-filtro-placa');
+  const countEl        = document.getElementById('pipa-historico-count');
+
+  if (ultimoConteudo) ultimoConteudo.innerHTML = '<p style="color:var(--text-muted);">Carregando...</p>';
+  if (historicoBody)  historicoBody.innerHTML  = '<tr><td colspan="7" style="text-align:center;color:var(--text-muted);">Carregando...</td></tr>';
+
+  try {
+    console.log('[PIPA] Iniciando fetch...');
+    const response = await fetch(PIPA_CSV_URL, { cache: 'no-store' });
+    console.log('[PIPA] Status:', response.status);
+    if (!response.ok) throw new Error('HTTP ' + response.status);
+    const csv = await response.text();
+    console.log('[PIPA] CSV recebido, chars:', csv.length, '| inicio:', csv.substring(0, 150));
+
+    const linhas = _parseCSVRobusto(csv);
+    console.log('[PIPA] Linhas parsed:', linhas.length, '| cab:', linhas[0]);
+
+    if (linhas.length < 2) {
+      if (ultimoConteudo) ultimoConteudo.innerHTML = '<p style="color:var(--text-muted);">Nenhum dado encontrado.</p>';
+      if (historicoBody)  historicoBody.innerHTML  = '<tr><td colspan="7" style="text-align:center;">Nenhum registro.</td></tr>';
+      return;
+    }
+
+    const cab = linhas[0].map(c => c.toUpperCase());
+
+    const idxPedido    = cab.findIndex(c => c.includes('PEDIDO'));
+    const idxReq       = cab.findIndex(c => c.includes('REQUISITADA') || c.includes('QTD_REQ'));
+    const idxRec       = cab.findIndex(c => c.includes('RECEBIDA')    || c.includes('QTD_REC'));
+    const idxPlaca     = cab.findIndex(c => c.includes('PLACA'));
+    const idxRelInicio = cab.findIndex(c => c.includes('INCIO') || c.includes('INICIO') || c.includes('INÍCIO'));
+    const idxRelFim    = cab.findIndex(c => c.includes('FIM'));
+    const idxRecibo    = cab.findIndex(c => c.includes('RECIBO') || c.includes('Nº') || c.includes('NR') || c.includes('NUM'));
+
+    console.log('[PIPA] Indices:', {idxPedido, idxReq, idxRec, idxPlaca, idxRelInicio, idxRelFim, idxRecibo});
+
+    const registros = [];
+    for (let i = 1; i < linhas.length; i++) {
+      const cols = linhas[i];
+      if (cols.every(c => c === '')) continue;
+      registros.push({
+        pedido:      idxPedido    >= 0 ? (cols[idxPedido]    || '-') : (cols[0] || '-'),
+        requisitada: idxReq       >= 0 ? (cols[idxReq]       || '-') : (cols[1] || '-'),
+        recebida:    idxRec       >= 0 ? (cols[idxRec]       || '-') : (cols[2] || '-'),
+        placa:       idxPlaca     >= 0 ? (cols[idxPlaca]     || '-') : (cols[3] || '-'),
+        relInicio:   idxRelInicio >= 0 ? (cols[idxRelInicio] || '-') : (cols[4] || '-'),
+        relFim:      idxRelFim    >= 0 ? (cols[idxRelFim]    || '-') : (cols[5] || '-'),
+        recibo:      idxRecibo    >= 0 ? (cols[idxRecibo]    || '-') : (cols[6] || '-'),
       });
     }
-  </script>
-</div>
-</body>
-</html>
+
+    console.log('[PIPA] Registros:', registros.length, '| primeiro:', registros[0]);
+    _pipaHistoricoCompleto = registros;
+
+    // --- Último abastecimento ---
+    const ultimo = registros[registros.length - 1];
+    if (ultimoConteudo && ultimo) {
+      ultimoConteudo.innerHTML = `
+        <div class="dashboard-grid" style="grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:1rem;">
+          <div class="kpi-card" style="text-align:center;"><div class="kpi-label">📅 Pedido</div><div class="kpi-value" style="font-size:1.1rem;">${ultimo.pedido}</div></div>
+          <div class="kpi-card" style="text-align:center;"><div class="kpi-label">📦 Qtd. Requisitada</div><div class="kpi-value" style="font-size:1.1rem;">${ultimo.requisitada}</div></div>
+          <div class="kpi-card" style="text-align:center;"><div class="kpi-label">✅ Qtd. Recebida</div><div class="kpi-value" style="font-size:1.1rem;color:var(--color-green);">${ultimo.recebida}</div></div>
+          <div class="kpi-card" style="text-align:center;"><div class="kpi-label">🚚 Placa</div><div class="kpi-value" style="font-size:1.1rem;">${ultimo.placa}</div></div>
+          <div class="kpi-card" style="text-align:center;"><div class="kpi-label">🕐 Relógio Início</div><div class="kpi-value" style="font-size:1.1rem;">${ultimo.relInicio}</div></div>
+          <div class="kpi-card" style="text-align:center;"><div class="kpi-label">🕓 Relógio Fim</div><div class="kpi-value" style="font-size:1.1rem;">${ultimo.relFim}</div></div>
+          <div class="kpi-card" style="text-align:center;"><div class="kpi-label">🧾 Nº Recibo</div><div class="kpi-value" style="font-size:1.1rem;">${ultimo.recibo}</div></div>
+        </div>`;
+    } else if (ultimoConteudo) {
+      ultimoConteudo.innerHTML = '<p style="color:var(--text-muted);">Nenhum registro encontrado.</p>';
+    }
+
+    // --- Placas no select ---
+    if (filtroPlaca) {
+      const placas = [...new Set(registros.map(r => r.placa).filter(p => p && p !== '-'))].sort();
+      const valorAtual = filtroPlaca.value;
+      filtroPlaca.innerHTML = '<option value="">Todas as placas</option>';
+      placas.forEach(p => {
+        const opt = document.createElement('option');
+        opt.value = p; opt.textContent = p;
+        if (p === valorAtual) opt.selected = true;
+        filtroPlaca.appendChild(opt);
+      });
+    }
+
+    _renderizarHistoricoPipa(registros, countEl, historicoBody);
+
+    // --- Eventos (registra só uma vez) ---
+    const btnFiltrar   = document.getElementById('btn-pipa-filtrar');
+    const btnLimpar    = document.getElementById('btn-pipa-limpar');
+    const btnAtualizar = document.getElementById('btn-atualizar-pipa');
+
+    if (btnFiltrar && !btnFiltrar._pipaEvt) {
+      btnFiltrar._pipaEvt = true;
+      btnFiltrar.addEventListener('click', () => {
+        const placa = document.getElementById('pipa-filtro-placa')?.value || '';
+        const de    = document.getElementById('pipa-filtro-de')?.value   || '';
+        const ate   = document.getElementById('pipa-filtro-ate')?.value  || '';
+        let f = _pipaHistoricoCompleto;
+        if (placa) f = f.filter(r => r.placa === placa);
+        if (de)    f = f.filter(r => _pipaParseData(r.pedido) >= new Date(de));
+        if (ate)   f = f.filter(r => _pipaParseData(r.pedido) <= new Date(ate + 'T23:59:59'));
+        _renderizarHistoricoPipa(f,
+          document.getElementById('pipa-historico-count'),
+          document.getElementById('pipa-historico-body'));
+      });
+    }
+    if (btnLimpar && !btnLimpar._pipaEvt) {
+      btnLimpar._pipaEvt = true;
+      btnLimpar.addEventListener('click', () => {
+        ['pipa-filtro-placa','pipa-filtro-de','pipa-filtro-ate'].forEach(id => {
+          const el = document.getElementById(id); if (el) el.value = '';
+        });
+        _renderizarHistoricoPipa(_pipaHistoricoCompleto,
+          document.getElementById('pipa-historico-count'),
+          document.getElementById('pipa-historico-body'));
+      });
+    }
+    if (btnAtualizar && !btnAtualizar._pipaEvt) {
+      btnAtualizar._pipaEvt = true;
+      btnAtualizar.addEventListener('click', () => {
+        ['btn-pipa-filtrar','btn-pipa-limpar','btn-atualizar-pipa'].forEach(id => {
+          const el = document.getElementById(id); if (el) delete el._pipaEvt;
+        });
+        carregarPipa();
+        showToast('Dados do Caminhão Pipa atualizados!', 'success');
+      });
+    }
+
+  } catch (erro) {
+    console.error('[PIPA] Erro:', erro);
+    const msg = 'Erro: ' + erro.message;
+    if (ultimoConteudo) ultimoConteudo.innerHTML = `<p style="color:var(--color-red);">${msg}</p>`;
+    if (historicoBody)  historicoBody.innerHTML  = `<tr><td colspan="7" style="text-align:center;color:var(--color-red);">${msg}</td></tr>`;
+  }
+}
+
+function _renderizarHistoricoPipa(registros, countEl, historicoBody) {
+  if (countEl) countEl.textContent = registros.length + ' registro(s) encontrado(s)';
+  if (!historicoBody) return;
+  if (registros.length === 0) {
+    historicoBody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--text-muted);">Nenhum registro encontrado.</td></tr>';
+    return;
+  }
+  historicoBody.innerHTML = registros.map(r => `
+    <tr>
+      <td>${r.pedido}</td>
+      <td>${r.requisitada}</td>
+      <td>${r.recebida}</td>
+      <td><strong>${r.placa}</strong></td>
+      <td>${r.relInicio}</td>
+      <td>${r.relFim}</td>
+      <td>${r.recibo}</td>
+    </tr>`).join('');
+}
+
+function _pipaParseData(str) {
+  if (!str || str === '-') return new Date(0);
+  if (str.includes('/')) { const [d,m,y] = str.split('/'); return new Date(`${y}-${m}-${d}`); }
+  return new Date(str);
+}
+
+
+// ================= TOAST =================
+
+function showToast(message, type = 'info') {
+  const toast = document.createElement('div'); toast.className = `toast ${type}`;
+  let icon = 'info';
+  if (type === 'success') icon = 'check-circle';
+  if (type === 'error') icon = 'x-circle';
+  if (type === 'warning') icon = 'alert-circle';
+  toast.innerHTML = `<i data-lucide="${icon}"></i><span>${message}</span>`;
+  DOM.toastContainer.appendChild(toast);
+  if (typeof lucide !== 'undefined') lucide.createIcons();
+  setTimeout(() => {
+    toast.style.animation = 'slideIn 0.3s forwards reverse ease-out';
+    toast.addEventListener('animationend', () => { toast.remove(); });
+  }, 4500);
+}
