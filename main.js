@@ -219,6 +219,9 @@ if (state.currentTab === 'dashboard') {
 
 } else if (state.currentTab === 'configuracoes') {
   renderConfiguracoesTab();
+
+} else if (state.currentTab === 'pipa') {
+  carregarPipa();
 }
 
   if (typeof lucide !== 'undefined') {
@@ -1783,6 +1786,207 @@ async function carregarOS() {
 
   }
 
+}
+
+// ================= MÓDULO CAMINHÃO PIPA =================
+
+// ⚠️ Substitua pela URL da aba PIPA publicada como CSV:
+// No Google Sheets: Arquivo > Publicar na web > Aba: PIPA > Formato: CSV > Publicar > Copiar link
+const PIPA_CSV_URL =
+'https://docs.google.com/spreadsheets/d/e/2PACX-1vQuFNjTMhQ3Z1QzmEXW6scCk4UkMTYRLBV0z6QSczCDZO4AyjaneybI1Xwj0LWBdNHiYf95TB6JbDHz/pub?gid=1113385596&single=true&output=csv';
+
+let _pipaHistoricoCompleto = [];
+let _pipaFiltroAtivo = false;
+
+async function carregarPipa() {
+  const ultimoConteudo = document.getElementById('pipa-ultimo-conteudo');
+  const historicoBody = document.getElementById('pipa-historico-body');
+  const filtroPlaca = document.getElementById('pipa-filtro-placa');
+  const countEl = document.getElementById('pipa-historico-count');
+
+  if (ultimoConteudo) ultimoConteudo.innerHTML = '<p style="color:var(--text-muted);">Carregando...</p>';
+  if (historicoBody) historicoBody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--text-muted);">Carregando...</td></tr>';
+
+  try {
+    const response = await fetch(PIPA_CSV_URL);
+    const csv = await response.text();
+
+    const linhas = csv.split('\n').filter(l => l.trim() !== '');
+    if (linhas.length < 2) {
+      if (ultimoConteudo) ultimoConteudo.innerHTML = '<p style="color:var(--text-muted);">Nenhum dado encontrado na aba PIPA.</p>';
+      if (historicoBody) historicoBody.innerHTML = '<tr><td colspan="7" style="text-align:center;">Nenhum registro.</td></tr>';
+      return;
+    }
+
+    const cab = linhas[0].split(',').map(c => c.trim().replace(/^"|"$/g, '').toUpperCase());
+
+    const idxPedido     = cab.findIndex(c => c.includes('PEDIDO'));
+    const idxReq        = cab.findIndex(c => c.includes('REQUISITADA') || c.includes('QTD_REQ'));
+    const idxRec        = cab.findIndex(c => c.includes('RECEBIDA') || c.includes('QTD_REC'));
+    const idxPlaca      = cab.findIndex(c => c.includes('PLACA'));
+    const idxRelInicio  = cab.findIndex(c => c.includes('INCIO') || c.includes('INÍCIO') || c.includes('INICIO'));
+    const idxRelFim     = cab.findIndex(c => c.includes('FIM'));
+    const idxRecibo     = cab.findIndex(c => c.includes('RECIBO') || c.includes('NR') || c.includes('Nº'));
+
+    const registros = [];
+    for (let i = 1; i < linhas.length; i++) {
+      const cols = linhas[i].split(',').map(c => c.trim().replace(/^"|"$/g, ''));
+      if (cols.every(c => c === '')) continue;
+      registros.push({
+        pedido:     idxPedido    >= 0 ? cols[idxPedido]    : '-',
+        requisitada: idxReq      >= 0 ? cols[idxReq]       : '-',
+        recebida:   idxRec       >= 0 ? cols[idxRec]       : '-',
+        placa:      idxPlaca     >= 0 ? cols[idxPlaca]     : '-',
+        relInicio:  idxRelInicio >= 0 ? cols[idxRelInicio] : '-',
+        relFim:     idxRelFim    >= 0 ? cols[idxRelFim]    : '-',
+        recibo:     idxRecibo    >= 0 ? cols[idxRecibo]    : '-',
+      });
+    }
+
+    _pipaHistoricoCompleto = registros;
+
+    // --- Último abastecimento ---
+    const ultimo = registros[registros.length - 1];
+    if (ultimoConteudo && ultimo) {
+      ultimoConteudo.innerHTML = `
+        <div class="dashboard-grid" style="grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 1rem;">
+          <div class="kpi-card" style="text-align:center;">
+            <div class="kpi-label">📅 Data do Pedido</div>
+            <div class="kpi-value" style="font-size:1.2rem;">${ultimo.pedido}</div>
+          </div>
+          <div class="kpi-card" style="text-align:center;">
+            <div class="kpi-label">📦 Qtd. Requisitada</div>
+            <div class="kpi-value" style="font-size:1.2rem;">${ultimo.requisitada}</div>
+          </div>
+          <div class="kpi-card" style="text-align:center;">
+            <div class="kpi-label">✅ Qtd. Recebida</div>
+            <div class="kpi-value" style="font-size:1.2rem; color:var(--color-green);">${ultimo.recebida}</div>
+          </div>
+          <div class="kpi-card" style="text-align:center;">
+            <div class="kpi-label">🚚 Placa do Veículo</div>
+            <div class="kpi-value" style="font-size:1.2rem;">${ultimo.placa}</div>
+          </div>
+          <div class="kpi-card" style="text-align:center;">
+            <div class="kpi-label">🕐 Relógio Início</div>
+            <div class="kpi-value" style="font-size:1.2rem;">${ultimo.relInicio}</div>
+          </div>
+          <div class="kpi-card" style="text-align:center;">
+            <div class="kpi-label">🕓 Relógio Fim</div>
+            <div class="kpi-value" style="font-size:1.2rem;">${ultimo.relFim}</div>
+          </div>
+          <div class="kpi-card" style="text-align:center;">
+            <div class="kpi-label">🧾 Nº do Recibo</div>
+            <div class="kpi-value" style="font-size:1.2rem;">${ultimo.recibo}</div>
+          </div>
+        </div>
+      `;
+    }
+
+    // --- Popular select de placas ---
+    if (filtroPlaca) {
+      const placas = [...new Set(registros.map(r => r.placa).filter(p => p && p !== '-'))].sort();
+      const valorAtual = filtroPlaca.value;
+      filtroPlaca.innerHTML = '<option value="">Todas as placas</option>';
+      placas.forEach(p => {
+        const opt = document.createElement('option');
+        opt.value = p;
+        opt.textContent = p;
+        if (p === valorAtual) opt.selected = true;
+        filtroPlaca.appendChild(opt);
+      });
+    }
+
+    // --- Renderizar histórico ---
+    _renderizarHistoricoPipa(registros, countEl, historicoBody);
+
+    // --- Eventos dos filtros (registra só uma vez) ---
+    const btnFiltrar = document.getElementById('btn-pipa-filtrar');
+    const btnLimpar  = document.getElementById('btn-pipa-limpar');
+    const btnAtualizar = document.getElementById('btn-atualizar-pipa');
+
+    if (btnFiltrar && !btnFiltrar._pipaEvento) {
+      btnFiltrar._pipaEvento = true;
+      btnFiltrar.addEventListener('click', () => {
+        const placa = document.getElementById('pipa-filtro-placa')?.value || '';
+        const de    = document.getElementById('pipa-filtro-de')?.value || '';
+        const ate   = document.getElementById('pipa-filtro-ate')?.value || '';
+        let filtrado = _pipaHistoricoCompleto;
+        if (placa) filtrado = filtrado.filter(r => r.placa === placa);
+        if (de)    filtrado = filtrado.filter(r => _pipaParseData(r.pedido) >= new Date(de));
+        if (ate)   filtrado = filtrado.filter(r => _pipaParseData(r.pedido) <= new Date(ate + 'T23:59:59'));
+        _renderizarHistoricoPipa(filtrado,
+          document.getElementById('pipa-historico-count'),
+          document.getElementById('pipa-historico-body'));
+      });
+    }
+
+    if (btnLimpar && !btnLimpar._pipaEvento) {
+      btnLimpar._pipaEvento = true;
+      btnLimpar.addEventListener('click', () => {
+        const fp = document.getElementById('pipa-filtro-placa');
+        const fd = document.getElementById('pipa-filtro-de');
+        const fa = document.getElementById('pipa-filtro-ate');
+        if (fp) fp.value = '';
+        if (fd) fd.value = '';
+        if (fa) fa.value = '';
+        _renderizarHistoricoPipa(_pipaHistoricoCompleto,
+          document.getElementById('pipa-historico-count'),
+          document.getElementById('pipa-historico-body'));
+      });
+    }
+
+    if (btnAtualizar && !btnAtualizar._pipaEvento) {
+      btnAtualizar._pipaEvento = true;
+      btnAtualizar.addEventListener('click', () => {
+        // Reseta flag de eventos para recarregar limpo
+        const bf = document.getElementById('btn-pipa-filtrar');
+        const bl = document.getElementById('btn-pipa-limpar');
+        const ba = document.getElementById('btn-atualizar-pipa');
+        if (bf) delete bf._pipaEvento;
+        if (bl) delete bl._pipaEvento;
+        if (ba) delete ba._pipaEvento;
+        carregarPipa();
+        showToast('Dados do Caminhão Pipa atualizados!', 'success');
+      });
+    }
+
+  } catch (erro) {
+    console.error('Erro ao carregar PIPA:', erro);
+    if (ultimoConteudo) ultimoConteudo.innerHTML = '<p style="color:var(--color-red);">Erro ao carregar dados. Verifique se a aba PIPA está publicada como CSV.</p>';
+    if (historicoBody) historicoBody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--color-red);">Erro ao carregar histórico.</td></tr>';
+  }
+}
+
+function _renderizarHistoricoPipa(registros, countEl, historicoBody) {
+  if (countEl) countEl.textContent = `${registros.length} registro(s) encontrado(s)`;
+  if (!historicoBody) return;
+
+  if (registros.length === 0) {
+    historicoBody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--text-muted);">Nenhum registro encontrado.</td></tr>';
+    return;
+  }
+
+  historicoBody.innerHTML = registros.map(r => `
+    <tr>
+      <td>${r.pedido}</td>
+      <td>${r.requisitada}</td>
+      <td>${r.recebida}</td>
+      <td><strong>${r.placa}</strong></td>
+      <td>${r.relInicio}</td>
+      <td>${r.relFim}</td>
+      <td>${r.recibo}</td>
+    </tr>
+  `).join('');
+}
+
+function _pipaParseData(str) {
+  if (!str || str === '-') return new Date(0);
+  // Suporta dd/mm/yyyy e yyyy-mm-dd
+  if (str.includes('/')) {
+    const [d, m, y] = str.split('/');
+    return new Date(`${y}-${m}-${d}`);
+  }
+  return new Date(str);
 }
 
 // ================= NOTIFICAÇÕES TOAST (V2.0) =================
