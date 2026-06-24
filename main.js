@@ -1840,9 +1840,15 @@ async function carregarPipa() {
   if (historicoBody) historicoBody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--text-muted);">Carregando...</td></tr>';
 
   try {
-    const response = await fetch(PIPA_CSV_URL);
+    console.log('[PIPA] Iniciando fetch...');
+    const response = await fetch(PIPA_CSV_URL, {
+      cache: 'no-store',
+      headers: { 'Accept': 'text/csv, text/plain, */*' }
+    });
+    console.log('[PIPA] Response status:', response.status, response.ok);
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const csv = await response.text();
+    console.log('[PIPA] CSV recebido, primeiros 200 chars:', csv.substring(0, 200));
 
     const linhas = _parseCSVRobusto(csv);
 
@@ -1994,8 +2000,9 @@ async function carregarPipa() {
 
   } catch (erro) {
     console.error('[PIPA] Erro:', erro);
-    if (ultimoConteudo) ultimoConteudo.innerHTML = '<p style="color:var(--color-red);">Erro ao carregar dados. Verifique o console.</p>';
-    if (historicoBody) historicoBody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--color-red);">Erro ao carregar historico.</td></tr>';
+    const msgErro = `Erro: ${erro.message}. Verifique o console (F12).`;
+    if (ultimoConteudo) ultimoConteudo.innerHTML = `<p style="color:var(--color-red);">${msgErro}</p>`;
+    if (historicoBody) historicoBody.innerHTML = `<tr><td colspan="7" style="text-align:center;color:var(--color-red);">${msgErro}</td></tr>`;
   }
 }
 
