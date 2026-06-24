@@ -138,6 +138,9 @@ document.addEventListener('DOMContentLoaded', () => {
 // ================= REFRESH GERAL =================
 
 function refreshApp() {
+  // Abas independentes de ciclo — executar antes do guard
+  if (state.currentTab === 'pipa') { carregarPipa(); if (typeof lucide !== 'undefined') lucide.createIcons(); return; }
+
   const availableCycles = getAvailableCycles(state.readings);
   if (!state.selectedCycleKey || !availableCycles.includes(state.selectedCycleKey)) {
     state.selectedCycleKey = availableCycles[0] || '';
@@ -157,7 +160,6 @@ function refreshApp() {
   else if (state.currentTab === 'central') carregarCentralOperacional();
   else if (state.currentTab === 'alertas') carregarAlertas();
   else if (state.currentTab === 'configuracoes') renderConfiguracoesTab();
-  else if (state.currentTab === 'pipa') carregarPipa();
 
   if (typeof lucide !== 'undefined') lucide.createIcons();
 }
