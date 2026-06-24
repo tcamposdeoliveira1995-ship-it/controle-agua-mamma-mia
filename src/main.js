@@ -1948,12 +1948,7 @@ let _pipaHistoricoCompleto = [];
 
 function _parseCSVRobusto(texto) {
   const linhas = [];
-  const rows = texto.replace(/
-/g, '
-').replace(/
-/g, '
-').split('
-');
+  const rows = texto.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n');
   for (const row of rows) {
     if (row.trim() === '') continue;
     const campos = [];
@@ -1980,7 +1975,6 @@ function _parseCSVRobusto(texto) {
   }
   return linhas;
 }
-
 async function carregarPipa() {
   const ultimoConteudo = document.getElementById('pipa-ultimo-conteudo');
   const historicoBody  = document.getElementById('pipa-historico-body');
