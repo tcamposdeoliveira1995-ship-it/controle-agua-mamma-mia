@@ -63,6 +63,7 @@
     <button class="tab-btn" data-tab="requisicoes"><i data-lucide="package"></i>Requisições</button>
     <button class="tab-btn" data-tab="central"><i data-lucide="radio"></i>Central</button>
     <button class="tab-btn" data-tab="operacao"><i data-lucide="clipboard-check"></i>Operação</button>
+    <button class="tab-btn" data-tab="pipa"><i data-lucide="truck"></i>Pipa</button>
   </nav>
 
   <main id="app-main-content">
@@ -416,6 +417,61 @@
           </div>
         </form>
       </section>
+    </div>
+
+    <!-- ================= ABA: CAMINHÃO PIPA ================= -->
+    <div id="tab-content-pipa" class="tab-panel">
+
+      <!-- Card: Último Abastecimento -->
+      <section class="panel-card" id="pipa-ultimo-card">
+        <div class="panel-header">
+          <h2>🚚 Último Abastecimento – Caminhão Pipa</h2>
+          <button id="btn-atualizar-pipa" class="btn btn-sm btn-secondary" style="margin-left:auto;">
+            <i data-lucide="refresh-cw"></i> Atualizar
+          </button>
+        </div>
+        <div id="pipa-ultimo-conteudo" style="padding: 1rem 0;">
+          <p style="color:var(--text-muted);">Carregando...</p>
+        </div>
+      </section>
+
+      <!-- Card: Histórico -->
+      <section class="panel-card">
+        <div class="panel-header" style="display:flex;align-items:center;gap:1rem;flex-wrap:wrap;">
+          <h2>📋 Histórico de Abastecimentos</h2>
+          <div style="display:flex;gap:0.5rem;align-items:center;margin-left:auto;flex-wrap:wrap;">
+            <label style="font-size:0.85rem;color:var(--text-muted);">Filtrar por placa:</label>
+            <select id="pipa-filtro-placa" class="form-control" style="width:auto;min-width:140px;">
+              <option value="">Todas as placas</option>
+            </select>
+            <label style="font-size:0.85rem;color:var(--text-muted);">Período:</label>
+            <input type="date" id="pipa-filtro-de" class="form-control" style="width:auto;">
+            <input type="date" id="pipa-filtro-ate" class="form-control" style="width:auto;">
+            <button id="btn-pipa-filtrar" class="btn btn-sm btn-primary">Filtrar</button>
+            <button id="btn-pipa-limpar" class="btn btn-sm btn-secondary">Limpar</button>
+          </div>
+        </div>
+        <div id="pipa-historico-count" style="font-size:0.85rem;color:var(--text-muted);margin-bottom:0.75rem;padding:0 0.25rem;"></div>
+        <div style="overflow-x:auto;">
+          <table class="data-table" id="pipa-historico-table">
+            <thead>
+              <tr>
+                <th>Pedido</th>
+                <th>Qtd. Requisitada</th>
+                <th>Qtd. Recebida</th>
+                <th>Placa do Veículo</th>
+                <th>Relógio Início</th>
+                <th>Relógio Fim</th>
+                <th>Nº do Recibo</th>
+              </tr>
+            </thead>
+            <tbody id="pipa-historico-body">
+              <tr><td colspan="7" style="text-align:center;color:var(--text-muted);">Carregando...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
     </div>
 
   </main>
