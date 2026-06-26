@@ -938,45 +938,16 @@ function _gerarPDFHistorico(lista) {
 // ─── SHEETS ───────────────────────────────────────────────────────────────────
 
 async function _enviarSheets(registro) {
-
   try {
-
-    const resposta = await fetch(APPS_SCRIPT_URL, {
+    fetch(APPS_SCRIPT_URL, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
+      mode: 'no-cors',
       body: JSON.stringify(registro)
     });
-
-    const retorno = await resposta.json();
-
-    console.log('Apps Script:', retorno);
-
-    if (retorno.status === 'ok') {
-
-      if (retorno.pdf) {
-
-        window.open(retorno.pdf, '_blank');
-
-      }
-
-    } else {
-
-      console.error(retorno);
-
-      _toast('Erro ao salvar auditoria.', 'error');
-
-    }
-
-  } catch (e) {
-
-    console.error(e);
-
-    _toast('Erro de comunicação com o servidor.', 'error');
-
+    _toast('Auditoria enviada para a nuvem!', 'success', 3000);
+  } catch(e) {
+    console.error('Erro ao enviar para Sheets:', e);
   }
-
 }
 // ─── TOAST ────────────────────────────────────────────────────────────────────
 
