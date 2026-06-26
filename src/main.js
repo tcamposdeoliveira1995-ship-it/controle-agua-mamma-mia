@@ -144,7 +144,7 @@ function refreshApp() {
   // Abas independentes de ciclo — executar antes do guard
   if (state.currentTab === 'pipa') { carregarPipa(); if (typeof lucide !== 'undefined') lucide.createIcons(); return; }
 
-  if (state.currentTab === 'auditoria') { initAuditoria(); if (typeof lucide !== 'undefined') lucide.createIcons(); return; }
+  if (state.currentTab === 'auditoria') { setTimeout(() => { initAuditoria(); if (typeof lucide !== 'undefined') lucide.createIcons(); }, 50); return; }
 
   const availableCycles = getAvailableCycles(state.readings);
   if (!state.selectedCycleKey || !availableCycles.includes(state.selectedCycleKey)) {
