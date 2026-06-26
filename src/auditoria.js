@@ -72,24 +72,25 @@ let _state = {
   assinatura: null,
   historico: [],
   historicoSheets: [],
+  historicoFiltrado: [],
   historicoAberto: false,
 };
 
 let _ncItemIdPendente = null;
 
-// ─── ENTRY POINT ─────────────────────────────────────────────────────────────
+// ─── ENTRY POINT ──────────────────────────────────────────────────────────────
 
 export function initAuditoria() {
   _state.respostas = {};
   _state.naoConformidades = {};
   _state.assinatura = null;
   _state.historicoAberto = false;
-
+  _state.historicoSheets = [];
+  _state.historicoFiltrado = [];
   try {
     const salvo = localStorage.getItem('auditoria_historico_yuka');
     _state.historico = salvo ? JSON.parse(salvo) : [];
   } catch(e) { _state.historico = []; }
-
   _renderTudo();
 }
 
@@ -98,11 +99,9 @@ export function initAuditoria() {
 function _renderTudo() {
   const container = document.getElementById('tab-content-auditoria');
   if (!container) return;
-
   const agora = new Date();
   const dataFmt = agora.toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' });
   const horaFmt = agora.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-
   container.innerHTML = `
     <div class="panel-card" style="margin-bottom:1.5rem; border-left:4px solid var(--color-green);">
       <div class="panel-header" style="flex-wrap:wrap; gap:1rem;">
@@ -121,9 +120,7 @@ function _renderTudo() {
         </div>
       </div>
     </div>
-
     <div id="aud-secao-historico" style="display:none;"></div>
-
     <div id="aud-secao-formulario">
       <div class="panel-card" style="margin-bottom:1.5rem;">
         <div class="panel-header"><h3>📋 Informações da Auditoria</h3></div>
@@ -143,9 +140,7 @@ function _renderTudo() {
           </div>
         </div>
       </div>
-
       <div id="aud-checklist">${_renderChecklist()}</div>
-
       <div class="panel-card" id="aud-nc-resumo" style="margin-bottom:1.5rem; display:none;">
         <div class="panel-header">
           <h3 style="color:var(--color-red);">⚠️ Não Conformidades Registradas</h3>
@@ -153,12 +148,10 @@ function _renderTudo() {
         </div>
         <div id="aud-nc-lista" style="margin-top:1rem;"></div>
       </div>
-
       <div class="panel-card" style="margin-bottom:1.5rem;">
         <div class="panel-header"><h3>📝 Observações Gerais</h3></div>
         <textarea id="aud-observacoes" class="form-control" rows="4" placeholder="Campo livre para registros adicionais..." style="resize:vertical; margin-top:1rem;"></textarea>
       </div>
-
       <div class="panel-card" style="margin-bottom:1.5rem;">
         <div class="panel-header"><h3>🏆 Resultado da Auditoria</h3></div>
         <p style="color:var(--text-muted); font-size:0.85rem; margin:0.75rem 0;">Calculado automaticamente com base nos itens avaliados.</p>
@@ -180,7 +173,6 @@ function _renderTudo() {
           </div>
         </div>
       </div>
-
       <div class="panel-card" style="margin-bottom:1.5rem;">
         <div class="panel-header">
           <h3>✍️ Assinatura Digital do Auditor</h3>
@@ -190,13 +182,11 @@ function _renderTudo() {
         <canvas id="aud-assinatura-canvas" style="width:100%; height:160px; border:2px dashed var(--card-border); border-radius:var(--border-radius-md); background:rgba(255,255,255,0.6); cursor:crosshair; touch-action:none; display:block;"></canvas>
         <p id="aud-assinatura-status" style="color:var(--text-muted); font-size:0.78rem; margin-top:0.4rem; text-align:center;">Área de assinatura vazia</p>
       </div>
-
       <div style="display:flex; justify-content:flex-end; gap:1rem; margin-bottom:2rem; flex-wrap:wrap;">
         <button id="aud-btn-limpar" class="btn btn-secondary" type="button"><i data-lucide="rotate-ccw"></i> Limpar Formulário</button>
         <button id="aud-btn-finalizar" class="btn btn-primary" type="button" style="font-size:1rem; padding:0.85rem 2rem;"><i data-lucide="check-circle"></i> Finalizar e Registrar Auditoria</button>
       </div>
     </div>
-
     <div id="aud-modal-nc" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:1000; align-items:center; justify-content:center; padding:1rem; backdrop-filter:blur(4px);">
       <div class="modal-content" style="max-width:560px; max-height:90vh; overflow-y:auto;">
         <div class="modal-header">
@@ -252,7 +242,6 @@ function _renderTudo() {
         </div>
       </div>
     </div>
-
     <div id="aud-modal-ver" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:1000; align-items:center; justify-content:center; padding:1rem; backdrop-filter:blur(4px);">
       <div class="modal-content" style="max-width:700px; max-height:90vh; overflow-y:auto;">
         <div class="modal-header">
@@ -267,7 +256,6 @@ function _renderTudo() {
       </div>
     </div>
   `;
-
   if (window.lucide) window.lucide.createIcons();
   _bindEventos();
   _bindCanvas();
@@ -281,7 +269,6 @@ function _renderChecklist() {
     if (!areas[sec.area]) areas[sec.area] = [];
     areas[sec.area].push(sec);
   });
-
   let html = '';
   for (const [area, secoes] of Object.entries(areas)) {
     html += `<div class="panel-card" style="margin-bottom:1.5rem;">
@@ -294,7 +281,6 @@ function _renderChecklist() {
         </div>
       </div>
       <div style="display:flex; flex-direction:column; gap:1.25rem;">`;
-
     secoes.forEach(sec => {
       if (sec.subarea !== sec.area) {
         html += `<p style="font-size:0.8rem; font-weight:700; text-transform:uppercase; color:var(--text-muted); letter-spacing:0.05em; margin-bottom:0.25rem;">${sec.subarea}</p>`;
@@ -316,8 +302,7 @@ function _renderChecklist() {
   return html;
 }
 
-// ─── RENDERIZADORES DE HISTÓRICO ──────────────────────────────────────────────
-
+// ─── HISTÓRICO LOCAL ──────────────────────────────────────────────────────────
 
 function _renderHistorico() {
   if (_state.historico.length === 0) {
@@ -327,10 +312,8 @@ function _renderHistorico() {
       <p style="color:var(--text-muted); font-size:0.85rem; margin-top:0.5rem;">Preencha e finalize a auditoria para que ela apareça aqui.</p>
     </div>`;
   }
-  
   const lista = [..._state.historico].reverse();
   const icones = { aprovado: '✅', ressalvas: '⚠️', reprovado: '❌' };
-
   const rows = lista.map(a => {
     const nc = Object.keys(a.naoConformidades || {}).length;
     const altas = Object.values(a.naoConformidades || {}).filter(n => n.criticidade === 'alta').length;
@@ -345,7 +328,6 @@ function _renderHistorico() {
       </td>
     </tr>`;
   }).join('');
-
   return `<div class="panel-card" style="margin-bottom:1.5rem;">
     <div class="panel-header" style="margin-bottom:1rem;">
       <h3>📋 Histórico Local Recente (YUKA)</h3>
@@ -365,6 +347,74 @@ function _renderHistorico() {
   </div>`;
 }
 
+// ─── HISTÓRICO NUVEM ──────────────────────────────────────────────────────────
+
+function _renderHistoricoSheets() {
+  const lista = _state.historicoSheets || [];
+  if (lista.length === 0) {
+    return `<div class="panel-card" style="text-align:center; padding:3rem 1rem; margin-bottom:1.5rem;">
+      <div style="font-size:3rem; margin-bottom:1rem;">☁️</div>
+      <h3 style="color:var(--text-muted);">Nenhuma auditoria em nuvem registrada ainda</h3>
+    </div>`;
+  }
+  const turnos = [...new Set(lista.map(a => a['Turno'] || a['turno']).filter(Boolean))];
+  return `<div class="panel-card" style="margin-bottom:1.5rem;">
+    <div class="panel-header" style="margin-bottom:1rem;">
+      <h3>☁️ Histórico em Nuvem (Google Sheets)</h3>
+      <span style="color:var(--text-muted); font-size:0.85rem;">${lista.length} registros</span>
+    </div>
+    <div style="display:flex; gap:0.75rem; flex-wrap:wrap; align-items:flex-end; margin-bottom:1rem;">
+      <div class="form-group" style="margin:0; flex:1; min-width:140px;">
+        <label class="form-label" style="font-size:0.8rem;">Data inicial</label>
+        <input type="date" id="aud-filtro-de" class="form-control" style="font-size:0.85rem;">
+      </div>
+      <div class="form-group" style="margin:0; flex:1; min-width:140px;">
+        <label class="form-label" style="font-size:0.8rem;">Data final</label>
+        <input type="date" id="aud-filtro-ate" class="form-control" style="font-size:0.85rem;">
+      </div>
+      <div class="form-group" style="margin:0; flex:1; min-width:140px;">
+        <label class="form-label" style="font-size:0.8rem;">Turno</label>
+        <select id="aud-filtro-turno" class="form-control" style="font-size:0.85rem;">
+          <option value="">Todos</option>
+          ${turnos.map(t => `<option value="${t}">${t}</option>`).join('')}
+        </select>
+      </div>
+      <button id="aud-btn-filtrar" class="btn btn-secondary" type="button" style="font-size:0.85rem; white-space:nowrap;"><i data-lucide="filter"></i> Filtrar</button>
+      <button id="aud-btn-pdf-historico" class="btn btn-primary" type="button" style="font-size:0.85rem; white-space:nowrap;"><i data-lucide="file-text"></i> Gerar PDF</button>
+    </div>
+    <div id="aud-tabela-nuvem" style="overflow-x:auto;">
+      ${_renderTabelaNuvem(lista)}
+    </div>
+  </div>`;
+}
+
+function _renderTabelaNuvem(lista) {
+  const icones = { aprovado: '✅', ressalvas: '⚠️', reprovado: '❌' };
+  if (lista.length === 0) {
+    return `<p style="color:var(--text-muted); text-align:center; padding:1.5rem;">Nenhum registro encontrado para os filtros selecionados.</p>`;
+  }
+  const rows = lista.map(a => {
+    const dataHora = a['Data/Hora'] || a['dataHora'] || '—';
+    const turno = a['Turno'] || a['turno'] || '—';
+    const auditor = a['Auditor'] || a['auditor'] || '—';
+    const nc = a['Não Conformes'] !== undefined ? a['Não Conformes'] : 0;
+    const res = String(a['Resultado'] || a['resultado'] || '').toLowerCase().trim();
+    return `<tr>
+      <td>${dataHora}</td><td>${turno}</td><td>${auditor}</td>
+      <td style="text-align:center;">${nc}</td>
+      <td style="text-align:center; font-size:1.1rem;">${icones[res] || '—'}</td>
+    </tr>`;
+  }).join('');
+  return `<table class="modern-table">
+    <thead><tr>
+      <th>Data/Hora</th><th>Turno</th><th>Auditor</th>
+      <th style="text-align:center;">N/C</th>
+      <th style="text-align:center;">Resultado</th>
+    </tr></thead>
+    <tbody>${rows}</tbody>
+  </table>`;
+}
+
 // ─── BIND EVENTOS ─────────────────────────────────────────────────────────────
 
 function _bindEventos() {
@@ -381,7 +431,6 @@ function _bindEventos() {
     const secForm = document.getElementById('aud-secao-formulario');
     const btnNova = document.getElementById('aud-btn-nova');
     const btnHist = document.getElementById('aud-btn-historico');
-    
     if (_state.historicoAberto) {
       secHist.innerHTML = '<div style="padding:2rem; text-align:center; color:var(--text-muted);">⏳ Carregando nuvem...</div>';
       secHist.style.display = '';
@@ -389,26 +438,18 @@ function _bindEventos() {
       btnNova.style.display = '';
       if (btnHist) btnHist.innerHTML = '<i data-lucide="x"></i> Fechar Histórico';
       if (window.lucide) window.lucide.createIcons();
-      
       try {
         const resp = await fetch(APPS_SCRIPT_URL);
         const dados = await resp.json();
-        if (Array.isArray(dados)) {
-          _state.historicoSheets = dados; 
-        }
+        _state.historicoSheets = Array.isArray(dados) ? dados : [];
+        _state.historicoFiltrado = _state.historicoSheets;
       } catch(e) {
         console.error('Erro ao buscar histórico do Sheets:', e);
         _state.historicoSheets = [];
+        _state.historicoFiltrado = [];
       }
-      
-      secHist.innerHTML = _renderHistorico() + '<br>' + _renderHistoricoSheets();
-      
-      document.querySelectorAll('.aud-btn-ver').forEach(b => {
-        b.addEventListener('click', () => {
-          const aud = _state.historico.find(a => a.id === b.dataset.id);
-          if (aud) _abrirVer(aud);
-        });
-      });
+      secHist.innerHTML = _renderHistorico() + _renderHistoricoSheets();
+      _bindEventosHistorico();
     } else {
       secHist.style.display = 'none';
       secForm.style.display = '';
@@ -462,6 +503,40 @@ function _bindEventos() {
   document.getElementById('aud-btn-fechar-ver')?.addEventListener('click', _fecharVer);
   document.getElementById('aud-btn-fechar-ver2')?.addEventListener('click', _fecharVer);
   document.getElementById('aud-btn-imprimir')?.addEventListener('click', () => window.print());
+}
+
+function _bindEventosHistorico() {
+  document.querySelectorAll('.aud-btn-ver').forEach(b => {
+    b.addEventListener('click', () => {
+      const aud = _state.historico.find(a => a.id === b.dataset.id);
+      if (aud) _abrirVer(aud);
+    });
+  });
+
+  document.getElementById('aud-btn-filtrar')?.addEventListener('click', () => {
+    const de = document.getElementById('aud-filtro-de')?.value;
+    const ate = document.getElementById('aud-filtro-ate')?.value;
+    const turno = document.getElementById('aud-filtro-turno')?.value;
+    let lista = _state.historicoSheets || [];
+    if (de) lista = lista.filter(a => {
+      const dt = _parseDataAuditoria(a['Data/Hora'] || a['dataHora'] || '');
+      return dt && dt >= new Date(de);
+    });
+    if (ate) lista = lista.filter(a => {
+      const dt = _parseDataAuditoria(a['Data/Hora'] || a['dataHora'] || '');
+      const fim = new Date(ate); fim.setHours(23,59,59,999);
+      return dt && dt <= fim;
+    });
+    if (turno) lista = lista.filter(a => (a['Turno'] || a['turno'] || '') === turno);
+    _state.historicoFiltrado = lista;
+    const tabela = document.getElementById('aud-tabela-nuvem');
+    if (tabela) tabela.innerHTML = _renderTabelaNuvem(lista);
+  });
+
+  document.getElementById('aud-btn-pdf-historico')?.addEventListener('click', () => {
+    const lista = _state.historicoFiltrado.length > 0 ? _state.historicoFiltrado : _state.historicoSheets;
+    _gerarPDFHistorico(lista);
+  });
 }
 
 // ─── LÓGICA DE CHECK ─────────────────────────────────────────────────────────
@@ -602,7 +677,7 @@ function _abrirNC(itemId) {
     }
   }
   const modal = document.getElementById('aud-modal-nc');
-  if (modal) { modal.style.display = 'flex'; }
+  if (modal) modal.style.display = 'flex';
 }
 
 function _fecharNC() {
@@ -647,7 +722,7 @@ function _processarFoto(file) {
   reader.readAsDataURL(file);
 }
 
-// ─── CANVAS (ASSINATURA) ──────────────────────────────────────────────────────
+// ─── CANVAS ───────────────────────────────────────────────────────────────────
 
 function _bindCanvas() {
   const canvas = document.getElementById('aud-assinatura-canvas');
@@ -659,13 +734,11 @@ function _bindCanvas() {
   ctx.scale(ratio, ratio);
   ctx.strokeStyle = '#4b433c'; ctx.lineWidth = 2.5; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
   let desenhando = false;
-  
   function pos(e) {
     const r = canvas.getBoundingClientRect();
     if (e.touches) return { x: e.touches[0].clientX - r.left, y: e.touches[0].clientY - r.top };
     return { x: e.clientX - r.left, y: e.clientY - r.top };
   }
-  
   canvas.addEventListener('mousedown', e => { e.preventDefault(); desenhando = true; const p = pos(e); ctx.beginPath(); ctx.moveTo(p.x, p.y); });
   canvas.addEventListener('mousemove', e => { if (!desenhando) return; e.preventDefault(); const p = pos(e); ctx.lineTo(p.x, p.y); ctx.stroke(); _marcarAssinatura(); });
   canvas.addEventListener('mouseup', () => { desenhando = false; _salvarAssinatura(canvas); });
@@ -673,7 +746,6 @@ function _bindCanvas() {
   canvas.addEventListener('touchstart', e => { e.preventDefault(); desenhando = true; const p = pos(e); ctx.beginPath(); ctx.moveTo(p.x, p.y); }, { passive: false });
   canvas.addEventListener('touchmove', e => { if (!desenhando) return; e.preventDefault(); const p = pos(e); ctx.lineTo(p.x, p.y); ctx.stroke(); _marcarAssinatura(); }, { passive: false });
   canvas.addEventListener('touchend', () => { desenhando = false; _salvarAssinatura(canvas); });
-  
   document.getElementById('aud-btn-limpar-assinatura')?.addEventListener('click', () => {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     _state.assinatura = null;
@@ -691,14 +763,13 @@ function _salvarAssinatura(canvas) {
   _state.assinatura = canvas.toDataURL('image/png');
 }
 
-// ─── FINALIZAR E SALVAR ───────────────────────────────────────────────────────
+// ─── FINALIZAR ────────────────────────────────────────────────────────────────
 
 function _finalizar() {
   const turno = document.getElementById('aud-turno')?.value;
   const auditor = document.getElementById('aud-auditor')?.value.trim();
   if (!turno) { _toast('Selecione o turno.', 'error'); return; }
   if (!auditor) { _toast('Informe o nome do auditor.', 'error'); return; }
-  
   const total = AUDITORIA_ESTRUTURA.reduce((acc, sec) => acc + sec.itens.length, 0);
   const avaliados = Object.keys(_state.respostas).length;
   if (avaliados < total) {
@@ -707,7 +778,6 @@ function _finalizar() {
   if (!_state.assinatura) {
     if (!confirm('A assinatura digital não foi capturada. Deseja finalizar sem assinatura?')) return;
   }
-  
   const resultado = _calcularResultado();
   const agora = new Date();
   const registro = {
@@ -722,14 +792,11 @@ function _finalizar() {
     resultado,
     assinatura: _state.assinatura,
   };
-  
   _state.historico.push(registro);
   try { localStorage.setItem('auditoria_historico_yuka', JSON.stringify(_state.historico)); } catch(e) {}
   _enviarSheets(registro);
-  
   const labels = { aprovado: '✅ Aprovado', ressalvas: '⚠️ Aprovado com Ressalvas', reprovado: '❌ Reprovado' };
   _toast(`Auditoria registrada! Resultado: ${labels[resultado]}`, 'success', 5000);
-  
   _state.respostas = {};
   _state.naoConformidades = {};
   _state.assinatura = null;
@@ -737,18 +804,16 @@ function _finalizar() {
   _renderTudo();
 }
 
-// ─── VISUALIZAR DETALHES ──────────────────────────────────────────────────────
+// ─── MODAL VER ────────────────────────────────────────────────────────────────
 
 function _abrirVer(auditoria) {
   const modal = document.getElementById('aud-modal-ver');
   const cont = document.getElementById('aud-modal-ver-conteudo');
   if (!modal || !cont) return;
-  
   const labels = { aprovado: '✅ Aprovado', ressalvas: '⚠️ Aprovado com Ressalvas', reprovado: '❌ Reprovado' };
   const ncs = auditoria.naoConformidades || {};
   const ncIds = Object.keys(ncs);
   const ic = { baixa: '🟢', media: '🟡', alta: '🔴' };
-  
   let ncsHTML = ncIds.length === 0
     ? '<p style="color:var(--color-green);">Nenhuma não conformidade registrada.</p>'
     : ncIds.map(id => {
@@ -768,7 +833,6 @@ function _abrirVer(auditoria) {
           ${nc.foto ? `<img src="${nc.foto}" style="max-width:100%; max-height:180px; border-radius:var(--border-radius-sm); margin-top:0.5rem; border:1px solid var(--card-border);" alt="Foto">` : ''}
         </div>`;
       }).join('');
-
   cont.innerHTML = `<div style="padding:0.5rem 0;">
     <div style="display:grid; grid-template-columns:1fr 1fr; gap:0.75rem; margin-bottom:1.5rem;">
       <div><strong>Unidade:</strong> ${auditoria.unidade || 'YUKA'}</div>
@@ -782,7 +846,6 @@ function _abrirVer(auditoria) {
     <div style="margin-bottom:1.5rem;"><h4 style="margin-bottom:0.75rem;">⚠️ Não Conformidades</h4>${ncsHTML}</div>
     ${auditoria.assinatura ? `<div><h4 style="margin-bottom:0.5rem;">✍️ Assinatura do Auditor</h4><img src="${auditoria.assinatura}" style="max-width:100%; border:1px solid var(--card-border); border-radius:var(--border-radius-sm); background:white; padding:0.5rem;" alt="Assinatura"></div>` : ''}
   </div>`;
-
   modal.style.display = 'flex';
   if (window.lucide) window.lucide.createIcons();
 }
@@ -792,7 +855,87 @@ function _fecharVer() {
   if (modal) modal.style.display = 'none';
 }
 
-// ─── SHEETS E TOASTS ──────────────────────────────────────────────────────────
+// ─── PDF ──────────────────────────────────────────────────────────────────────
+
+function _parseDataAuditoria(str) {
+  if (!str) return null;
+  const partes = str.split(', ');
+  const dateParts = (partes[0] || '').split('/');
+  if (dateParts.length < 3) return null;
+  return new Date(`${dateParts[2]}-${dateParts[1]}-${dateParts[0]}`);
+}
+
+function _gerarPDFHistorico(lista) {
+  if (!lista || lista.length === 0) { _toast('Nenhum registro para gerar PDF.', 'warning'); return; }
+  const agora = new Date().toLocaleString('pt-BR');
+  const icones = { aprovado: '✅', ressalvas: '⚠️', reprovado: '❌' };
+
+  const blocos = lista.map((a, idx) => {
+    const dataHora = a['Data/Hora'] || a['dataHora'] || '—';
+    const turno = a['Turno'] || a['turno'] || '—';
+    const auditor = a['Auditor'] || a['auditor'] || '—';
+    const nc = a['Não Conformes'] !== undefined ? a['Não Conformes'] : 0;
+    const res = String(a['Resultado'] || a['resultado'] || '').toLowerCase().trim();
+    const obs = a['Observações'] || a['observacoes'] || '';
+    const ncAltas = a['NC - Altas'] || 0;
+    const conformes = a['Conformes'] || 0;
+    const total = a['Total Itens'] || 47;
+    return `<div style="border:1px solid #e0d8d0; border-radius:8px; padding:16px; margin-bottom:16px; background:#faf8f5; page-break-inside:avoid;">
+      <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:8px; margin-bottom:12px; padding-bottom:10px; border-bottom:1px solid #e0d8d0;">
+        <div>
+          <strong style="font-size:13px; color:#4b433c;">#${idx + 1} — ${dataHora}</strong><br>
+          <span style="font-size:12px; color:#7b6f63;">Turno: ${turno} &nbsp;|&nbsp; Auditor: ${auditor}</span>
+        </div>
+        <div style="font-size:20px;">${icones[res] || '—'}</div>
+      </div>
+      <div style="display:grid; grid-template-columns:repeat(4,1fr); gap:8px; margin-bottom:10px;">
+        <div style="background:#fff; border:1px solid #e0d8d0; border-radius:6px; padding:8px; text-align:center;">
+          <div style="font-size:10px; color:#8a8570; text-transform:uppercase;">Conformes</div>
+          <div style="font-size:18px; font-weight:700; color:#5c7a4e;">${conformes}</div>
+        </div>
+        <div style="background:#fff; border:1px solid #e0d8d0; border-radius:6px; padding:8px; text-align:center;">
+          <div style="font-size:10px; color:#8a8570; text-transform:uppercase;">N/C Total</div>
+          <div style="font-size:18px; font-weight:700; color:#c0402a;">${nc}</div>
+        </div>
+        <div style="background:#fff; border:1px solid #e0d8d0; border-radius:6px; padding:8px; text-align:center;">
+          <div style="font-size:10px; color:#8a8570; text-transform:uppercase;">N/C Altas</div>
+          <div style="font-size:18px; font-weight:700; color:#c0402a;">${ncAltas}</div>
+        </div>
+        <div style="background:#fff; border:1px solid #e0d8d0; border-radius:6px; padding:8px; text-align:center;">
+          <div style="font-size:10px; color:#8a8570; text-transform:uppercase;">Total Itens</div>
+          <div style="font-size:18px; font-weight:700; color:#4b433c;">${total}</div>
+        </div>
+      </div>
+      ${obs ? `<p style="font-size:11px; color:#7b6f63; margin:0;"><strong>Observações:</strong> ${obs}</p>` : ''}
+    </div>`;
+  }).join('');
+
+  const html = `<!DOCTYPE html><html><head><meta charset="UTF-8">
+  <style>body{font-family:Arial,sans-serif;max-width:820px;margin:0 auto;padding:28px;background:#fff;color:#4b433c;}@media print{body{padding:0;}}</style>
+  </head><body>
+  <div style="display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid #b79b6c;padding-bottom:14px;margin-bottom:20px;">
+    <div>
+      <h1 style="margin:0;font-size:20px;font-weight:800;">Mamma Mia Control</h1>
+      <p style="margin:4px 0 0;font-size:13px;color:#8a8570;">🧼 Relatório de Auditorias de Higienização — YUKA</p>
+    </div>
+    <div style="text-align:right;font-size:11px;color:#a09284;">
+      <div>Emitido em: <strong style="color:#4b433c;">${agora}</strong></div>
+      <div style="margin-top:4px;">${lista.length} auditoria(s)</div>
+    </div>
+  </div>
+  ${blocos}
+  <div style="margin-top:24px;padding-top:12px;border-top:1px solid #e0d8d0;font-size:10px;color:#a09284;text-align:center;">
+    Mamma Mia Control — Gestão Inteligente de Operações • © 2026 Mamma Mia Salgados
+  </div>
+  </body></html>`;
+
+  const janela = window.open('', '_blank');
+  janela.document.write(html);
+  janela.document.close();
+  setTimeout(() => janela.print(), 500);
+}
+
+// ─── SHEETS ───────────────────────────────────────────────────────────────────
 
 async function _enviarSheets(registro) {
   try {
@@ -800,10 +943,12 @@ async function _enviarSheets(registro) {
   } catch(e) { console.error('Erro ao enviar para Sheets:', e); }
 }
 
+// ─── TOAST ────────────────────────────────────────────────────────────────────
+
 function _toast(msg, tipo = 'info', duracao = 3500) {
   const cores = { success: 'var(--color-green)', error: 'var(--color-red)', info: 'var(--color-blue)', warning: 'var(--color-orange)' };
   const toast = document.createElement('div');
-  toast.style.cssText = `position:fixed; bottom:1.5rem; right:1.5rem; z-index:99999; background:var(--card-bg); border:1px solid ${cores[tipo]}; border-left:4px solid ${cores[tipo]}; border-radius:var(--border-radius-md); padding:0.9rem 1.25rem; box-shadow:0 8px 24px rgba(0,0,0,0.12); max-width:360px; font-family:var(--font-main); font-size:0.9rem; color:var(--text-primary);`;
+  toast.style.cssText = `position:fixed;bottom:1.5rem;right:1.5rem;z-index:99999;background:var(--card-bg);border:1px solid ${cores[tipo]};border-left:4px solid ${cores[tipo]};border-radius:var(--border-radius-md);padding:0.9rem 1.25rem;box-shadow:0 8px 24px rgba(0,0,0,0.12);max-width:360px;font-family:var(--font-main);font-size:0.9rem;color:var(--text-primary);`;
   toast.textContent = msg;
   document.body.appendChild(toast);
   setTimeout(() => toast.remove(), duracao);
