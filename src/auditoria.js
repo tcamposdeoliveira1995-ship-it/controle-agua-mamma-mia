@@ -65,6 +65,7 @@ const AUDITORIA_ESTRUTURA = [
 ];
 
 const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyxTb1JgVX5o8_jD6xKXocb_tJb7lPQdo5c5aN9woB7es4FUthUcsQabYrZJ7est3cp/exec';
+const LOGO_URL = '/logo-mamma-mia.jpg';
 
 let _state = {
   respostas: {},
@@ -78,7 +79,9 @@ let _state = {
 
 let _ncItemIdPendente = null;
 
-// ─── ENTRY POINT ──────────────────────────────────────────────────────────────
+// =============================================================================
+// ENTRY POINT
+// =============================================================================
 
 export function initAuditoria() {
   _state.respostas = {};
@@ -94,7 +97,9 @@ export function initAuditoria() {
   _renderTudo();
 }
 
-// ─── RENDER PRINCIPAL ─────────────────────────────────────────────────────────
+// =============================================================================
+// RENDER PRINCIPAL
+// =============================================================================
 
 function _renderTudo() {
   const container = document.getElementById('tab-content-auditoria');
@@ -120,7 +125,9 @@ function _renderTudo() {
         </div>
       </div>
     </div>
+
     <div id="aud-secao-historico" style="display:none;"></div>
+
     <div id="aud-secao-formulario">
       <div class="panel-card" style="margin-bottom:1.5rem;">
         <div class="panel-header"><h3>📋 Informações da Auditoria</h3></div>
@@ -140,7 +147,9 @@ function _renderTudo() {
           </div>
         </div>
       </div>
+
       <div id="aud-checklist">${_renderChecklist()}</div>
+
       <div class="panel-card" id="aud-nc-resumo" style="margin-bottom:1.5rem; display:none;">
         <div class="panel-header">
           <h3 style="color:var(--color-red);">⚠️ Não Conformidades Registradas</h3>
@@ -148,10 +157,12 @@ function _renderTudo() {
         </div>
         <div id="aud-nc-lista" style="margin-top:1rem;"></div>
       </div>
+
       <div class="panel-card" style="margin-bottom:1.5rem;">
         <div class="panel-header"><h3>📝 Observações Gerais</h3></div>
         <textarea id="aud-observacoes" class="form-control" rows="4" placeholder="Campo livre para registros adicionais..." style="resize:vertical; margin-top:1rem;"></textarea>
       </div>
+
       <div class="panel-card" style="margin-bottom:1.5rem;">
         <div class="panel-header"><h3>🏆 Resultado da Auditoria</h3></div>
         <p style="color:var(--text-muted); font-size:0.85rem; margin:0.75rem 0;">Calculado automaticamente com base nos itens avaliados.</p>
@@ -173,6 +184,7 @@ function _renderTudo() {
           </div>
         </div>
       </div>
+
       <div class="panel-card" style="margin-bottom:1.5rem;">
         <div class="panel-header">
           <h3>✍️ Assinatura Digital do Auditor</h3>
@@ -182,11 +194,13 @@ function _renderTudo() {
         <canvas id="aud-assinatura-canvas" style="width:100%; height:160px; border:2px dashed var(--card-border); border-radius:var(--border-radius-md); background:rgba(255,255,255,0.6); cursor:crosshair; touch-action:none; display:block;"></canvas>
         <p id="aud-assinatura-status" style="color:var(--text-muted); font-size:0.78rem; margin-top:0.4rem; text-align:center;">Área de assinatura vazia</p>
       </div>
+
       <div style="display:flex; justify-content:flex-end; gap:1rem; margin-bottom:2rem; flex-wrap:wrap;">
         <button id="aud-btn-limpar" class="btn btn-secondary" type="button"><i data-lucide="rotate-ccw"></i> Limpar Formulário</button>
         <button id="aud-btn-finalizar" class="btn btn-primary" type="button" style="font-size:1rem; padding:0.85rem 2rem;"><i data-lucide="check-circle"></i> Finalizar e Registrar Auditoria</button>
       </div>
     </div>
+
     <div id="aud-modal-nc" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:1000; align-items:center; justify-content:center; padding:1rem; backdrop-filter:blur(4px);">
       <div class="modal-content" style="max-width:560px; max-height:90vh; overflow-y:auto;">
         <div class="modal-header">
@@ -242,6 +256,7 @@ function _renderTudo() {
         </div>
       </div>
     </div>
+
     <div id="aud-modal-ver" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:1000; align-items:center; justify-content:center; padding:1rem; backdrop-filter:blur(4px);">
       <div class="modal-content" style="max-width:700px; max-height:90vh; overflow-y:auto;">
         <div class="modal-header">
@@ -250,7 +265,7 @@ function _renderTudo() {
         </div>
         <div id="aud-modal-ver-conteudo"></div>
         <div class="modal-footer">
-          <button id="aud-btn-imprimir" class="btn btn-secondary" type="button"><i data-lucide="printer"></i> Imprimir</button>
+          <button id="aud-btn-imprimir" class="btn btn-secondary" type="button"><i data-lucide="printer"></i> Imprimir PDF</button>
           <button id="aud-btn-fechar-ver2" class="btn btn-primary" type="button">Fechar</button>
         </div>
       </div>
@@ -261,7 +276,9 @@ function _renderTudo() {
   _bindCanvas();
 }
 
-// ─── CHECKLIST ────────────────────────────────────────────────────────────────
+// =============================================================================
+// CHECKLIST
+// =============================================================================
 
 function _renderChecklist() {
   const areas = {};
@@ -302,14 +319,15 @@ function _renderChecklist() {
   return html;
 }
 
-// ─── HISTÓRICO LOCAL ──────────────────────────────────────────────────────────
+// =============================================================================
+// HISTÓRICO LOCAL
+// =============================================================================
 
 function _renderHistorico() {
   if (_state.historico.length === 0) {
     return `<div class="panel-card" style="text-align:center; padding:3rem 1rem; margin-bottom:1.5rem;">
       <div style="font-size:3rem; margin-bottom:1rem;">📋</div>
       <h3 style="color:var(--text-muted);">Nenhuma auditoria local registrada</h3>
-      <p style="color:var(--text-muted); font-size:0.85rem; margin-top:0.5rem;">Preencha e finalize a auditoria para que ela apareça aqui.</p>
     </div>`;
   }
   const lista = [..._state.historico].reverse();
@@ -323,8 +341,9 @@ function _renderHistorico() {
       <td>${a.auditor || '—'}</td>
       <td style="text-align:center;">${nc}${altas > 0 ? ` <span style="color:var(--color-red);font-size:0.75rem;">(${altas} alta${altas > 1 ? 's' : ''})</span>` : ''}</td>
       <td style="text-align:center; font-size:1.1rem;">${icones[a.resultado] || '—'}</td>
-      <td style="text-align:center;">
+      <td style="text-align:center; display:flex; gap:0.25rem; justify-content:center;">
         <button class="btn btn-secondary aud-btn-ver" data-id="${a.id}" style="padding:0.3rem 0.7rem; font-size:0.8rem;"><i data-lucide="eye" style="width:14px;height:14px;"></i> Ver</button>
+        <button class="btn btn-primary aud-btn-pdf-local" data-id="${a.id}" style="padding:0.3rem 0.7rem; font-size:0.8rem;"><i data-lucide="file-text" style="width:14px;height:14px;"></i> PDF</button>
       </td>
     </tr>`;
   }).join('');
@@ -337,7 +356,7 @@ function _renderHistorico() {
       <table class="modern-table">
         <thead><tr>
           <th>Data/Hora</th><th>Turno</th><th>Auditor</th>
-          <th style="text-align:center;">Não Conformidades</th>
+          <th style="text-align:center;">N/C</th>
           <th style="text-align:center;">Resultado</th>
           <th style="text-align:center;">Ações</th>
         </tr></thead>
@@ -347,7 +366,9 @@ function _renderHistorico() {
   </div>`;
 }
 
-// ─── HISTÓRICO NUVEM ──────────────────────────────────────────────────────────
+// =============================================================================
+// HISTÓRICO NUVEM
+// =============================================================================
 
 function _renderHistoricoSheets() {
   const lista = _state.historicoSheets || [];
@@ -391,7 +412,7 @@ function _renderHistoricoSheets() {
 function _renderTabelaNuvem(lista) {
   const icones = { aprovado: '✅', ressalvas: '⚠️', reprovado: '❌' };
   if (lista.length === 0) {
-    return `<p style="color:var(--text-muted); text-align:center; padding:1.5rem;">Nenhum registro encontrado para os filtros selecionados.</p>`;
+    return `<p style="color:var(--text-muted); text-align:center; padding:1.5rem;">Nenhum registro encontrado.</p>`;
   }
   const rows = lista.map(a => {
     const dataHora = a['Data/Hora'] || a['dataHora'] || '—';
@@ -415,7 +436,9 @@ function _renderTabelaNuvem(lista) {
   </table>`;
 }
 
-// ─── BIND EVENTOS ─────────────────────────────────────────────────────────────
+// =============================================================================
+// BIND EVENTOS
+// =============================================================================
 
 function _bindEventos() {
   document.querySelectorAll('.aud-btn-conf').forEach(btn => {
@@ -432,7 +455,7 @@ function _bindEventos() {
     const btnNova = document.getElementById('aud-btn-nova');
     const btnHist = document.getElementById('aud-btn-historico');
     if (_state.historicoAberto) {
-      secHist.innerHTML = '<div style="padding:2rem; text-align:center; color:var(--text-muted);">⏳ Carregando nuvem...</div>';
+      secHist.innerHTML = '<div style="padding:2rem; text-align:center; color:var(--text-muted);">⏳ Carregando...</div>';
       secHist.style.display = '';
       secForm.style.display = 'none';
       btnNova.style.display = '';
@@ -444,7 +467,6 @@ function _bindEventos() {
         _state.historicoSheets = Array.isArray(dados) ? dados : [];
         _state.historicoFiltrado = _state.historicoSheets;
       } catch(e) {
-        console.error('Erro ao buscar histórico do Sheets:', e);
         _state.historicoSheets = [];
         _state.historicoFiltrado = [];
       }
@@ -502,7 +524,14 @@ function _bindEventos() {
   document.getElementById('aud-btn-finalizar')?.addEventListener('click', _finalizar);
   document.getElementById('aud-btn-fechar-ver')?.addEventListener('click', _fecharVer);
   document.getElementById('aud-btn-fechar-ver2')?.addEventListener('click', _fecharVer);
-  document.getElementById('aud-btn-imprimir')?.addEventListener('click', () => window.print());
+  document.getElementById('aud-btn-imprimir')?.addEventListener('click', () => {
+    const id = document.getElementById('aud-modal-ver-conteudo')?.dataset.audId;
+    if (id) {
+      const aud = _state.historico.find(a => a.id === id);
+      if (aud) { _fecharVer(); _gerarPDFAuditoria(aud); return; }
+    }
+    window.print();
+  });
 }
 
 function _bindEventosHistorico() {
@@ -512,34 +541,33 @@ function _bindEventosHistorico() {
       if (aud) _abrirVer(aud);
     });
   });
-
+  document.querySelectorAll('.aud-btn-pdf-local').forEach(b => {
+    b.addEventListener('click', () => {
+      const aud = _state.historico.find(a => a.id === b.dataset.id);
+      if (aud) _gerarPDFAuditoria(aud);
+    });
+  });
   document.getElementById('aud-btn-filtrar')?.addEventListener('click', () => {
     const de = document.getElementById('aud-filtro-de')?.value;
     const ate = document.getElementById('aud-filtro-ate')?.value;
     const turno = document.getElementById('aud-filtro-turno')?.value;
     let lista = _state.historicoSheets || [];
-    if (de) lista = lista.filter(a => {
-      const dt = _parseDataAuditoria(a['Data/Hora'] || a['dataHora'] || '');
-      return dt && dt >= new Date(de);
-    });
-    if (ate) lista = lista.filter(a => {
-      const dt = _parseDataAuditoria(a['Data/Hora'] || a['dataHora'] || '');
-      const fim = new Date(ate); fim.setHours(23,59,59,999);
-      return dt && dt <= fim;
-    });
-    if (turno) lista = lista.filter(a => (a['Turno'] || a['turno'] || '') === turno);
+    if (de) lista = lista.filter(a => { const dt = _parseData(a['Data/Hora'] || ''); return dt && dt >= new Date(de); });
+    if (ate) lista = lista.filter(a => { const dt = _parseData(a['Data/Hora'] || ''); const fim = new Date(ate); fim.setHours(23,59,59,999); return dt && dt <= fim; });
+    if (turno) lista = lista.filter(a => (a['Turno'] || '') === turno);
     _state.historicoFiltrado = lista;
     const tabela = document.getElementById('aud-tabela-nuvem');
     if (tabela) tabela.innerHTML = _renderTabelaNuvem(lista);
   });
-
   document.getElementById('aud-btn-pdf-historico')?.addEventListener('click', () => {
     const lista = _state.historicoFiltrado.length > 0 ? _state.historicoFiltrado : _state.historicoSheets;
-    _gerarPDFHistorico(lista);
+    _gerarPDFResumo(lista);
   });
 }
 
-// ─── LÓGICA DE CHECK ─────────────────────────────────────────────────────────
+// =============================================================================
+// LÓGICA DE CHECK
+// =============================================================================
 
 function _check(itemId, tipo) {
   if (_state.respostas[itemId] === tipo) {
@@ -644,7 +672,9 @@ function _atualizarResultado() {
   });
 }
 
-// ─── MODAL NC ─────────────────────────────────────────────────────────────────
+// =============================================================================
+// MODAL NC
+// =============================================================================
 
 function _abrirNC(itemId) {
   _ncItemIdPendente = itemId;
@@ -701,7 +731,10 @@ function _salvarNC() {
   if (!window._audFotoBase64) { _toast('A foto é obrigatória para não conformidades.', 'error'); return; }
   if (!radio) { _toast('Selecione o grau de criticidade.', 'error'); return; }
   if (!acao) { _toast('Informe a ação corretiva imediata.', 'error'); return; }
-  _state.naoConformidades[_ncItemIdPendente] = { descricao, foto: window._audFotoBase64, criticidade: radio.value, acao, gerarOS: document.getElementById('aud-nc-gerar-os').checked };
+  _state.naoConformidades[_ncItemIdPendente] = {
+    descricao, foto: window._audFotoBase64, criticidade: radio.value, acao,
+    gerarOS: document.getElementById('aud-nc-gerar-os').checked
+  };
   const modal = document.getElementById('aud-modal-nc');
   if (modal) modal.style.display = 'none';
   _ncItemIdPendente = null;
@@ -722,7 +755,9 @@ function _processarFoto(file) {
   reader.readAsDataURL(file);
 }
 
-// ─── CANVAS ───────────────────────────────────────────────────────────────────
+// =============================================================================
+// CANVAS ASSINATURA
+// =============================================================================
 
 function _bindCanvas() {
   const canvas = document.getElementById('aud-assinatura-canvas');
@@ -763,7 +798,9 @@ function _salvarAssinatura(canvas) {
   _state.assinatura = canvas.toDataURL('image/png');
 }
 
-// ─── FINALIZAR ────────────────────────────────────────────────────────────────
+// =============================================================================
+// FINALIZAR
+// =============================================================================
 
 function _finalizar() {
   const turno = document.getElementById('aud-turno')?.value;
@@ -797,6 +834,7 @@ function _finalizar() {
   _enviarSheets(registro);
   const labels = { aprovado: '✅ Aprovado', ressalvas: '⚠️ Aprovado com Ressalvas', reprovado: '❌ Reprovado' };
   _toast(`Auditoria registrada! Resultado: ${labels[resultado]}`, 'success', 5000);
+  setTimeout(() => _gerarPDFAuditoria(registro), 1500);
   _state.respostas = {};
   _state.naoConformidades = {};
   _state.assinatura = null;
@@ -804,12 +842,15 @@ function _finalizar() {
   _renderTudo();
 }
 
-// ─── MODAL VER ────────────────────────────────────────────────────────────────
+// =============================================================================
+// MODAL VER
+// =============================================================================
 
 function _abrirVer(auditoria) {
   const modal = document.getElementById('aud-modal-ver');
   const cont = document.getElementById('aud-modal-ver-conteudo');
   if (!modal || !cont) return;
+  cont.dataset.audId = auditoria.id;
   const labels = { aprovado: '✅ Aprovado', ressalvas: '⚠️ Aprovado com Ressalvas', reprovado: '❌ Reprovado' };
   const ncs = auditoria.naoConformidades || {};
   const ncIds = Object.keys(ncs);
@@ -855,68 +896,187 @@ function _fecharVer() {
   if (modal) modal.style.display = 'none';
 }
 
-// ─── PDF ──────────────────────────────────────────────────────────────────────
+// =============================================================================
+// PDF INDIVIDUAL — gerado no navegador com logo, NCs, fotos e assinatura
+// =============================================================================
 
-function _parseDataAuditoria(str) {
-  if (!str) return null;
-  const partes = str.split(', ');
-  const dateParts = (partes[0] || '').split('/');
-  if (dateParts.length < 3) return null;
-  return new Date(`${dateParts[2]}-${dateParts[1]}-${dateParts[0]}`);
+function _gerarPDFAuditoria(registro) {
+  const agora = new Date().toLocaleString('pt-BR');
+  const labelRes = { aprovado: '✅ Aprovado', ressalvas: '⚠️ Aprovado com Ressalvas', reprovado: '❌ Reprovado' };
+  const corRes = { aprovado: '#5c7a4e', ressalvas: '#b07a2a', reprovado: '#c0402a' };
+  const icNC = { baixa: '🟢 Baixa', media: '🟡 Média', alta: '🔴 Alta' };
+  const ncs = registro.naoConformidades || {};
+  const ncIds = Object.keys(ncs);
+  const total = AUDITORIA_ESTRUTURA.reduce((acc, sec) => acc + sec.itens.length, 0);
+  const conformes = Object.values(registro.respostas || {}).filter(v => v === 'conforme').length;
+  const naoConformes = Object.values(registro.respostas || {}).filter(v => v === 'nao_conforme').length;
+  const naoAvaliados = total - conformes - naoConformes;
+
+  const ncsHTML = ncIds.length === 0
+    ? `<p style="color:#5c7a4e;font-size:13px;padding:12px;background:#f0f7ec;border-radius:8px;border-left:4px solid #5c7a4e;">✅ Nenhuma não conformidade registrada nesta auditoria.</p>`
+    : ncIds.map((id, idx) => {
+        const nc = ncs[id];
+        let label = id;
+        for (const sec of AUDITORIA_ESTRUTURA) {
+          const f = sec.itens.find(i => i.id === id);
+          if (f) { label = `${sec.subarea} → ${f.label}`; break; }
+        }
+        const corCrit = { baixa: '#5c7a4e', media: '#b07a2a', alta: '#c0402a' }[nc.criticidade] || '#4b433c';
+        return `<div style="border:1px solid #e0d8d0;border-radius:8px;padding:16px;margin-bottom:14px;background:#faf8f5;page-break-inside:avoid;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid #e0d8d0;">
+            <strong style="font-size:13px;color:#4b433c;">NC #${idx+1} — ${label}</strong>
+            <span style="font-size:12px;font-weight:700;color:${corCrit};">${icNC[nc.criticidade] || nc.criticidade}</span>
+          </div>
+          <p style="font-size:12px;color:#5a4e45;margin:0 0 6px;"><strong>Ocorrência:</strong> ${nc.descricao}</p>
+          <p style="font-size:12px;color:#5a4e45;margin:0 0 8px;"><strong>Ação corretiva:</strong> ${nc.acao}</p>
+          ${nc.gerarOS ? '<span style="font-size:11px;background:#3b82f6;color:white;border-radius:10px;padding:2px 8px;display:inline-block;margin-bottom:8px;">🔧 OS Gerada</span>' : ''}
+          ${nc.foto ? `<div style="margin-top:10px;text-align:center;"><img src="${nc.foto}" style="max-width:100%;max-height:260px;border-radius:6px;border:1px solid #e0d8d0;"></div>` : ''}
+        </div>`;
+      }).join('');
+
+  const html = `<!DOCTYPE html>
+<html><head><meta charset="UTF-8">
+<style>
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { font-family:Arial,sans-serif; max-width:820px; margin:0 auto; padding:32px; background:#fff; color:#4b433c; }
+  @media print { body { padding:16px; } .no-print { display:none !important; } }
+  h1 { font-size:22px; font-weight:800; color:#4b433c; }
+  h2 { font-size:15px; font-weight:700; color:#4b433c; margin-bottom:12px; padding-bottom:6px; border-bottom:2px solid #e0d8d0; }
+  .kpi { background:#faf8f5; border:1px solid #e0d8d0; border-radius:8px; padding:14px; text-align:center; }
+  .kpi-label { font-size:10px; color:#8a8570; text-transform:uppercase; letter-spacing:0.05em; margin-bottom:4px; }
+  .kpi-value { font-size:26px; font-weight:800; }
+  .section { margin-bottom:24px; }
+</style>
+</head><body>
+
+  <div style="display:flex;justify-content:space-between;align-items:center;border-bottom:2px solid #b79b6c;padding-bottom:16px;margin-bottom:24px;">
+    <div style="display:flex;align-items:center;gap:16px;">
+      <img src="${LOGO_URL}" style="height:56px;object-fit:contain;" onerror="this.style.display='none'">
+      <div>
+        <h1>Mamma Mia Control</h1>
+        <p style="font-size:13px;color:#8a8570;margin-top:2px;">🧼 Auditoria de Higienização Estrutural — ${registro.unidade || 'YUKA'}</p>
+      </div>
+    </div>
+    <div style="text-align:right;font-size:11px;color:#a09284;">
+      <div>Emitido em:</div>
+      <div style="font-weight:700;color:#4b433c;margin-top:2px;">${agora}</div>
+      <div style="margin-top:4px;font-size:13px;font-weight:700;color:${corRes[registro.resultado] || '#4b433c'};">${labelRes[registro.resultado] || '—'}</div>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>📋 Informações da Auditoria</h2>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;font-size:13px;">
+      <div><strong>ID:</strong> ${registro.id}</div>
+      <div><strong>Data/Hora:</strong> ${registro.dataHora}</div>
+      <div><strong>Turno:</strong> ${registro.turno}</div>
+      <div><strong>Auditor:</strong> ${registro.auditor}</div>
+      <div><strong>Unidade:</strong> ${registro.unidade || 'YUKA'}</div>
+      <div><strong>Resultado:</strong> <span style="font-weight:700;color:${corRes[registro.resultado] || '#4b433c'};">${labelRes[registro.resultado] || '—'}</span></div>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>📊 Resumo dos Itens</h2>
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;">
+      <div class="kpi"><div class="kpi-label">Total Itens</div><div class="kpi-value" style="color:#4b433c;">${total}</div></div>
+      <div class="kpi"><div class="kpi-label">Conformes</div><div class="kpi-value" style="color:#5c7a4e;">${conformes}</div></div>
+      <div class="kpi"><div class="kpi-label">Não Conformes</div><div class="kpi-value" style="color:#c0402a;">${naoConformes}</div></div>
+      <div class="kpi"><div class="kpi-label">Não Avaliados</div><div class="kpi-value" style="color:#8a8570;">${naoAvaliados}</div></div>
+    </div>
+  </div>
+
+  ${registro.observacoes ? `<div class="section">
+    <h2>📝 Observações</h2>
+    <p style="font-size:13px;color:#5a4e45;line-height:1.6;">${registro.observacoes}</p>
+  </div>` : ''}
+
+  <div class="section">
+    <h2>⚠️ Não Conformidades (${ncIds.length})</h2>
+    ${ncsHTML}
+  </div>
+
+  ${registro.assinatura ? `<div class="section" style="page-break-inside:avoid;">
+    <h2>✍️ Assinatura do Auditor</h2>
+    <div style="border:1px solid #e0d8d0;border-radius:8px;padding:16px;background:#fff;display:inline-block;">
+      <img src="${registro.assinatura}" style="max-width:280px;max-height:100px;display:block;">
+      <p style="font-size:11px;color:#8a8570;margin-top:8px;">${registro.auditor} — ${registro.dataHora}</p>
+    </div>
+  </div>` : ''}
+
+  <div style="margin-top:32px;padding-top:12px;border-top:1px solid #e0d8d0;font-size:10px;color:#a09284;text-align:center;">
+    Mamma Mia Control — Gestão Inteligente de Operações • © 2026 Mamma Mia Salgados — By Thalita Campos
+  </div>
+
+  <div class="no-print" style="text-align:center;margin-top:24px;">
+    <button onclick="window.print()" style="background:#b79b6c;color:white;border:none;border-radius:8px;padding:12px 32px;font-size:15px;cursor:pointer;font-weight:700;">🖨️ Imprimir / Salvar PDF</button>
+  </div>
+
+</body></html>`;
+
+  const janela = window.open('', '_blank');
+  janela.document.write(html);
+  janela.document.close();
 }
 
-function _gerarPDFHistorico(lista) {
+// =============================================================================
+// PDF RESUMO — histórico em nuvem com filtros
+// =============================================================================
+
+function _gerarPDFResumo(lista) {
   if (!lista || lista.length === 0) { _toast('Nenhum registro para gerar PDF.', 'warning'); return; }
   const agora = new Date().toLocaleString('pt-BR');
   const icones = { aprovado: '✅', ressalvas: '⚠️', reprovado: '❌' };
-
   const blocos = lista.map((a, idx) => {
-    const dataHora = a['Data/Hora'] || a['dataHora'] || '—';
-    const turno = a['Turno'] || a['turno'] || '—';
-    const auditor = a['Auditor'] || a['auditor'] || '—';
-    const nc = a['Não Conformes'] !== undefined ? a['Não Conformes'] : 0;
-    const res = String(a['Resultado'] || a['resultado'] || '').toLowerCase().trim();
-    const obs = a['Observações'] || a['observacoes'] || '';
+    const dataHora = a['Data/Hora'] || '—';
+    const turno = a['Turno'] || '—';
+    const auditor = a['Auditor'] || '—';
+    const nc = a['Não Conformes'] || 0;
+    const res = String(a['Resultado'] || '').toLowerCase().trim();
+    const obs = a['Observações'] || '';
     const ncAltas = a['NC - Altas'] || 0;
     const conformes = a['Conformes'] || 0;
     const total = a['Total Itens'] || 47;
-    return `<div style="border:1px solid #e0d8d0; border-radius:8px; padding:16px; margin-bottom:16px; background:#faf8f5; page-break-inside:avoid;">
-      <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:8px; margin-bottom:12px; padding-bottom:10px; border-bottom:1px solid #e0d8d0;">
+    return `<div style="border:1px solid #e0d8d0;border-radius:8px;padding:16px;margin-bottom:16px;background:#faf8f5;page-break-inside:avoid;">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px;padding-bottom:10px;border-bottom:1px solid #e0d8d0;">
         <div>
-          <strong style="font-size:13px; color:#4b433c;">#${idx + 1} — ${dataHora}</strong><br>
-          <span style="font-size:12px; color:#7b6f63;">Turno: ${turno} &nbsp;|&nbsp; Auditor: ${auditor}</span>
+          <strong style="font-size:13px;color:#4b433c;">#${idx+1} — ${dataHora}</strong><br>
+          <span style="font-size:12px;color:#7b6f63;">Turno: ${turno} | Auditor: ${auditor}</span>
         </div>
         <div style="font-size:20px;">${icones[res] || '—'}</div>
       </div>
-      <div style="display:grid; grid-template-columns:repeat(4,1fr); gap:8px; margin-bottom:10px;">
-        <div style="background:#fff; border:1px solid #e0d8d0; border-radius:6px; padding:8px; text-align:center;">
-          <div style="font-size:10px; color:#8a8570; text-transform:uppercase;">Conformes</div>
-          <div style="font-size:18px; font-weight:700; color:#5c7a4e;">${conformes}</div>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:10px;">
+        <div style="background:#fff;border:1px solid #e0d8d0;border-radius:6px;padding:8px;text-align:center;">
+          <div style="font-size:10px;color:#8a8570;text-transform:uppercase;">Conformes</div>
+          <div style="font-size:18px;font-weight:700;color:#5c7a4e;">${conformes}</div>
         </div>
-        <div style="background:#fff; border:1px solid #e0d8d0; border-radius:6px; padding:8px; text-align:center;">
-          <div style="font-size:10px; color:#8a8570; text-transform:uppercase;">N/C Total</div>
-          <div style="font-size:18px; font-weight:700; color:#c0402a;">${nc}</div>
+        <div style="background:#fff;border:1px solid #e0d8d0;border-radius:6px;padding:8px;text-align:center;">
+          <div style="font-size:10px;color:#8a8570;text-transform:uppercase;">N/C Total</div>
+          <div style="font-size:18px;font-weight:700;color:#c0402a;">${nc}</div>
         </div>
-        <div style="background:#fff; border:1px solid #e0d8d0; border-radius:6px; padding:8px; text-align:center;">
-          <div style="font-size:10px; color:#8a8570; text-transform:uppercase;">N/C Altas</div>
-          <div style="font-size:18px; font-weight:700; color:#c0402a;">${ncAltas}</div>
+        <div style="background:#fff;border:1px solid #e0d8d0;border-radius:6px;padding:8px;text-align:center;">
+          <div style="font-size:10px;color:#8a8570;text-transform:uppercase;">N/C Altas</div>
+          <div style="font-size:18px;font-weight:700;color:#c0402a;">${ncAltas}</div>
         </div>
-        <div style="background:#fff; border:1px solid #e0d8d0; border-radius:6px; padding:8px; text-align:center;">
-          <div style="font-size:10px; color:#8a8570; text-transform:uppercase;">Total Itens</div>
-          <div style="font-size:18px; font-weight:700; color:#4b433c;">${total}</div>
+        <div style="background:#fff;border:1px solid #e0d8d0;border-radius:6px;padding:8px;text-align:center;">
+          <div style="font-size:10px;color:#8a8570;text-transform:uppercase;">Total Itens</div>
+          <div style="font-size:18px;font-weight:700;color:#4b433c;">${total}</div>
         </div>
       </div>
-      ${obs ? `<p style="font-size:11px; color:#7b6f63; margin:0;"><strong>Observações:</strong> ${obs}</p>` : ''}
+      ${obs ? `<p style="font-size:11px;color:#7b6f63;margin:0;"><strong>Observações:</strong> ${obs}</p>` : ''}
     </div>`;
   }).join('');
 
   const html = `<!DOCTYPE html><html><head><meta charset="UTF-8">
-  <style>body{font-family:Arial,sans-serif;max-width:820px;margin:0 auto;padding:28px;background:#fff;color:#4b433c;}@media print{body{padding:0;}}</style>
+  <style>body{font-family:Arial,sans-serif;max-width:820px;margin:0 auto;padding:28px;background:#fff;color:#4b433c;}@media print{body{padding:0;}.no-print{display:none;}}</style>
   </head><body>
-  <div style="display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid #b79b6c;padding-bottom:14px;margin-bottom:20px;">
-    <div>
-      <h1 style="margin:0;font-size:20px;font-weight:800;">Mamma Mia Control</h1>
-      <p style="margin:4px 0 0;font-size:13px;color:#8a8570;">🧼 Relatório de Auditorias de Higienização — YUKA</p>
+  <div style="display:flex;justify-content:space-between;align-items:center;border-bottom:2px solid #b79b6c;padding-bottom:14px;margin-bottom:20px;">
+    <div style="display:flex;align-items:center;gap:16px;">
+      <img src="${LOGO_URL}" style="height:48px;object-fit:contain;" onerror="this.style.display='none'">
+      <div>
+        <h1 style="font-size:20px;font-weight:800;">Mamma Mia Control</h1>
+        <p style="font-size:13px;color:#8a8570;">🧼 Relatório de Auditorias de Higienização — YUKA</p>
+      </div>
     </div>
     <div style="text-align:right;font-size:11px;color:#a09284;">
       <div>Emitido em: <strong style="color:#4b433c;">${agora}</strong></div>
@@ -927,33 +1087,43 @@ function _gerarPDFHistorico(lista) {
   <div style="margin-top:24px;padding-top:12px;border-top:1px solid #e0d8d0;font-size:10px;color:#a09284;text-align:center;">
     Mamma Mia Control — Gestão Inteligente de Operações • © 2026 Mamma Mia Salgados
   </div>
+  <div class="no-print" style="text-align:center;margin-top:24px;">
+    <button onclick="window.print()" style="background:#b79b6c;color:white;border:none;border-radius:8px;padding:12px 32px;font-size:15px;cursor:pointer;font-weight:700;">🖨️ Imprimir / Salvar PDF</button>
+  </div>
   </body></html>`;
 
   const janela = window.open('', '_blank');
   janela.document.write(html);
   janela.document.close();
-  setTimeout(() => janela.print(), 500);
 }
 
-// ─── SHEETS ───────────────────────────────────────────────────────────────────
+// =============================================================================
+// SHEETS
+// =============================================================================
 
 async function _enviarSheets(registro) {
   try {
-    const resp = await fetch(APPS_SCRIPT_URL, {
+    fetch(APPS_SCRIPT_URL, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      mode: 'no-cors',
       body: JSON.stringify(registro)
     });
-    const retorno = await resp.json();
-    if (retorno.status === 'ok' && retorno.pdf) {
-      _toast('✅ Auditoria salva! Abrindo PDF...', 'success', 4000);
-      setTimeout(() => window.open(retorno.pdf, '_blank'), 1000);
-    }
   } catch(e) {
     console.error('Erro ao enviar para Sheets:', e);
   }
 }
-// ─── TOAST ────────────────────────────────────────────────────────────────────
+
+// =============================================================================
+// UTILS
+// =============================================================================
+
+function _parseData(str) {
+  if (!str) return null;
+  const partes = str.split(', ');
+  const dateParts = (partes[0] || '').split('/');
+  if (dateParts.length < 3) return null;
+  return new Date(`${dateParts[2]}-${dateParts[1]}-${dateParts[0]}`);
+}
 
 function _toast(msg, tipo = 'info', duracao = 3500) {
   const cores = { success: 'var(--color-green)', error: 'var(--color-red)', info: 'var(--color-blue)', warning: 'var(--color-orange)' };
