@@ -325,7 +325,40 @@ function _renderHistorico() {
       <p style="color:var(--text-muted); font-size:0.85rem; margin-top:0.5rem;">Preencha e finalize a auditoria para que ela apareça aqui.</p>
     </div>`;
   }
+function _renderHistoricoSheets() {
+  const lista = _state.historicoSheets || [];
+  if (lista.length === 0) {
+    return `<div class="panel-card" style="text-align:center; padding:3rem 1rem; margin-bottom:1.5rem;">
+      <div style="font-size:3rem; margin-bottom:1rem;">📋</div>
+      <h3 style="color:var(--text-muted);">Nenhuma auditoria registrada ainda</h3>
+    </div>`;
+  }
+  const icones = { aprovado: '✅', ressalvas: '⚠️', reprovado: '❌' };
+  const rows = lista.map(a => `<tr>
+    <td>${a['Data/Hora'] || '—'}</td>
+    <td>${a['Turno'] || '—'}</td>
+    <td>${a['Auditor'] || '—'}</td>
+    <td style="text-align:center;">${a['Não Conformes'] || 0}</td>
+    <td style="text-align:center; font-size:1.1rem;">${icones[a['Resultado']] || a['Resultado'] || '—'}</td>
+  </tr>`).join('');
 
+  return `<div class="panel-card" style="margin-bottom:1.5rem;">
+    <div class="panel-header" style="margin-bottom:1rem;">
+      <h3>📋 Histórico de Auditorias - YUKA</h3>
+      <span style="color:var(--text-muted); font-size:0.85rem;">${lista.length} registros</span>
+    </div>
+    <div style="overflow-x:auto;">
+      <table class="modern-table">
+        <thead><tr>
+          <th>Data/Hora</th><th>Turno</th><th>Auditor</th>
+          <th style="text-align:center;">Não Conformes</th>
+          <th style="text-align:center;">Resultado</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+  </div>`;
+}
   const lista = [..._state.historico].reverse();
   const icones = { aprovado: '✅', ressalvas: '⚠️', reprovado: '❌' };
 
@@ -375,18 +408,30 @@ function _bindEventos() {
   });
 
   // Histórico toggle
-  document.getElementById('aud-btn-historico')?.addEventListener('click', () => {
+  document.getElementById('aud-btn-historico')?.addEventListener('click', async () => {
     _state.historicoAberto = !_state.historicoAberto;
     const secHist = document.getElementById('aud-secao-historico');
     const secForm = document.getElementById('aud-secao-formulario');
     const btnNova = document.getElementById('aud-btn-nova');
     const btnHist = document.getElementById('aud-btn-historico');
     if (_state.historicoAberto) {
-      secHist.innerHTML = _renderHistorico();
+      secHist.innerHTML = '<div style="padding:2rem; text-align:center; color:var(--text-muted);">⏳ Carregando histórico...</div>';
       secHist.style.display = '';
       secForm.style.display = 'none';
       btnNova.style.display = '';
       if (btnHist) btnHist.innerHTML = '<i data-lucide="x"></i> Fechar Histórico';
+      if (window.lucide) window.lucide.createIcons();
+      try {
+        const resp = await fetch(APPS_SCRIPT_URL);
+        const dados = await resp.json();
+        if (Array.isArray(dados)) {
+          _state.historicoSheets = dados.reverse();
+        }
+      } catch(e) {
+        console.error('Erro ao buscar histórico:', e);
+        _state.historicoSheets = [];
+      }
+      secHist.innerHTML = _renderHistoricoSheets();
       document.querySelectorAll('.aud-btn-ver').forEach(b => {
         b.addEventListener('click', () => {
           const aud = _state.historico.find(a => a.id === b.dataset.id);
@@ -401,7 +446,6 @@ function _bindEventos() {
     }
     if (window.lucide) window.lucide.createIcons();
   });
-
   // Nova auditoria
   document.getElementById('aud-btn-nova')?.addEventListener('click', () => {
     _state.historicoAberto = false;
