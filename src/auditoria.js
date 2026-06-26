@@ -332,10 +332,16 @@ function _renderHistorico() {
   }
   const lista = [..._state.historico].reverse();
   const icones = { aprovado: '✅', ressalvas: '⚠️', reprovado: '❌' };
+  const turnos = [...new Set(lista.map(a => a.turno).filter(Boolean))];
+
   const rows = lista.map(a => {
     const nc = Object.keys(a.naoConformidades || {}).length;
     const altas = Object.values(a.naoConformidades || {}).filter(n => n.criticidade === 'alta').length;
-    return `<tr>
+    return `<tr class="aud-hist-row"
+      data-turno="${a.turno || ''}"
+      data-data="${a.data || ''}"
+      data-nc="${nc}"
+      data-resultado="${a.resultado || ''}">
       <td>${a.dataHora || '—'}</td>
       <td>${a.turno || '—'}</td>
       <td>${a.auditor || '—'}</td>
@@ -347,13 +353,43 @@ function _renderHistorico() {
       </td>
     </tr>`;
   }).join('');
+
   return `<div class="panel-card" style="margin-bottom:1.5rem;">
     <div class="panel-header" style="margin-bottom:1rem;">
       <h3>📋 Histórico Local Recente (YUKA)</h3>
       <span style="color:var(--text-muted); font-size:0.85rem;">${lista.length} registros</span>
     </div>
+
+    <div style="display:flex; gap:0.75rem; flex-wrap:wrap; align-items:flex-end; margin-bottom:1rem;">
+      <div class="form-group" style="margin:0; flex:1; min-width:140px;">
+        <label class="form-label" style="font-size:0.8rem;">Data inicial</label>
+        <input type="date" id="aud-local-filtro-de" class="form-control" style="font-size:0.85rem;">
+      </div>
+      <div class="form-group" style="margin:0; flex:1; min-width:140px;">
+        <label class="form-label" style="font-size:0.8rem;">Data final</label>
+        <input type="date" id="aud-local-filtro-ate" class="form-control" style="font-size:0.85rem;">
+      </div>
+      <div class="form-group" style="margin:0; flex:1; min-width:140px;">
+        <label class="form-label" style="font-size:0.8rem;">Turno</label>
+        <select id="aud-local-filtro-turno" class="form-control" style="font-size:0.85rem;">
+          <option value="">Todos</option>
+          ${turnos.map(t => `<option value="${t}">${t}</option>`).join('')}
+        </select>
+      </div>
+      <div class="form-group" style="margin:0; flex:1; min-width:120px;">
+        <label class="form-label" style="font-size:0.8rem;">Com N/C</label>
+        <select id="aud-local-filtro-nc" class="form-control" style="font-size:0.85rem;">
+          <option value="">Todas</option>
+          <option value="sim">Com N/C</option>
+          <option value="nao">Sem N/C</option>
+        </select>
+      </div>
+      <button id="aud-local-btn-filtrar" class="btn btn-secondary" type="button" style="font-size:0.85rem; white-space:nowrap;"><i data-lucide="filter"></i> Filtrar</button>
+      <button id="aud-local-btn-pdf" class="btn btn-primary" type="button" style="font-size:0.85rem; white-space:nowrap;"><i data-lucide="file-text"></i> Gerar PDF</button>
+    </div>
+
     <div style="overflow-x:auto;">
-      <table class="modern-table">
+      <table class="modern-table" id="aud-local-tabela">
         <thead><tr>
           <th>Data/Hora</th><th>Turno</th><th>Auditor</th>
           <th style="text-align:center;">N/C</th>
