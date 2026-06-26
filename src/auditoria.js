@@ -318,50 +318,6 @@ function _renderChecklist() {
 
 // ─── RENDERIZADORES DE HISTÓRICO ──────────────────────────────────────────────
 
-function _renderHistoricoSheets() {
-  const lista = _state.historicoSheets || [];
-  if (lista.length === 0) {
-    return `<div class="panel-card" style="text-align:center; padding:3rem 1rem; margin-bottom:1.5rem;">
-      <div style="font-size:3rem; margin-bottom:1rem;">📋</div>
-      <h3 style="color:var(--text-muted);">Nenhuma auditoria em nuvem registrada ainda</h3>
-    </div>`;
-  }
-  const icones = { aprovado: '✅', ressalvas: '⚠️', reprovado: '❌' };
-  
-  const rows = lista.map(a => {
-    const dataHora = a['Data/Hora'] || a['dataHora'] || '—';
-    const turno = a['Turno'] || a['turno'] || '—';
-    const auditor = a['Auditor'] || a['auditor'] || '—';
-    const naoConformes = a['Não Conformes'] !== undefined ? a['Não Conformes'] : (a['naoConformes'] || 0);
-    const rawResultado = a['Resultado'] || a['resultado'] || '';
-    const resultado = String(rawResultado).toLowerCase().trim();
-
-    return `<tr>
-      <td>${dataHora}</td>
-      <td>${turno}</td>
-      <td class="text-truncate" style="max-width: 150px;">${auditor}</td>
-      <td style="text-align:center;">${naoConformes}</td>
-      <td style="text-align:center; font-size:1.1rem;">${icones[resultado] || '—'}</td>
-    </tr>`;
-  }).join('');
-
-  return `<div class="panel-card" style="margin-bottom:1.5rem;">
-    <div class="panel-header" style="margin-bottom:1rem;">
-      <h3>☁️ Histórico em Nuvem (Google Sheets)</h3>
-      <span style="color:var(--text-muted); font-size:0.85rem;">${lista.length} registros</span>
-    </div>
-    <div style="overflow-x:auto; -webkit-overflow-scrolling:touch;">
-      <table class="modern-table">
-        <thead><tr>
-          <th>Data/Hora</th><th>Turno</th><th>Auditor</th>
-          <th style="text-align:center;">N/C</th>
-          <th style="text-align:center;">Resultado</th>
-        </tr></thead>
-        <tbody>${rows}</tbody>
-      </table>
-    </div>
-  </div>`;
-}
 
 function _renderHistorico() {
   if (_state.historico.length === 0) {
