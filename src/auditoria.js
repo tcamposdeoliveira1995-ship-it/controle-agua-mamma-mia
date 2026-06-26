@@ -131,10 +131,13 @@ let auditoriaState = {
 // ─── INICIALIZAÇÃO ────────────────────────────────────────────────────────────
 
 export function initAuditoria() {
+  const container = document.getElementById('tab-content-auditoria');
+  if (container) container.innerHTML = '';
   carregarHistorico();
   auditoriaState.respostas = {};
   auditoriaState.naoConformidades = {};
   auditoriaState.assinatura = null;
+  
   // Garantir que sempre abre no formulário, nunca no histórico
   const secHist = document.getElementById('auditoria-historico-section');
   const secForm = document.getElementById('auditoria-formulario-section');
