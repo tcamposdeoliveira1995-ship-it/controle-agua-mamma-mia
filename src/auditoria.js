@@ -327,24 +327,34 @@ function _renderHistoricoSheets() {
     </div>`;
   }
   const icones = { aprovado: '✅', ressalvas: '⚠️', reprovado: '❌' };
-  const rows = lista.map(a => `<tr>
-    <td>${a['Data/Hora'] || '—'}</td>
-    <td>${a['Turno'] || '—'}</td>
-    <td>${a['Auditor'] || '—'}</td>
-    <td style="text-align:center;">${a['Não Conformes'] || 0}</td>
-    <td style="text-align:center; font-size:1.1rem;">${icones[a['Resultado']] || a['Resultado'] || '—'}</td>
-  </tr>`).join('');
+  
+  // Mapeia usando exatamente as strings das colunas da planilha
+  const rows = lista.map(a => {
+    const dataHora = a['Data/Hora'] || a['dataHora'] || '—';
+    const turno = a['Turno'] || a['turno'] || '—';
+    const auditor = a['Auditor'] || a['auditor'] || '—';
+    const naoConformes = a['Não Conformes'] !== undefined ? a['Não Conformes'] : (a['naoConformes'] || 0);
+    const resultado = (a['Resultado'] || a['resultado'] || '—').toLowerCase().trim();
+
+    return `<tr>
+      <td>${dataHora}</td>
+      <td>${turno}</td>
+      <td class="text-truncate" style="max-width: 150px;">${auditor}</td>
+      <td style="text-align:center;">${naoConformes}</td>
+      <td style="text-align:center; font-size:1.1rem;">${icones[resultado] || '—'}</td>
+    </tr>`;
+  }).join('');
 
   return `<div class="panel-card" style="margin-bottom:1.5rem;">
     <div class="panel-header" style="margin-bottom:1rem;">
-      <h3>📋 Histórico em Nuvem (Google Sheets)</h3>
+      <h3>☁️ Histórico em Nuvem (Google Sheets)</h3>
       <span style="color:var(--text-muted); font-size:0.85rem;">${lista.length} registros</span>
     </div>
-    <div style="overflow-x:auto;">
+    <div style="overflow-x:auto; -webkit-overflow-scrolling:touch;">
       <table class="modern-table">
         <thead><tr>
           <th>Data/Hora</th><th>Turno</th><th>Auditor</th>
-          <th style="text-align:center;">Não Conformes</th>
+          <th style="text-align:center;">N/C</th>
           <th style="text-align:center;">Resultado</th>
         </tr></thead>
         <tbody>${rows}</tbody>
