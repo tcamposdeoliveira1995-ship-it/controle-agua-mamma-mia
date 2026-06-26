@@ -14,6 +14,7 @@ import { renderTrendChart, renderComparisonChart } from './chart-setup.js';
 import { exportToJSON, exportToCSV, exportToExcel, exportToPDF, syncGoogleSheetsFuture } from './integration.js';
 
 import { initAuditoria } from './auditoria.js';
+window.initAuditoria = initAuditoria;
 
 // --- URLs CSV ---
 const LIMPEZA_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRt3TOjpSYFl40nUJcPeL82B8SqmBpbomHDbPVK2rXcdPpuJ8M5QZgOlDQV1WFJl7371U7Ox7heooiv/pub?output=csv';
