@@ -152,6 +152,21 @@ function salvarHistorico() {
   }
 }
 
+const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyxTb1JgVX5o8_jD6xKXocb_tJb7lPQdo5c5aN9woB7es4FUthUcsQabYrZJ7est3cp/exec';
+
+async function enviarParaSheets(registro) {
+  try {
+    await fetch(APPS_SCRIPT_URL, {
+      method: 'POST',
+      mode: 'no-cors',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(registro)
+    });
+  } catch (err) {
+    console.error('Erro ao enviar auditoria para Sheets:', err);
+  }
+}
+
 // ─── RENDER PRINCIPAL ─────────────────────────────────────────────────────────
 
 function renderTabAuditoria() {
@@ -1003,6 +1018,7 @@ function finalizarAuditoria() {
 
   auditoriaState.historico.push(registro);
   salvarHistorico();
+  enviarParaSheets(registro);
 
   // Limpar estado
   auditoriaState.respostas = {};
