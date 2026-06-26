@@ -216,7 +216,6 @@ function renderTabAuditoria() {
 
     <!-- HISTÓRICO (oculto por padrão) -->
     <div id="auditoria-historico-section" style="display:none;">
-      ${renderHistoricoHTML()}
     </div>
 
     <!-- FORMULÁRIO DA AUDITORIA -->
