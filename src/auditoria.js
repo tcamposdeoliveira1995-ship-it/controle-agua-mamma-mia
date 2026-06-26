@@ -583,6 +583,59 @@ function _bindEventosHistorico() {
       if (aud) _gerarPDFAuditoria(aud);
     });
   });
+
+  document.getElementById('aud-local-btn-filtrar')?.addEventListener('click', () => {
+    const de = document.getElementById('aud-local-filtro-de')?.value;
+    const ate = document.getElementById('aud-local-filtro-ate')?.value;
+    const turno = document.getElementById('aud-local-filtro-turno')?.value;
+    const nc = document.getElementById('aud-local-filtro-nc')?.value;
+    document.querySelectorAll('.aud-hist-row').forEach(row => {
+      let mostrar = true;
+      if (de && row.dataset.data) {
+        const partes = row.dataset.data.split('/');
+        if (partes.length === 3) {
+          const dataRow = new Date(`${partes[2]}-${partes[1]}-${partes[0]}`);
+          if (dataRow < new Date(de)) mostrar = false;
+        }
+      }
+      if (ate && row.dataset.data) {
+        const partes = row.dataset.data.split('/');
+        if (partes.length === 3) {
+          const dataRow = new Date(`${partes[2]}-${partes[1]}-${partes[0]}`);
+          const fim = new Date(ate); fim.setHours(23,59,59,999);
+          if (dataRow > fim) mostrar = false;
+        }
+      }
+      if (turno && row.dataset.turno !== turno) mostrar = false;
+      if (nc === 'sim' && Number(row.dataset.nc) === 0) mostrar = false;
+      if (nc === 'nao' && Number(row.dataset.nc) > 0) mostrar = false;
+      row.style.display = mostrar ? '' : 'none';
+    });
+  });
+
+  document.getElementById('aud-local-btn-pdf')?.addEventListener('click', () => {
+    const de = document.getElementById('aud-local-filtro-de')?.value;
+    const ate = document.getElementById('aud-local-filtro-ate')?.value;
+    const turno = document.getElementById('aud-local-filtro-turno')?.value;
+    const nc = document.getElementById('aud-local-filtro-nc')?.value;
+    let lista = [..._state.historico].reverse();
+    if (de) lista = lista.filter(a => {
+      const partes = (a.data || '').split('/');
+      if (partes.length < 3) return true;
+      return new Date(`${partes[2]}-${partes[1]}-${partes[0]}`) >= new Date(de);
+    });
+    if (ate) lista = lista.filter(a => {
+      const partes = (a.data || '').split('/');
+      if (partes.length < 3) return true;
+      const fim = new Date(ate); fim.setHours(23,59,59,999);
+      return new Date(`${partes[2]}-${partes[1]}-${partes[0]}`) <= fim;
+    });
+    if (turno) lista = lista.filter(a => a.turno === turno);
+    if (nc === 'sim') lista = lista.filter(a => Object.keys(a.naoConformidades || {}).length > 0);
+    if (nc === 'nao') lista = lista.filter(a => Object.keys(a.naoConformidades || {}).length === 0);
+    _gerarPDFResumoLocal(lista);
+  });
+
   document.getElementById('aud-btn-filtrar')?.addEventListener('click', () => {
     const de = document.getElementById('aud-filtro-de')?.value;
     const ate = document.getElementById('aud-filtro-ate')?.value;
@@ -595,12 +648,12 @@ function _bindEventosHistorico() {
     const tabela = document.getElementById('aud-tabela-nuvem');
     if (tabela) tabela.innerHTML = _renderTabelaNuvem(lista);
   });
+
   document.getElementById('aud-btn-pdf-historico')?.addEventListener('click', () => {
     const lista = _state.historicoFiltrado.length > 0 ? _state.historicoFiltrado : _state.historicoSheets;
     _gerarPDFResumo(lista);
   });
 }
-
 // =============================================================================
 // LÓGICA DE CHECK
 // =============================================================================
@@ -1059,25 +1112,23 @@ function _gerarPDFAuditoria(registro) {
 // PDF RESUMO — histórico em nuvem com filtros
 // =============================================================================
 
-function _gerarPDFResumo(lista) {
+function _gerarPDFResumoLocal(lista) {
   if (!lista || lista.length === 0) { _toast('Nenhum registro para gerar PDF.', 'warning'); return; }
   const agora = new Date().toLocaleString('pt-BR');
   const icones = { aprovado: '✅', ressalvas: '⚠️', reprovado: '❌' };
   const blocos = lista.map((a, idx) => {
-    const dataHora = a['Data/Hora'] || '—';
-    const turno = a['Turno'] || '—';
-    const auditor = a['Auditor'] || '—';
-    const nc = a['Não Conformes'] || 0;
-    const res = String(a['Resultado'] || '').toLowerCase().trim();
-    const obs = a['Observações'] || '';
-    const ncAltas = a['NC - Altas'] || 0;
-    const conformes = a['Conformes'] || 0;
-    const total = a['Total Itens'] || 47;
+    const nc = Object.keys(a.naoConformidades || {}).length;
+    const altas = Object.values(a.naoConformidades || {}).filter(n => n.criticidade === 'alta').length;
+    const medias = Object.values(a.naoConformidades || {}).filter(n => n.criticidade === 'media').length;
+    const baixas = Object.values(a.naoConformidades || {}).filter(n => n.criticidade === 'baixa').length;
+    const total = AUDITORIA_ESTRUTURA.reduce((acc, sec) => acc + sec.itens.length, 0);
+    const conformes = Object.values(a.respostas || {}).filter(v => v === 'conforme').length;
+    const res = a.resultado || '';
     return `<div style="border:1px solid #e0d8d0;border-radius:8px;padding:16px;margin-bottom:16px;background:#faf8f5;page-break-inside:avoid;">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px;padding-bottom:10px;border-bottom:1px solid #e0d8d0;">
         <div>
-          <strong style="font-size:13px;color:#4b433c;">#${idx+1} — ${dataHora}</strong><br>
-          <span style="font-size:12px;color:#7b6f63;">Turno: ${turno} | Auditor: ${auditor}</span>
+          <strong style="font-size:13px;color:#4b433c;">#${idx+1} — ${a.dataHora || '—'}</strong><br>
+          <span style="font-size:12px;color:#7b6f63;">Turno: ${a.turno || '—'} | Auditor: ${a.auditor || '—'}</span>
         </div>
         <div style="font-size:20px;">${icones[res] || '—'}</div>
       </div>
@@ -1092,14 +1143,14 @@ function _gerarPDFResumo(lista) {
         </div>
         <div style="background:#fff;border:1px solid #e0d8d0;border-radius:6px;padding:8px;text-align:center;">
           <div style="font-size:10px;color:#8a8570;text-transform:uppercase;">N/C Altas</div>
-          <div style="font-size:18px;font-weight:700;color:#c0402a;">${ncAltas}</div>
+          <div style="font-size:18px;font-weight:700;color:#c0402a;">${altas}</div>
         </div>
         <div style="background:#fff;border:1px solid #e0d8d0;border-radius:6px;padding:8px;text-align:center;">
           <div style="font-size:10px;color:#8a8570;text-transform:uppercase;">Total Itens</div>
           <div style="font-size:18px;font-weight:700;color:#4b433c;">${total}</div>
         </div>
       </div>
-      ${obs ? `<p style="font-size:11px;color:#7b6f63;margin:0;"><strong>Observações:</strong> ${obs}</p>` : ''}
+      ${a.observacoes ? `<p style="font-size:11px;color:#7b6f63;margin:0;"><strong>Observações:</strong> ${a.observacoes}</p>` : ''}
     </div>`;
   }).join('');
 
@@ -1110,8 +1161,8 @@ function _gerarPDFResumo(lista) {
     <div style="display:flex;align-items:center;gap:16px;">
       <img src="${LOGO_URL}" style="height:48px;object-fit:contain;" onerror="this.style.display='none'">
       <div>
-        <h1 style="font-size:20px;font-weight:800;">Mamma Mia Control</h1>
-        <p style="font-size:13px;color:#8a8570;">🧼 Relatório de Auditorias de Higienização — YUKA</p>
+        <h1 style="font-size:20px;font-weight:800;margin:0;">Mamma Mia Control</h1>
+        <p style="font-size:13px;color:#8a8570;margin:2px 0 0;">🧼 Relatório de Auditorias — YUKA</p>
       </div>
     </div>
     <div style="text-align:right;font-size:11px;color:#a09284;">
@@ -1132,7 +1183,6 @@ function _gerarPDFResumo(lista) {
   janela.document.write(html);
   janela.document.close();
 }
-
 // =============================================================================
 // SHEETS
 // =============================================================================
