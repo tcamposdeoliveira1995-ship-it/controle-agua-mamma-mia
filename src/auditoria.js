@@ -340,6 +340,7 @@ function renderTabAuditoria() {
   // Bind de eventos
   bindEventosAuditoria();
   bindAssinaturaCanvas();
+  }
 
 // ─── RENDER CHECKLIST HTML ────────────────────────────────────────────────────
 
