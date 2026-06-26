@@ -4,7 +4,7 @@
 // =============================================================================
 
 const AUDITORIA_ESTRUTURA = [
-  { id: 'producao_pisos', area: 'Área de Produção', subarea: 'Pisos', icone: '🏭', itens: [
+  { id: 'producao_pisos', area: 'Área de Production', subarea: 'Pisos', icone: '🏭', itens: [
     { id: 'piso_limpo', label: 'Piso limpo' },
     { id: 'piso_sem_residuos', label: 'Sem resíduos' },
     { id: 'piso_sem_agua', label: 'Sem acúmulo de água' },
@@ -71,6 +71,7 @@ let _state = {
   naoConformidades: {},
   assinatura: null,
   historico: [],
+  historicoSheets: [],
   historicoAberto: false,
 };
 
@@ -206,7 +207,7 @@ function _renderTudo() {
           <p id="aud-nc-label" style="font-weight:600; color:var(--text-primary); margin-bottom:1.25rem; padding:0.75rem; background:rgba(192,122,108,0.1); border-radius:var(--border-radius-sm); border-left:3px solid var(--color-red);"></p>
           <div class="form-group" style="margin-bottom:1rem;">
             <label class="form-label">Descrição da ocorrência <span style="color:var(--color-red);">*</span></label>
-            <textarea id="aud-nc-descricao" class="form-control" rows="3" placeholder="Descreva o problema encontrado..." style="resize:vertical;"></textarea>
+            <textarea id="aud-nc-descricao" class="form-control" rows="3" placeholder="Descreva o problem encontrado..." style="resize:vertical;"></textarea>
           </div>
           <div class="form-group" style="margin-bottom:1rem;">
             <label class="form-label">Foto da ocorrência <span style="color:var(--color-red);">*</span></label>
@@ -315,22 +316,14 @@ function _renderChecklist() {
   return html;
 }
 
-// ─── HISTÓRICO ────────────────────────────────────────────────────────────────
+// ─── RENDERIZADORES DE HISTÓRICO (CORRIGIDOS) ─────────────────────────────────
 
-function _renderHistorico() {
-  if (_state.historico.length === 0) {
-    return `<div class="panel-card" style="text-align:center; padding:3rem 1rem; margin-bottom:1.5rem;">
-      <div style="font-size:3rem; margin-bottom:1rem;">📋</div>
-      <h3 style="color:var(--text-muted);">Nenhuma auditoria registrada ainda</h3>
-      <p style="color:var(--text-muted); font-size:0.85rem; margin-top:0.5rem;">Preencha e finalize a auditoria para que ela apareça aqui.</p>
-    </div>`;
-  }
 function _renderHistoricoSheets() {
   const lista = _state.historicoSheets || [];
   if (lista.length === 0) {
     return `<div class="panel-card" style="text-align:center; padding:3rem 1rem; margin-bottom:1.5rem;">
       <div style="font-size:3rem; margin-bottom:1rem;">📋</div>
-      <h3 style="color:var(--text-muted);">Nenhuma auditoria registrada ainda</h3>
+      <h3 style="color:var(--text-muted);">Nenhuma auditoria em nuvem registrada ainda</h3>
     </div>`;
   }
   const icones = { aprovado: '✅', ressalvas: '⚠️', reprovado: '❌' };
@@ -344,7 +337,7 @@ function _renderHistoricoSheets() {
 
   return `<div class="panel-card" style="margin-bottom:1.5rem;">
     <div class="panel-header" style="margin-bottom:1rem;">
-      <h3>📋 Histórico de Auditorias - YUKA</h3>
+      <h3>📋 Histórico em Nuvem (Google Sheets)</h3>
       <span style="color:var(--text-muted); font-size:0.85rem;">${lista.length} registros</span>
     </div>
     <div style="overflow-x:auto;">
@@ -359,6 +352,16 @@ function _renderHistoricoSheets() {
     </div>
   </div>`;
 }
+
+function _renderHistorico() {
+  if (_state.historico.length === 0) {
+    return `<div class="panel-card" style="text-align:center; padding:3rem 1rem; margin-bottom:1.5rem;">
+      <div style="font-size:3rem; margin-bottom:1rem;">📋</div>
+      <h3 style="color:var(--text-muted);">Nenhuma auditoria local registrada</h3>
+      <p style="color:var(--text-muted); font-size:0.85rem; margin-top:0.5rem;">Preencha e finalize a auditoria para que ela apareça aqui.</p>
+    </div>`;
+  }
+  
   const lista = [..._state.historico].reverse();
   const icones = { aprovado: '✅', ressalvas: '⚠️', reprovado: '❌' };
 
@@ -379,7 +382,7 @@ function _renderHistoricoSheets() {
 
   return `<div class="panel-card" style="margin-bottom:1.5rem;">
     <div class="panel-header" style="margin-bottom:1rem;">
-      <h3>📋 Histórico de Auditorias - YUKA</h3>
+      <h3>📋 Histórico Local Recente (YUKA)</h3>
       <span style="color:var(--text-muted); font-size:0.85rem;">${lista.length} registros</span>
     </div>
     <div style="overflow-x:auto;">
@@ -399,7 +402,6 @@ function _renderHistoricoSheets() {
 // ─── BIND EVENTOS ─────────────────────────────────────────────────────────────
 
 function _bindEventos() {
-  // Checklist
   document.querySelectorAll('.aud-btn-conf').forEach(btn => {
     btn.addEventListener('click', () => _check(btn.dataset.id, 'conforme'));
   });
@@ -407,31 +409,35 @@ function _bindEventos() {
     btn.addEventListener('click', () => _check(btn.dataset.id, 'nao_conforme'));
   });
 
-  // Histórico toggle
   document.getElementById('aud-btn-historico')?.addEventListener('click', async () => {
     _state.historicoAberto = !_state.historicoAberto;
     const secHist = document.getElementById('aud-secao-historico');
     const secForm = document.getElementById('aud-secao-formulario');
     const btnNova = document.getElementById('aud-btn-nova');
     const btnHist = document.getElementById('aud-btn-historico');
+    
     if (_state.historicoAberto) {
-      secHist.innerHTML = '<div style="padding:2rem; text-align:center; color:var(--text-muted);">⏳ Carregando histórico...</div>';
+      secHist.innerHTML = '<div style="padding:2rem; text-align:center; color:var(--text-muted);">⏳ Carregando nuvem...</div>';
       secHist.style.display = '';
       secForm.style.display = 'none';
       btnNova.style.display = '';
       if (btnHist) btnHist.innerHTML = '<i data-lucide="x"></i> Fechar Histórico';
       if (window.lucide) window.lucide.createIcons();
+      
       try {
         const resp = await fetch(APPS_SCRIPT_URL);
         const dados = await resp.json();
         if (Array.isArray(dados)) {
-          _state.historicoSheets = dados.reverse();
+          _state.historicoSheets = dados; 
         }
       } catch(e) {
-        console.error('Erro ao buscar histórico:', e);
+        console.error('Erro ao buscar histórico do Sheets:', e);
         _state.historicoSheets = [];
       }
-      secHist.innerHTML = _renderHistoricoSheets();
+      
+      // Renderiza as duas visões combinadas
+      secHist.innerHTML = _renderHistorico() + '<br>' + _renderHistoricoSheets();
+      
       document.querySelectorAll('.aud-btn-ver').forEach(b => {
         b.addEventListener('click', () => {
           const aud = _state.historico.find(a => a.id === b.dataset.id);
@@ -446,7 +452,7 @@ function _bindEventos() {
     }
     if (window.lucide) window.lucide.createIcons();
   });
-  // Nova auditoria
+
   document.getElementById('aud-btn-nova')?.addEventListener('click', () => {
     _state.historicoAberto = false;
     document.getElementById('aud-secao-historico').style.display = 'none';
@@ -457,12 +463,10 @@ function _bindEventos() {
     if (window.lucide) window.lucide.createIcons();
   });
 
-  // Modal NC
   document.getElementById('aud-btn-fechar-nc')?.addEventListener('click', _fecharNC);
   document.getElementById('aud-btn-cancelar-nc')?.addEventListener('click', _fecharNC);
   document.getElementById('aud-btn-salvar-nc')?.addEventListener('click', _salvarNC);
 
-  // Foto
   const fotoDrop = document.getElementById('aud-nc-foto-drop');
   const fotoInput = document.getElementById('aud-nc-foto-input');
   if (fotoDrop && fotoInput) {
@@ -479,7 +483,6 @@ function _bindEventos() {
     window._audFotoBase64 = null;
   });
 
-  // Limpar formulário
   document.getElementById('aud-btn-limpar')?.addEventListener('click', () => {
     if (confirm('Tem certeza que deseja limpar todo o formulário?')) {
       _state.respostas = {};
@@ -490,10 +493,7 @@ function _bindEventos() {
     }
   });
 
-  // Finalizar
   document.getElementById('aud-btn-finalizar')?.addEventListener('click', _finalizar);
-
-  // Modal ver
   document.getElementById('aud-btn-fechar-ver')?.addEventListener('click', _fecharVer);
   document.getElementById('aud-btn-fechar-ver2')?.addEventListener('click', _fecharVer);
   document.getElementById('aud-btn-imprimir')?.addEventListener('click', () => window.print());
@@ -657,12 +657,11 @@ function _salvarNC() {
   const descricao = document.getElementById('aud-nc-descricao').value.trim();
   const acao = document.getElementById('aud-nc-acao').value.trim();
   const radio = document.querySelector('input[name="aud-nc-criticidade"]:checked');
-  const gerarOS = document.getElementById('aud-nc-gerar-os').checked;
   if (!descricao) { _toast('Informe a descrição da ocorrência.', 'error'); return; }
   if (!window._audFotoBase64) { _toast('A foto é obrigatória para não conformidades.', 'error'); return; }
   if (!radio) { _toast('Selecione o grau de criticidade.', 'error'); return; }
   if (!acao) { _toast('Informe a ação corretiva imediata.', 'error'); return; }
-  _state.naoConformidades[_ncItemIdPendente] = { descricao, foto: window._audFotoBase64, criticidade: radio.value, acao, gerarOS };
+  _state.naoConformidades[_ncItemIdPendente] = { descricao, foto: window._audFotoBase64, criticidade: radio.value, acao, gerarOS: document.getElementById('aud-nc-gerar-os').checked };
   const modal = document.getElementById('aud-modal-nc');
   if (modal) modal.style.display = 'none';
   _ncItemIdPendente = null;
@@ -683,7 +682,7 @@ function _processarFoto(file) {
   reader.readAsDataURL(file);
 }
 
-// ─── CANVAS ───────────────────────────────────────────────────────────────────
+// ─── CANVAS (ASSINATURA) ──────────────────────────────────────────────────────
 
 function _bindCanvas() {
   const canvas = document.getElementById('aud-assinatura-canvas');
@@ -695,11 +694,13 @@ function _bindCanvas() {
   ctx.scale(ratio, ratio);
   ctx.strokeStyle = '#4b433c'; ctx.lineWidth = 2.5; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
   let desenhando = false;
+  
   function pos(e) {
     const r = canvas.getBoundingClientRect();
     if (e.touches) return { x: e.touches[0].clientX - r.left, y: e.touches[0].clientY - r.top };
     return { x: e.clientX - r.left, y: e.clientY - r.top };
   }
+  
   canvas.addEventListener('mousedown', e => { e.preventDefault(); desenhando = true; const p = pos(e); ctx.beginPath(); ctx.moveTo(p.x, p.y); });
   canvas.addEventListener('mousemove', e => { if (!desenhando) return; e.preventDefault(); const p = pos(e); ctx.lineTo(p.x, p.y); ctx.stroke(); _marcarAssinatura(); });
   canvas.addEventListener('mouseup', () => { desenhando = false; _salvarAssinatura(canvas); });
@@ -707,6 +708,7 @@ function _bindCanvas() {
   canvas.addEventListener('touchstart', e => { e.preventDefault(); desenhando = true; const p = pos(e); ctx.beginPath(); ctx.moveTo(p.x, p.y); }, { passive: false });
   canvas.addEventListener('touchmove', e => { if (!desenhando) return; e.preventDefault(); const p = pos(e); ctx.lineTo(p.x, p.y); ctx.stroke(); _marcarAssinatura(); }, { passive: false });
   canvas.addEventListener('touchend', () => { desenhando = false; _salvarAssinatura(canvas); });
+  
   document.getElementById('aud-btn-limpar-assinatura')?.addEventListener('click', () => {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     _state.assinatura = null;
@@ -724,13 +726,14 @@ function _salvarAssinatura(canvas) {
   _state.assinatura = canvas.toDataURL('image/png');
 }
 
-// ─── FINALIZAR ────────────────────────────────────────────────────────────────
+// ─── FINALIZAR E SALVAR ───────────────────────────────────────────────────────
 
 function _finalizar() {
   const turno = document.getElementById('aud-turno')?.value;
   const auditor = document.getElementById('aud-auditor')?.value.trim();
   if (!turno) { _toast('Selecione o turno.', 'error'); return; }
   if (!auditor) { _toast('Informe o nome do auditor.', 'error'); return; }
+  
   const total = AUDITORIA_ESTRUTURA.reduce((acc, sec) => acc + sec.itens.length, 0);
   const avaliados = Object.keys(_state.respostas).length;
   if (avaliados < total) {
@@ -739,6 +742,7 @@ function _finalizar() {
   if (!_state.assinatura) {
     if (!confirm('A assinatura digital não foi capturada. Deseja finalizar sem assinatura?')) return;
   }
+  
   const resultado = _calcularResultado();
   const agora = new Date();
   const registro = {
@@ -753,11 +757,14 @@ function _finalizar() {
     resultado,
     assinatura: _state.assinatura,
   };
+  
   _state.historico.push(registro);
   try { localStorage.setItem('auditoria_historico_yuka', JSON.stringify(_state.historico)); } catch(e) {}
   _enviarSheets(registro);
+  
   const labels = { aprovado: '✅ Aprovado', ressalvas: '⚠️ Aprovado com Ressalvas', reprovado: '❌ Reprovado' };
   _toast(`Auditoria registrada! Resultado: ${labels[resultado]}`, 'success', 5000);
+  
   _state.respostas = {};
   _state.naoConformidades = {};
   _state.assinatura = null;
@@ -765,16 +772,18 @@ function _finalizar() {
   _renderTudo();
 }
 
-// ─── MODAL VER ────────────────────────────────────────────────────────────────
+// ─── VISUALIZAR DETALHES ──────────────────────────────────────────────────────
 
 function _abrirVer(auditoria) {
   const modal = document.getElementById('aud-modal-ver');
   const cont = document.getElementById('aud-modal-ver-conteudo');
   if (!modal || !cont) return;
+  
   const labels = { aprovado: '✅ Aprovado', ressalvas: '⚠️ Aprovado com Ressalvas', reprovado: '❌ Reprovado' };
   const ncs = auditoria.naoConformidades || {};
   const ncIds = Object.keys(ncs);
   const ic = { baixa: '🟢', media: '🟡', alta: '🔴' };
+  
   let ncsHTML = ncIds.length === 0
     ? '<p style="color:var(--color-green);">Nenhuma não conformidade registrada.</p>'
     : ncIds.map(id => {
@@ -818,15 +827,13 @@ function _fecharVer() {
   if (modal) modal.style.display = 'none';
 }
 
-// ─── SHEETS ───────────────────────────────────────────────────────────────────
+// ─── SHEETS E TOASTS ──────────────────────────────────────────────────────────
 
 async function _enviarSheets(registro) {
   try {
     await fetch(APPS_SCRIPT_URL, { method: 'POST', mode: 'no-cors', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(registro) });
   } catch(e) { console.error('Erro ao enviar para Sheets:', e); }
 }
-
-// ─── TOAST ────────────────────────────────────────────────────────────────────
 
 function _toast(msg, tipo = 'info', duracao = 3500) {
   const cores = { success: 'var(--color-green)', error: 'var(--color-red)', info: 'var(--color-blue)', warning: 'var(--color-orange)' };
