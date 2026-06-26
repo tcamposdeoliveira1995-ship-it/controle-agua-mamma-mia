@@ -4,7 +4,7 @@
 // =============================================================================
 
 const AUDITORIA_ESTRUTURA = [
-  { id: 'producao_pisos', area: 'Área de Production', subarea: 'Pisos', icone: '🏭', itens: [
+  { id: 'producao_pisos', area: 'Área de Produção', subarea: 'Pisos', icone: '🏭', itens: [
     { id: 'piso_limpo', label: 'Piso limpo' },
     { id: 'piso_sem_residuos', label: 'Sem resíduos' },
     { id: 'piso_sem_agua', label: 'Sem acúmulo de água' },
@@ -207,7 +207,7 @@ function _renderTudo() {
           <p id="aud-nc-label" style="font-weight:600; color:var(--text-primary); margin-bottom:1.25rem; padding:0.75rem; background:rgba(192,122,108,0.1); border-radius:var(--border-radius-sm); border-left:3px solid var(--color-red);"></p>
           <div class="form-group" style="margin-bottom:1rem;">
             <label class="form-label">Descrição da ocorrência <span style="color:var(--color-red);">*</span></label>
-            <textarea id="aud-nc-descricao" class="form-control" rows="3" placeholder="Descreva o problem encontrado..." style="resize:vertical;"></textarea>
+            <textarea id="aud-nc-descricao" class="form-control" rows="3" placeholder="Descreva o problema encontrado..." style="resize:vertical;"></textarea>
           </div>
           <div class="form-group" style="margin-bottom:1rem;">
             <label class="form-label">Foto da ocorrência <span style="color:var(--color-red);">*</span></label>
@@ -316,7 +316,7 @@ function _renderChecklist() {
   return html;
 }
 
-// ─── RENDERIZADORES DE HISTÓRICO (CORRIGIDOS) ─────────────────────────────────
+// ─── RENDERIZADORES DE HISTÓRICO ──────────────────────────────────────────────
 
 function _renderHistoricoSheets() {
   const lista = _state.historicoSheets || [];
@@ -328,13 +328,13 @@ function _renderHistoricoSheets() {
   }
   const icones = { aprovado: '✅', ressalvas: '⚠️', reprovado: '❌' };
   
-  // Mapeia usando exatamente as strings das colunas da planilha
   const rows = lista.map(a => {
     const dataHora = a['Data/Hora'] || a['dataHora'] || '—';
     const turno = a['Turno'] || a['turno'] || '—';
     const auditor = a['Auditor'] || a['auditor'] || '—';
     const naoConformes = a['Não Conformes'] !== undefined ? a['Não Conformes'] : (a['naoConformes'] || 0);
-    const resultado = (a['Resultado'] || a['resultado'] || '—').toLowerCase().trim();
+    const rawResultado = a['Resultado'] || a['resultado'] || '';
+    const resultado = String(rawResultado).toLowerCase().trim();
 
     return `<tr>
       <td>${dataHora}</td>
@@ -445,7 +445,6 @@ function _bindEventos() {
         _state.historicoSheets = [];
       }
       
-      // Renderiza as duas visões combinadas
       secHist.innerHTML = _renderHistorico() + '<br>' + _renderHistoricoSheets();
       
       document.querySelectorAll('.aud-btn-ver').forEach(b => {
