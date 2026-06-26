@@ -978,3 +978,13 @@ async function _enviarSheets(registro) {
   }
 
 }
+// ─── TOAST ────────────────────────────────────────────────────────────────────
+
+function _toast(msg, tipo = 'info', duracao = 3500) {
+  const cores = { success: 'var(--color-green)', error: 'var(--color-red)', info: 'var(--color-blue)', warning: 'var(--color-orange)' };
+  const toast = document.createElement('div');
+  toast.style.cssText = `position:fixed;bottom:1.5rem;right:1.5rem;z-index:99999;background:var(--card-bg);border:1px solid ${cores[tipo]};border-left:4px solid ${cores[tipo]};border-radius:var(--border-radius-md);padding:0.9rem 1.25rem;box-shadow:0 8px 24px rgba(0,0,0,0.12);max-width:360px;font-family:var(--font-main);font-size:0.9rem;color:var(--text-primary);`;
+  toast.textContent = msg;
+  document.body.appendChild(toast);
+  setTimeout(() => toast.remove(), duracao);
+}
