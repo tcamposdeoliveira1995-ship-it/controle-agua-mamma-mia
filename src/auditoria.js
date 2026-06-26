@@ -939,12 +939,16 @@ function _gerarPDFHistorico(lista) {
 
 async function _enviarSheets(registro) {
   try {
-    fetch(APPS_SCRIPT_URL, {
+    const resp = await fetch(APPS_SCRIPT_URL, {
       method: 'POST',
-      mode: 'no-cors',
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(registro)
     });
-    _toast('Auditoria enviada para a nuvem!', 'success', 3000);
+    const retorno = await resp.json();
+    if (retorno.status === 'ok' && retorno.pdf) {
+      _toast('✅ Auditoria salva! Abrindo PDF...', 'success', 4000);
+      setTimeout(() => window.open(retorno.pdf, '_blank'), 1000);
+    }
   } catch(e) {
     console.error('Erro ao enviar para Sheets:', e);
   }
