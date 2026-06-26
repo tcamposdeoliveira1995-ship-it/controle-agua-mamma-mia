@@ -135,6 +135,11 @@ export function initAuditoria() {
   auditoriaState.respostas = {};
   auditoriaState.naoConformidades = {};
   auditoriaState.assinatura = null;
+  // Garantir que sempre abre no formulário, nunca no histórico
+  const secHist = document.getElementById('auditoria-historico-section');
+  const secForm = document.getElementById('auditoria-formulario-section');
+  if (secHist) secHist.style.display = 'none';
+  if (secForm) secForm.style.display = '';
   renderTabAuditoria();
 }
 
