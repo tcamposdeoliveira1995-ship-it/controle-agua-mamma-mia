@@ -3,7 +3,7 @@
  * Cache básico para funcionamento offline e instalação como PWA
  */
 
-const CACHE_NAME = 'mamma-mia-control-v1';
+const CACHE_NAME = 'mamma-mia-control-v3';
 
 const ASSETS_TO_CACHE = [
   '/',
