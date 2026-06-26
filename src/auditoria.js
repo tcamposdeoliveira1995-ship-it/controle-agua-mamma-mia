@@ -327,10 +327,19 @@ function renderTabAuditoria() {
   // Ativar ícones lucide nos novos elementos
   if (window.lucide) window.lucide.createIcons();
 
+  // Garantir que abre sempre no formulário
+  const secHist = document.getElementById('auditoria-historico-section');
+  const secForm = document.getElementById('auditoria-formulario-section');
+  const btnNova = document.getElementById('btn-nova-auditoria');
+  const btnHist = document.getElementById('btn-historico-auditoria');
+  if (secHist) secHist.style.display = 'none';
+  if (secForm) secForm.style.display = '';
+  if (btnNova) btnNova.style.display = 'none';
+  if (btnHist) btnHist.innerHTML = '<i data-lucide="history"></i> Histórico';
+
   // Bind de eventos
   bindEventosAuditoria();
   bindAssinaturaCanvas();
-}
 
 // ─── RENDER CHECKLIST HTML ────────────────────────────────────────────────────
 
