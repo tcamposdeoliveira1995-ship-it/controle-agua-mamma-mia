@@ -13,6 +13,8 @@ import { renderTrendChart, renderComparisonChart } from './chart-setup.js';
 
 import { exportToJSON, exportToCSV, exportToExcel, exportToPDF, syncGoogleSheetsFuture } from './integration.js';
 
+import { initAuditoria } from './auditoria.js';
+
 // --- URLs CSV ---
 const LIMPEZA_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRt3TOjpSYFl40nUJcPeL82B8SqmBpbomHDbPVK2rXcdPpuJ8M5QZgOlDQV1WFJl7371U7Ox7heooiv/pub?output=csv';
 const MP_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTFEg4Bpk7evJs7NDYRCMBVWm5ZB6hQRD8SS_RwowjbNS_hI2kmtzH5ovhjYRpRssk0YH00yiCgoyCC/pub?gid=2077926267&single=true&output=csv';
@@ -140,6 +142,8 @@ document.addEventListener('DOMContentLoaded', () => {
 function refreshApp() {
   // Abas independentes de ciclo — executar antes do guard
   if (state.currentTab === 'pipa') { carregarPipa(); if (typeof lucide !== 'undefined') lucide.createIcons(); return; }
+
+  if (state.currentTab === 'auditoria') { initAuditoria(); if (typeof lucide !== 'undefined') lucide.createIcons(); return; }
 
   const availableCycles = getAvailableCycles(state.readings);
   if (!state.selectedCycleKey || !availableCycles.includes(state.selectedCycleKey)) {
