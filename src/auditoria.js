@@ -132,6 +132,9 @@ let auditoriaState = {
 
 export function initAuditoria() {
   carregarHistorico();
+  auditoriaState.respostas = {};
+  auditoriaState.naoConformidades = {};
+  auditoriaState.assinatura = null;
   renderTabAuditoria();
 }
 
