@@ -2153,6 +2153,10 @@ const HIGIENIZACAO_CSV_URL =
 
 const HIGIENIZACAO_UNIDADES = ['Yuka', 'Tc', 'Cd'];
 
+// Enquanto uma unidade não tem nenhuma resposta registrada no formulário,
+// a contagem de dias parte dessa data-base (definida manualmente).
+const HIGIENIZACAO_DATA_BASE = new Date(2026, 5, 1); // 01/06/2026
+
 let _higienizacaoHistoricoCompleto = [];
 
 function _higienizacaoParseData(str) {
@@ -2192,13 +2196,20 @@ function _higienizacaoCalcularStatus(registrosUnidade) {
     .filter(r => r.data)
     .sort((a, b) => b.data.getTime() - a.data.getTime());
 
-  const ultimo = ordenados[0] || null;
+  let ultimo = ordenados[0] || null;
+  let semRegistro = false;
+
+  if (!ultimo) {
+    // Nenhuma resposta ainda no formulário: conta a partir da data-base
+    ultimo = { data: HIGIENIZACAO_DATA_BASE, responsavel: '-', dataStr: '01/06/2026' };
+    semRegistro = true;
+  }
+
   const marco = _higienizacaoUltimoMarco(hoje);
+  const diasDesde = Math.floor((hoje.getTime() - ultimo.data.getTime()) / (1000 * 60 * 60 * 24));
+  const atrasado = ultimo.data.getTime() < marco.getTime();
 
-  const diasDesde = ultimo ? Math.floor((hoje.getTime() - ultimo.data.getTime()) / (1000 * 60 * 60 * 24)) : null;
-  const atrasado = !ultimo || ultimo.data.getTime() < marco.getTime();
-
-  return { ultimo, diasDesde, atrasado };
+  return { ultimo, diasDesde, atrasado, semRegistro };
 }
 
 async function carregarHigienizacao() {
@@ -2260,18 +2271,19 @@ async function carregarHigienizacao() {
         <div class="dashboard-grid" style="grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:1rem;">
           ${HIGIENIZACAO_UNIDADES.map(unidade => {
             const regsUnidade = registros.filter(r => r.unidade === unidade);
-            const { ultimo, diasDesde, atrasado } = _higienizacaoCalcularStatus(regsUnidade);
+            const { ultimo, diasDesde, atrasado, semRegistro } = _higienizacaoCalcularStatus(regsUnidade);
             const corStatus = atrasado ? 'var(--color-red)' : 'var(--color-green)';
             const textoStatus = atrasado ? '🔴 Atrasado' : '🟢 Em dia';
-            const dataFormatada = ultimo && ultimo.data ? ultimo.data.toLocaleDateString('pt-BR') : 'Nunca registrada';
-            const diasTexto = diasDesde !== null ? `${diasDesde} dia(s) atrás` : '-';
+            const dataFormatada = ultimo.data.toLocaleDateString('pt-BR');
+            const diasTexto = `${diasDesde} dia(s) atrás`;
+            const rotuloData = semRegistro ? '📅 Sem registro — contando desde' : '📅 Última';
             return `
               <div class="kpi-card" style="text-align:left;">
                 <div class="kpi-label" style="font-size:1rem;font-weight:600;">${unidade}</div>
                 <div style="margin:0.5rem 0;font-size:0.9rem;color:${corStatus};font-weight:600;">${textoStatus}</div>
-                <div style="font-size:0.85rem;color:var(--text-muted);">📅 Última: ${dataFormatada}</div>
+                <div style="font-size:0.85rem;color:var(--text-muted);">${rotuloData}: ${dataFormatada}</div>
                 <div style="font-size:0.85rem;color:var(--text-muted);">⏱️ ${diasTexto}</div>
-                <div style="font-size:0.85rem;color:var(--text-muted);">👤 ${ultimo ? ultimo.responsavel : '-'}</div>
+                <div style="font-size:0.85rem;color:var(--text-muted);">👤 ${semRegistro ? '-' : ultimo.responsavel}</div>
               </div>`;
           }).join('')}
         </div>`;
