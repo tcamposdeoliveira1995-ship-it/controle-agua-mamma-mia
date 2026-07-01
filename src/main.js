@@ -2149,7 +2149,7 @@ function _pipaParseData(str) {
 // ================= MÓDULO HIGIENIZAÇÃO DE MOTORES =================
 
 const HIGIENIZACAO_CSV_URL =
-  'https://docs.google.com/spreadsheets/d/e/2PACX-1vSyKnl6d4trSwtVru3JQIcoqb_h2gTHKBqn-3zXM1JW7MTzm_Xj01UJh62eDPDNEOYjisMWrGrWfFJt/pub?output=csv';
+  'https://docs.google.com/spreadsheets/d/e/2PACX-1vSyKnl6d4trSwtVru3JQIcoqb_h2gTHKBqn-3zXM1JW7MTzm_Xj01UJh62eDPDNEOYjisMWrGrWfFJt/pub?gid=1973720702&single=true&output=csv';
 
 const HIGIENIZACAO_UNIDADES = ['Yuka', 'Tc', 'Cd'];
 
