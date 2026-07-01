@@ -62,6 +62,14 @@ const AUDITORIA_ESTRUTURA = [
     { id: 'cor_organizacao', label: 'Organização' },
     { id: 'cor_limpeza', label: 'Limpeza geral' },
   ]},
+  { id: 'higienizacao_formas', area: 'Higienização de Formas', subarea: 'Higienização de Formas', icone: '🧽', itens: [
+    { id: 'hf_lavadora', label: 'Lavadora Contínua GIFE LC15EPRO' },
+    { id: 'hf_tanque', label: 'Tanque de Imersão GIFE 11350' },
+    { id: 'hf_pia', label: 'Pia' },
+    { id: 'hf_container', label: 'Container de Formas' },
+    { id: 'hf_bancada', label: 'Bancada' },
+    { id: 'hf_chao_paredes_janelas', label: 'Chão, Paredes e Janelas' },
+  ]},
 ];
 
 const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyxTb1JgVX5o8_jD6xKXocb_tJb7lPQdo5c5aN9woB7es4FUthUcsQabYrZJ7est3cp/exec';
@@ -333,7 +341,6 @@ function _renderHistorico() {
   const lista = [..._state.historico].reverse();
   const icones = { aprovado: '✅', ressalvas: '⚠️', reprovado: '❌' };
   const turnos = [...new Set(lista.map(a => a.turno).filter(Boolean))];
-
   const rows = lista.map(a => {
     const nc = Object.keys(a.naoConformidades || {}).length;
     const altas = Object.values(a.naoConformidades || {}).filter(n => n.criticidade === 'alta').length;
@@ -353,13 +360,11 @@ function _renderHistorico() {
       </td>
     </tr>`;
   }).join('');
-
   return `<div class="panel-card" style="margin-bottom:1.5rem;">
     <div class="panel-header" style="margin-bottom:1rem;">
       <h3>📋 Histórico Local Recente (YUKA)</h3>
       <span style="color:var(--text-muted); font-size:0.85rem;">${lista.length} registros</span>
     </div>
-
     <div style="display:flex; gap:0.75rem; flex-wrap:wrap; align-items:flex-end; margin-bottom:1rem;">
       <div class="form-group" style="margin:0; flex:1; min-width:140px;">
         <label class="form-label" style="font-size:0.8rem;">Data inicial</label>
@@ -387,7 +392,6 @@ function _renderHistorico() {
       <button id="aud-local-btn-filtrar" class="btn btn-secondary" type="button" style="font-size:0.85rem; white-space:nowrap;"><i data-lucide="filter"></i> Filtrar</button>
       <button id="aud-local-btn-pdf" class="btn btn-primary" type="button" style="font-size:0.85rem; white-space:nowrap;"><i data-lucide="file-text"></i> Gerar PDF</button>
     </div>
-
     <div style="overflow-x:auto;">
       <table class="modern-table" id="aud-local-tabela">
         <thead><tr>
@@ -654,6 +658,7 @@ function _bindEventosHistorico() {
     _gerarPDFResumo(lista);
   });
 }
+
 // =============================================================================
 // LÓGICA DE CHECK
 // =============================================================================
@@ -986,7 +991,7 @@ function _fecharVer() {
 }
 
 // =============================================================================
-// PDF INDIVIDUAL — gerado no navegador com logo, NCs, fotos e assinatura
+// PDF INDIVIDUAL
 // =============================================================================
 
 function _gerarPDFAuditoria(registro) {
@@ -1037,7 +1042,6 @@ function _gerarPDFAuditoria(registro) {
   .section { margin-bottom:24px; }
 </style>
 </head><body>
-
   <div style="display:flex;justify-content:space-between;align-items:center;border-bottom:2px solid #b79b6c;padding-bottom:16px;margin-bottom:24px;">
     <div style="display:flex;align-items:center;gap:16px;">
       <img src="${LOGO_URL}" style="height:56px;object-fit:contain;" onerror="this.style.display='none'">
@@ -1052,7 +1056,6 @@ function _gerarPDFAuditoria(registro) {
       <div style="margin-top:4px;font-size:13px;font-weight:700;color:${corRes[registro.resultado] || '#4b433c'};">${labelRes[registro.resultado] || '—'}</div>
     </div>
   </div>
-
   <div class="section">
     <h2>📋 Informações da Auditoria</h2>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;font-size:13px;">
@@ -1064,7 +1067,6 @@ function _gerarPDFAuditoria(registro) {
       <div><strong>Resultado:</strong> <span style="font-weight:700;color:${corRes[registro.resultado] || '#4b433c'};">${labelRes[registro.resultado] || '—'}</span></div>
     </div>
   </div>
-
   <div class="section">
     <h2>📊 Resumo dos Itens</h2>
     <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;">
@@ -1074,17 +1076,11 @@ function _gerarPDFAuditoria(registro) {
       <div class="kpi"><div class="kpi-label">Não Avaliados</div><div class="kpi-value" style="color:#8a8570;">${naoAvaliados}</div></div>
     </div>
   </div>
-
-  ${registro.observacoes ? `<div class="section">
-    <h2>📝 Observações</h2>
-    <p style="font-size:13px;color:#5a4e45;line-height:1.6;">${registro.observacoes}</p>
-  </div>` : ''}
-
+  ${registro.observacoes ? `<div class="section"><h2>📝 Observações</h2><p style="font-size:13px;color:#5a4e45;line-height:1.6;">${registro.observacoes}</p></div>` : ''}
   <div class="section">
     <h2>⚠️ Não Conformidades (${ncIds.length})</h2>
     ${ncsHTML}
   </div>
-
   ${registro.assinatura ? `<div class="section" style="page-break-inside:avoid;">
     <h2>✍️ Assinatura do Auditor</h2>
     <div style="border:1px solid #e0d8d0;border-radius:8px;padding:16px;background:#fff;display:inline-block;">
@@ -1092,15 +1088,12 @@ function _gerarPDFAuditoria(registro) {
       <p style="font-size:11px;color:#8a8570;margin-top:8px;">${registro.auditor} — ${registro.dataHora}</p>
     </div>
   </div>` : ''}
-
   <div style="margin-top:32px;padding-top:12px;border-top:1px solid #e0d8d0;font-size:10px;color:#a09284;text-align:center;">
     Mamma Mia Control — Gestão Inteligente de Operações • © 2026 Mamma Mia Salgados — By Thalita Campos
   </div>
-
   <div class="no-print" style="text-align:center;margin-top:24px;">
     <button onclick="window.print()" style="background:#b79b6c;color:white;border:none;border-radius:8px;padding:12px 32px;font-size:15px;cursor:pointer;font-weight:700;">🖨️ Imprimir / Salvar PDF</button>
   </div>
-
 </body></html>`;
 
   const janela = window.open('', '_blank');
@@ -1109,7 +1102,7 @@ function _gerarPDFAuditoria(registro) {
 }
 
 // =============================================================================
-// PDF RESUMO — histórico em nuvem com filtros
+// PDF RESUMO LOCAL
 // =============================================================================
 
 function _gerarPDFResumoLocal(lista) {
@@ -1119,8 +1112,6 @@ function _gerarPDFResumoLocal(lista) {
   const blocos = lista.map((a, idx) => {
     const nc = Object.keys(a.naoConformidades || {}).length;
     const altas = Object.values(a.naoConformidades || {}).filter(n => n.criticidade === 'alta').length;
-    const medias = Object.values(a.naoConformidades || {}).filter(n => n.criticidade === 'media').length;
-    const baixas = Object.values(a.naoConformidades || {}).filter(n => n.criticidade === 'baixa').length;
     const total = AUDITORIA_ESTRUTURA.reduce((acc, sec) => acc + sec.itens.length, 0);
     const conformes = Object.values(a.respostas || {}).filter(v => v === 'conforme').length;
     const res = a.resultado || '';
@@ -1183,6 +1174,85 @@ function _gerarPDFResumoLocal(lista) {
   janela.document.write(html);
   janela.document.close();
 }
+
+// =============================================================================
+// PDF RESUMO NUVEM
+// =============================================================================
+
+function _gerarPDFResumo(lista) {
+  if (!lista || lista.length === 0) { _toast('Nenhum registro para gerar PDF.', 'warning'); return; }
+  const agora = new Date().toLocaleString('pt-BR');
+  const icones = { aprovado: '✅', ressalvas: '⚠️', reprovado: '❌' };
+  const blocos = lista.map((a, idx) => {
+    const dataHora = a['Data/Hora'] || '—';
+    const turno = a['Turno'] || '—';
+    const auditor = a['Auditor'] || '—';
+    const nc = a['Não Conformes'] || 0;
+    const res = String(a['Resultado'] || '').toLowerCase().trim();
+    const obs = a['Observações'] || '';
+    const ncAltas = a['NC - Altas'] || 0;
+    const conformes = a['Conformes'] || 0;
+    const total = a['Total Itens'] || 53;
+    return `<div style="border:1px solid #e0d8d0;border-radius:8px;padding:16px;margin-bottom:16px;background:#faf8f5;page-break-inside:avoid;">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px;padding-bottom:10px;border-bottom:1px solid #e0d8d0;">
+        <div>
+          <strong style="font-size:13px;color:#4b433c;">#${idx+1} — ${dataHora}</strong><br>
+          <span style="font-size:12px;color:#7b6f63;">Turno: ${turno} | Auditor: ${auditor}</span>
+        </div>
+        <div style="font-size:20px;">${icones[res] || '—'}</div>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:10px;">
+        <div style="background:#fff;border:1px solid #e0d8d0;border-radius:6px;padding:8px;text-align:center;">
+          <div style="font-size:10px;color:#8a8570;text-transform:uppercase;">Conformes</div>
+          <div style="font-size:18px;font-weight:700;color:#5c7a4e;">${conformes}</div>
+        </div>
+        <div style="background:#fff;border:1px solid #e0d8d0;border-radius:6px;padding:8px;text-align:center;">
+          <div style="font-size:10px;color:#8a8570;text-transform:uppercase;">N/C Total</div>
+          <div style="font-size:18px;font-weight:700;color:#c0402a;">${nc}</div>
+        </div>
+        <div style="background:#fff;border:1px solid #e0d8d0;border-radius:6px;padding:8px;text-align:center;">
+          <div style="font-size:10px;color:#8a8570;text-transform:uppercase;">N/C Altas</div>
+          <div style="font-size:18px;font-weight:700;color:#c0402a;">${ncAltas}</div>
+        </div>
+        <div style="background:#fff;border:1px solid #e0d8d0;border-radius:6px;padding:8px;text-align:center;">
+          <div style="font-size:10px;color:#8a8570;text-transform:uppercase;">Total Itens</div>
+          <div style="font-size:18px;font-weight:700;color:#4b433c;">${total}</div>
+        </div>
+      </div>
+      ${obs ? `<p style="font-size:11px;color:#7b6f63;margin:0;"><strong>Observações:</strong> ${obs}</p>` : ''}
+    </div>`;
+  }).join('');
+
+  const html = `<!DOCTYPE html><html><head><meta charset="UTF-8">
+  <style>body{font-family:Arial,sans-serif;max-width:820px;margin:0 auto;padding:28px;background:#fff;color:#4b433c;}@media print{body{padding:0;}.no-print{display:none;}}</style>
+  </head><body>
+  <div style="display:flex;justify-content:space-between;align-items:center;border-bottom:2px solid #b79b6c;padding-bottom:14px;margin-bottom:20px;">
+    <div style="display:flex;align-items:center;gap:16px;">
+      <img src="${LOGO_URL}" style="height:48px;object-fit:contain;" onerror="this.style.display='none'">
+      <div>
+        <h1 style="font-size:20px;font-weight:800;margin:0;">Mamma Mia Control</h1>
+        <p style="font-size:13px;color:#8a8570;margin:2px 0 0;">🧼 Relatório de Auditorias de Higienização — YUKA</p>
+      </div>
+    </div>
+    <div style="text-align:right;font-size:11px;color:#a09284;">
+      <div>Emitido em: <strong style="color:#4b433c;">${agora}</strong></div>
+      <div style="margin-top:4px;">${lista.length} auditoria(s)</div>
+    </div>
+  </div>
+  ${blocos}
+  <div style="margin-top:24px;padding-top:12px;border-top:1px solid #e0d8d0;font-size:10px;color:#a09284;text-align:center;">
+    Mamma Mia Control — Gestão Inteligente de Operações • © 2026 Mamma Mia Salgados
+  </div>
+  <div class="no-print" style="text-align:center;margin-top:24px;">
+    <button onclick="window.print()" style="background:#b79b6c;color:white;border:none;border-radius:8px;padding:12px 32px;font-size:15px;cursor:pointer;font-weight:700;">🖨️ Imprimir / Salvar PDF</button>
+  </div>
+  </body></html>`;
+
+  const janela = window.open('', '_blank');
+  janela.document.write(html);
+  janela.document.close();
+}
+
 // =============================================================================
 // SHEETS
 // =============================================================================
