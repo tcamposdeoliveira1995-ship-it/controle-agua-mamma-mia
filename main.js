@@ -13,6 +13,9 @@ import { renderTrendChart, renderComparisonChart } from './chart-setup.js';
 
 import { exportToJSON, exportToCSV, exportToExcel, exportToPDF, syncGoogleSheetsFuture } from './integration.js';
 
+import { initAuditoria } from './auditoria.js';
+window.initAuditoria = initAuditoria;
+
 // --- URLs CSV ---
 const LIMPEZA_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRt3TOjpSYFl40nUJcPeL82B8SqmBpbomHDbPVK2rXcdPpuJ8M5QZgOlDQV1WFJl7371U7Ox7heooiv/pub?output=csv';
 const MP_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTFEg4Bpk7evJs7NDYRCMBVWm5ZB6hQRD8SS_RwowjbNS_hI2kmtzH5ovhjYRpRssk0YH00yiCgoyCC/pub?gid=2077926267&single=true&output=csv';
@@ -140,6 +143,10 @@ document.addEventListener('DOMContentLoaded', () => {
 function refreshApp() {
   // Abas independentes de ciclo — executar antes do guard
   if (state.currentTab === 'pipa') { carregarPipa(); if (typeof lucide !== 'undefined') lucide.createIcons(); return; }
+
+  if (state.currentTab === 'higienizacao') { carregarHigienizacao(); if (typeof lucide !== 'undefined') lucide.createIcons(); return; }
+
+  if (state.currentTab === 'auditoria') { setTimeout(() => { initAuditoria(); if (typeof lucide !== 'undefined') lucide.createIcons(); }, 50); return; }
 
   const availableCycles = getAvailableCycles(state.readings);
   if (!state.selectedCycleKey || !availableCycles.includes(state.selectedCycleKey)) {
@@ -1948,12 +1955,7 @@ let _pipaHistoricoCompleto = [];
 
 function _parseCSVRobusto(texto) {
   const linhas = [];
-  const rows = texto.replace(/
-/g, '
-').replace(/
-/g, '
-').split('
-');
+  const rows = texto.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n');
   for (const row of rows) {
     if (row.trim() === '') continue;
     const campos = [];
@@ -1980,7 +1982,6 @@ function _parseCSVRobusto(texto) {
   }
   return linhas;
 }
-
 async function carregarPipa() {
   const ultimoConteudo = document.getElementById('pipa-ultimo-conteudo');
   const historicoBody  = document.getElementById('pipa-historico-body');
@@ -2142,6 +2143,222 @@ function _pipaParseData(str) {
   if (!str || str === '-') return new Date(0);
   if (str.includes('/')) { const [d,m,y] = str.split('/'); return new Date(`${y}-${m}-${d}`); }
   return new Date(str);
+}
+
+
+// ================= MÓDULO HIGIENIZAÇÃO DE MOTORES =================
+
+const HIGIENIZACAO_CSV_URL =
+  'https://docs.google.com/spreadsheets/d/e/2PACX-1vSyKnl6d4trSwtVru3JQIcoqb_h2gTHKBqn-3zXM1JW7MTzm_Xj01UJh62eDPDNEOYjisMWrGrWfFJt/pub?output=csv';
+
+const HIGIENIZACAO_UNIDADES = ['Yuka', 'Tc', 'Cd'];
+
+let _higienizacaoHistoricoCompleto = [];
+
+function _higienizacaoParseData(str) {
+  if (!str || str === '-') return null;
+  const s = str.trim();
+  if (s.includes('/')) {
+    // aceita DD/MM/YYYY (com ou sem hora junto, ex: vindo do Timestamp)
+    const soData = s.split(' ')[0];
+    const [d, m, y] = soData.split('/');
+    if (!d || !m || !y) return null;
+    const data = new Date(`${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`);
+    return isNaN(data.getTime()) ? null : data;
+  }
+  const data = new Date(s);
+  return isNaN(data.getTime()) ? null : data;
+}
+
+function _higienizacaoNormalizarUnidade(raw) {
+  const u = (raw || '').toUpperCase();
+  if (u.includes('YUKA')) return 'Yuka';
+  if (u.includes('TC')) return 'Tc';
+  if (u.includes('CD')) return 'Cd';
+  return raw || '-';
+}
+
+function _higienizacaoUltimoMarco(hoje) {
+  const ano = hoje.getFullYear(), mes = hoje.getMonth(), dia = hoje.getDate();
+  if (dia >= 15) return new Date(ano, mes, 15);
+  return new Date(ano, mes, 1);
+}
+
+function _higienizacaoCalcularStatus(registrosUnidade) {
+  const hoje = new Date();
+  hoje.setHours(0, 0, 0, 0);
+
+  const ordenados = registrosUnidade
+    .filter(r => r.data)
+    .sort((a, b) => b.data.getTime() - a.data.getTime());
+
+  const ultimo = ordenados[0] || null;
+  const marco = _higienizacaoUltimoMarco(hoje);
+
+  const diasDesde = ultimo ? Math.floor((hoje.getTime() - ultimo.data.getTime()) / (1000 * 60 * 60 * 24)) : null;
+  const atrasado = !ultimo || ultimo.data.getTime() < marco.getTime();
+
+  return { ultimo, diasDesde, atrasado };
+}
+
+async function carregarHigienizacao() {
+  const statusConteudo = document.getElementById('higienizacao-status-conteudo');
+  const historicoBody  = document.getElementById('higienizacao-historico-body');
+  const filtroUnidade  = document.getElementById('higienizacao-filtro-unidade');
+  const countEl        = document.getElementById('higienizacao-historico-count');
+
+  if (statusConteudo) statusConteudo.innerHTML = '<p style="color:var(--text-muted);">Carregando...</p>';
+  if (historicoBody)  historicoBody.innerHTML  = '<tr><td colspan="3" style="text-align:center;color:var(--text-muted);">Carregando...</td></tr>';
+
+  try {
+    console.log('[HIGIENIZACAO] Iniciando fetch...');
+    const response = await fetch(HIGIENIZACAO_CSV_URL, { cache: 'no-store' });
+    console.log('[HIGIENIZACAO] Status:', response.status);
+    if (!response.ok) throw new Error('HTTP ' + response.status);
+    const csv = await response.text();
+
+    const linhas = _parseCSVRobusto(csv);
+    console.log('[HIGIENIZACAO] Linhas parsed:', linhas.length, '| cab:', linhas[0]);
+
+    if (linhas.length < 2) {
+      if (statusConteudo) statusConteudo.innerHTML = '<p style="color:var(--text-muted);">Nenhum dado encontrado.</p>';
+      if (historicoBody)  historicoBody.innerHTML  = '<tr><td colspan="3" style="text-align:center;">Nenhum registro.</td></tr>';
+      return;
+    }
+
+    const cab = linhas[0].map(c => c.toUpperCase());
+
+    const idxTimestamp = cab.findIndex(c => c.includes('TIMESTAMP') || c.includes('CARIMBO'));
+    const idxData       = cab.findIndex(c => c.includes('HIGIENIZ'));
+    const idxResp        = cab.findIndex(c => c.includes('RESPONS'));
+    const idxUnidade      = cab.findIndex(c => c.includes('UNIDADE'));
+
+    console.log('[HIGIENIZACAO] Indices:', { idxTimestamp, idxData, idxResp, idxUnidade });
+
+    const registros = [];
+    for (let i = 1; i < linhas.length; i++) {
+      const cols = linhas[i];
+      if (cols.every(c => c === '')) continue;
+
+      const dataStr = idxData >= 0 ? cols[idxData] : (idxTimestamp >= 0 ? cols[idxTimestamp] : cols[1]);
+      const data = _higienizacaoParseData(dataStr || (idxTimestamp >= 0 ? cols[idxTimestamp] : ''));
+
+      registros.push({
+        dataStr:    dataStr || '-',
+        data:       data,
+        responsavel: idxResp    >= 0 ? (cols[idxResp]    || '-') : (cols[2] || '-'),
+        unidade:    _higienizacaoNormalizarUnidade(idxUnidade >= 0 ? cols[idxUnidade] : cols[3]),
+      });
+    }
+
+    console.log('[HIGIENIZACAO] Registros:', registros.length, '| primeiro:', registros[0]);
+    _higienizacaoHistoricoCompleto = registros;
+
+    // --- Cards de status por unidade ---
+    if (statusConteudo) {
+      statusConteudo.innerHTML = `
+        <div class="dashboard-grid" style="grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:1rem;">
+          ${HIGIENIZACAO_UNIDADES.map(unidade => {
+            const regsUnidade = registros.filter(r => r.unidade === unidade);
+            const { ultimo, diasDesde, atrasado } = _higienizacaoCalcularStatus(regsUnidade);
+            const corStatus = atrasado ? 'var(--color-red)' : 'var(--color-green)';
+            const textoStatus = atrasado ? '🔴 Atrasado' : '🟢 Em dia';
+            const dataFormatada = ultimo && ultimo.data ? ultimo.data.toLocaleDateString('pt-BR') : 'Nunca registrada';
+            const diasTexto = diasDesde !== null ? `${diasDesde} dia(s) atrás` : '-';
+            return `
+              <div class="kpi-card" style="text-align:left;">
+                <div class="kpi-label" style="font-size:1rem;font-weight:600;">${unidade}</div>
+                <div style="margin:0.5rem 0;font-size:0.9rem;color:${corStatus};font-weight:600;">${textoStatus}</div>
+                <div style="font-size:0.85rem;color:var(--text-muted);">📅 Última: ${dataFormatada}</div>
+                <div style="font-size:0.85rem;color:var(--text-muted);">⏱️ ${diasTexto}</div>
+                <div style="font-size:0.85rem;color:var(--text-muted);">👤 ${ultimo ? ultimo.responsavel : '-'}</div>
+              </div>`;
+          }).join('')}
+        </div>`;
+    }
+
+    // --- Unidades no select ---
+    if (filtroUnidade) {
+      const valorAtual = filtroUnidade.value;
+      filtroUnidade.innerHTML = '<option value="">Todas as unidades</option>';
+      HIGIENIZACAO_UNIDADES.forEach(u => {
+        const opt = document.createElement('option');
+        opt.value = u; opt.textContent = u;
+        if (u === valorAtual) opt.selected = true;
+        filtroUnidade.appendChild(opt);
+      });
+    }
+
+    _renderizarHistoricoHigienizacao(
+      [...registros].sort((a, b) => (b.data?.getTime() || 0) - (a.data?.getTime() || 0)),
+      countEl, historicoBody
+    );
+
+    // --- Eventos (registra só uma vez) ---
+    const btnFiltrar   = document.getElementById('btn-higienizacao-filtrar');
+    const btnLimpar    = document.getElementById('btn-higienizacao-limpar');
+    const btnAtualizar = document.getElementById('btn-atualizar-higienizacao');
+
+    if (btnFiltrar && !btnFiltrar._higEvt) {
+      btnFiltrar._higEvt = true;
+      btnFiltrar.addEventListener('click', () => {
+        const unidade = document.getElementById('higienizacao-filtro-unidade')?.value || '';
+        const de      = document.getElementById('higienizacao-filtro-de')?.value      || '';
+        const ate     = document.getElementById('higienizacao-filtro-ate')?.value     || '';
+        let f = _higienizacaoHistoricoCompleto;
+        if (unidade) f = f.filter(r => r.unidade === unidade);
+        if (de)      f = f.filter(r => r.data && r.data >= new Date(de));
+        if (ate)     f = f.filter(r => r.data && r.data <= new Date(ate + 'T23:59:59'));
+        _renderizarHistoricoHigienizacao(
+          [...f].sort((a, b) => (b.data?.getTime() || 0) - (a.data?.getTime() || 0)),
+          document.getElementById('higienizacao-historico-count'),
+          document.getElementById('higienizacao-historico-body'));
+      });
+    }
+    if (btnLimpar && !btnLimpar._higEvt) {
+      btnLimpar._higEvt = true;
+      btnLimpar.addEventListener('click', () => {
+        ['higienizacao-filtro-unidade', 'higienizacao-filtro-de', 'higienizacao-filtro-ate'].forEach(id => {
+          const el = document.getElementById(id); if (el) el.value = '';
+        });
+        _renderizarHistoricoHigienizacao(
+          [..._higienizacaoHistoricoCompleto].sort((a, b) => (b.data?.getTime() || 0) - (a.data?.getTime() || 0)),
+          document.getElementById('higienizacao-historico-count'),
+          document.getElementById('higienizacao-historico-body'));
+      });
+    }
+    if (btnAtualizar && !btnAtualizar._higEvt) {
+      btnAtualizar._higEvt = true;
+      btnAtualizar.addEventListener('click', () => {
+        ['btn-higienizacao-filtrar', 'btn-higienizacao-limpar', 'btn-atualizar-higienizacao'].forEach(id => {
+          const el = document.getElementById(id); if (el) delete el._higEvt;
+        });
+        carregarHigienizacao();
+        showToast('Dados de Higienização atualizados!', 'success');
+      });
+    }
+
+  } catch (erro) {
+    console.error('[HIGIENIZACAO] Erro:', erro);
+    const msg = 'Erro: ' + erro.message;
+    if (statusConteudo) statusConteudo.innerHTML = `<p style="color:var(--color-red);">${msg}</p>`;
+    if (historicoBody)  historicoBody.innerHTML  = `<tr><td colspan="3" style="text-align:center;color:var(--color-red);">${msg}</td></tr>`;
+  }
+}
+
+function _renderizarHistoricoHigienizacao(registros, countEl, historicoBody) {
+  if (countEl) countEl.textContent = registros.length + ' registro(s) encontrado(s)';
+  if (!historicoBody) return;
+  if (registros.length === 0) {
+    historicoBody.innerHTML = '<tr><td colspan="3" style="text-align:center;color:var(--text-muted);">Nenhum registro encontrado.</td></tr>';
+    return;
+  }
+  historicoBody.innerHTML = registros.map(r => `
+    <tr>
+      <td>${r.data ? r.data.toLocaleDateString('pt-BR') : r.dataStr}</td>
+      <td>${r.responsavel}</td>
+      <td><strong>${r.unidade}</strong></td>
+    </tr>`).join('');
 }
 
 
