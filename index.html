@@ -64,6 +64,7 @@
     <button class="tab-btn" data-tab="central"><i data-lucide="radio"></i>Central</button>
     <button class="tab-btn" data-tab="operacao"><i data-lucide="clipboard-check"></i>Operação</button>
     <button class="tab-btn" data-tab="pipa"><i data-lucide="truck"></i>Pipa</button>
+    <button class="tab-btn" data-tab="higienizacao"><i data-lucide="spray-can"></i>Higienização</button>
     <button class="tab-btn" data-tab="auditoria"><i data-lucide="clipboard-list"></i>Auditoria</button>
   </nav>
 
@@ -464,6 +465,52 @@
             </thead>
             <tbody id="pipa-historico-body">
               <tr><td colspan="7" style="text-align:center;color:var(--text-muted);">Carregando...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+
+    <!-- ABA: HIGIENIZAÇÃO DE MOTORES -->
+    <div id="tab-content-higienizacao" class="tab-panel">
+      <section class="panel-card" id="higienizacao-status-card">
+        <div class="panel-header">
+          <h2>Status de Higienização por Unidade</h2>
+          <button id="btn-atualizar-higienizacao" class="btn btn-sm btn-secondary" style="margin-left:auto;">
+            <i data-lucide="refresh-cw"></i> Atualizar
+          </button>
+        </div>
+        <div id="higienizacao-status-conteudo" style="padding:1rem 0;">
+          <p style="color:var(--text-muted);">Carregando...</p>
+        </div>
+      </section>
+      <section class="panel-card">
+        <div class="panel-header" style="display:flex;align-items:center;gap:1rem;flex-wrap:wrap;">
+          <h2>Historico de Higienizacoes</h2>
+          <div style="display:flex;gap:0.5rem;align-items:center;margin-left:auto;flex-wrap:wrap;">
+            <label style="font-size:0.85rem;color:var(--text-muted);">Filtrar por unidade:</label>
+            <select id="higienizacao-filtro-unidade" class="form-control" style="width:auto;min-width:140px;">
+              <option value="">Todas as unidades</option>
+            </select>
+            <label style="font-size:0.85rem;color:var(--text-muted);">Periodo:</label>
+            <input type="date" id="higienizacao-filtro-de" class="form-control" style="width:auto;">
+            <input type="date" id="higienizacao-filtro-ate" class="form-control" style="width:auto;">
+            <button id="btn-higienizacao-filtrar" class="btn btn-sm btn-primary">Filtrar</button>
+            <button id="btn-higienizacao-limpar" class="btn btn-sm btn-secondary">Limpar</button>
+          </div>
+        </div>
+        <div id="higienizacao-historico-count" style="font-size:0.85rem;color:var(--text-muted);margin-bottom:0.75rem;"></div>
+        <div style="overflow-x:auto;">
+          <table class="data-table" id="higienizacao-historico-table">
+            <thead>
+              <tr>
+                <th>Data</th>
+                <th>Responsavel</th>
+                <th>Unidade</th>
+              </tr>
+            </thead>
+            <tbody id="higienizacao-historico-body">
+              <tr><td colspan="3" style="text-align:center;color:var(--text-muted);">Carregando...</td></tr>
             </tbody>
           </table>
         </div>
