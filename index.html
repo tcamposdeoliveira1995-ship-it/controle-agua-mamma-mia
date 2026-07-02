@@ -65,6 +65,7 @@
     <button class="tab-btn" data-tab="operacao"><i data-lucide="clipboard-check"></i>Operação</button>
     <button class="tab-btn" data-tab="pipa"><i data-lucide="truck"></i>Pipa</button>
     <button class="tab-btn" data-tab="higienizacao"><i data-lucide="spray-can"></i>MOTORES EQ. REFRIGERADOS</button>
+    <button class="tab-btn" data-tab="insumos"><i data-lucide="package-x"></i>Insumos Críticos</button>
     <button class="tab-btn" data-tab="auditoria"><i data-lucide="clipboard-list"></i>Auditoria</button>
   </nav>
 
@@ -513,6 +514,21 @@
               <tr><td colspan="3" style="text-align:center;color:var(--text-muted);">Carregando...</td></tr>
             </tbody>
           </table>
+        </div>
+      </section>
+    </div>
+
+    <!-- ABA: INSUMOS CRÍTICOS -->
+    <div id="tab-content-insumos" class="tab-panel">
+      <section class="panel-card" id="insumos-status-card">
+        <div class="panel-header">
+          <h2><i data-lucide="package-x"></i> Controle de Insumos Críticos</h2>
+          <button id="btn-atualizar-insumos" class="btn btn-sm btn-secondary" style="margin-left:auto;">
+            <i data-lucide="refresh-cw"></i> Atualizar
+          </button>
+        </div>
+        <div id="insumos-conteudo" style="padding:1rem 0;">
+          <p style="color:var(--text-muted);">Carregando...</p>
         </div>
       </section>
     </div>
