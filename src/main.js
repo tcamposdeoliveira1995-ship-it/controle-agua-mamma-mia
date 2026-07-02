@@ -146,6 +146,8 @@ function refreshApp() {
 
   if (state.currentTab === 'higienizacao') { carregarHigienizacao(); if (typeof lucide !== 'undefined') lucide.createIcons(); return; }
 
+  if (state.currentTab === 'insumos') { carregarInsumos(); if (typeof lucide !== 'undefined') lucide.createIcons(); return; }
+
   if (state.currentTab === 'auditoria') { setTimeout(() => { initAuditoria(); if (typeof lucide !== 'undefined') lucide.createIcons(); }, 50); return; }
 
   const availableCycles = getAvailableCycles(state.readings);
@@ -2371,6 +2373,176 @@ function _renderizarHistoricoHigienizacao(registros, countEl, historicoBody) {
       <td>${r.responsavel}</td>
       <td><strong>${r.unidade}</strong></td>
     </tr>`).join('');
+}
+
+
+// ================= MÓDULO INSUMOS CRÍTICOS =================
+
+const INSUMOS_CSV_URL =
+  'https://docs.google.com/spreadsheets/d/e/2PACX-1vTxAviEilfLLSjTjSznB3EyWWtrHVp6ClhabTSuzu5gQh2aoYbLeYKKoH6CcfRPkBpelcOG9bU2a0b3/pub?output=csv';
+
+const INSUMOS_POST_URL =
+  'https://script.google.com/macros/s/AKfycbxtrM875Sb92YmXJRQUyTTW1fYgEIyDYwg_D6FJqlQHcsyiPvg8frozc2nug8WbTJzM/exec';
+
+let _insumosDadosAtuais = [];
+let _insumosSalvando = false;
+
+function _insumosParseCsv(csv) {
+  const linhas = csv.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+  if (linhas.length < 2) return [];
+  return linhas.slice(1).map(linha => {
+    const cols = linha.split(',').map(c => c.replace(/^"|"$/g, '').trim());
+    return {
+      item: cols[0] || '',
+      quantidadeAtual: Number(cols[1]) || 0,
+      alertaMinimo: Number(cols[2]) || 0,
+      unidadeMedida: cols[3] || '',
+      ultimaAtualizacao: cols[4] || '-',
+      atualizadoPor: cols[5] || '-'
+    };
+  }).filter(r => r.item);
+}
+
+function _insumosObterNomeResponsavel() {
+  let nome = localStorage.getItem('insumos_responsavel');
+  if (!nome) {
+    nome = prompt('Seu nome (fica salvo neste navegador para as próximas atualizações):', 'Thalita Campos');
+    if (!nome || !nome.trim()) nome = 'Não identificado';
+    localStorage.setItem('insumos_responsavel', nome.trim());
+  }
+  return nome;
+}
+
+function _insumosIconeItem(item) {
+  const u = (item || '').toUpperCase();
+  if (u.includes('RIBBON')) return 'printer';
+  if (u.includes('CARTUCHO')) return 'droplet';
+  return 'package';
+}
+
+async function _insumosSalvarQuantidade(item, novaQuantidade) {
+  if (_insumosSalvando) return;
+  if (isNaN(novaQuantidade) || novaQuantidade < 0) { showToast('Quantidade inválida.', 'error'); return; }
+
+  _insumosSalvando = true;
+  const atualizadoPor = _insumosObterNomeResponsavel();
+
+  // Atualização otimista: reflete na tela antes da confirmação do servidor
+  const registro = _insumosDadosAtuais.find(r => r.item === item);
+  if (registro) registro.quantidadeAtual = novaQuantidade;
+  _renderizarInsumos(_insumosDadosAtuais);
+
+  try {
+    await fetch(INSUMOS_POST_URL, {
+      method: 'POST',
+      mode: 'no-cors',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({ item, novaQuantidade, atualizadoPor })
+    });
+    showToast(`${item}: quantidade atualizada para ${novaQuantidade}.`, 'success');
+    setTimeout(() => { carregarInsumos(); }, 1500);
+  } catch (erro) {
+    console.error('[INSUMOS] Erro ao salvar:', erro);
+    showToast('Falha ao salvar. Verifique sua conexão e tente novamente.', 'error');
+  } finally {
+    _insumosSalvando = false;
+  }
+}
+
+async function carregarInsumos() {
+  const conteudo = document.getElementById('insumos-conteudo');
+  if (conteudo && _insumosDadosAtuais.length === 0) {
+    conteudo.innerHTML = '<p style="color:var(--text-muted);">Carregando...</p>';
+  }
+
+  try {
+    const response = await fetch(INSUMOS_CSV_URL, { cache: 'no-store' });
+    if (!response.ok) throw new Error('HTTP ' + response.status);
+    const csv = await response.text();
+    _insumosDadosAtuais = _insumosParseCsv(csv);
+    _renderizarInsumos(_insumosDadosAtuais);
+
+    const btnAtualizar = document.getElementById('btn-atualizar-insumos');
+    if (btnAtualizar && !btnAtualizar.dataset.bound) {
+      btnAtualizar.dataset.bound = '1';
+      btnAtualizar.addEventListener('click', () => { carregarInsumos(); });
+    }
+  } catch (erro) {
+    console.error('[INSUMOS] Erro:', erro);
+    if (conteudo) conteudo.innerHTML = '<p style="color:var(--color-red);">Erro ao carregar dados dos insumos.</p>';
+  }
+}
+
+function _renderizarInsumos(registros) {
+  const conteudo = document.getElementById('insumos-conteudo');
+  if (!conteudo) return;
+
+  if (!registros || registros.length === 0) {
+    conteudo.innerHTML = '<p style="color:var(--text-muted);">Nenhum insumo cadastrado.</p>';
+    return;
+  }
+
+  conteudo.innerHTML = `
+    <div class="dashboard-grid">
+      ${registros.map(r => {
+        const critico = r.quantidadeAtual <= r.alertaMinimo;
+        const cor = critico ? 'var(--color-red)' : 'var(--color-green)';
+        const selo = critico ? '🔴 CRÍTICO' : '🟢 OK';
+        const idSeguro = r.item.replace(/[^a-zA-Z0-9]/g, '_');
+        return `
+        <div class="kpi-card" style="border: 1px solid ${cor}33;">
+          <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.5rem;">
+            <i data-lucide="${_insumosIconeItem(r.item)}" style="width:18px;height:18px;color:${cor};"></i>
+            <span class="kpi-label" style="margin:0;">${r.item}</span>
+          </div>
+          <div class="kpi-value" style="color:${cor};">${r.quantidadeAtual} <span class="unit">${r.unidadeMedida.toLowerCase()}</span></div>
+          <div class="kpi-subtext" style="margin-bottom:0.75rem;">${selo} · Mínimo: ${r.alertaMinimo} ${r.unidadeMedida.toLowerCase()}</div>
+
+          <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.6rem;">
+            <button class="btn btn-sm btn-secondary btn-insumo-menos" data-item="${r.item}" type="button" style="width:36px;">−1</button>
+            <button class="btn btn-sm btn-secondary btn-insumo-mais" data-item="${r.item}" type="button" style="width:36px;">+1</button>
+            <span style="font-size:0.75rem;color:var(--text-muted);margin-left:auto;">Atualizado: ${r.ultimaAtualizacao} ${r.atualizadoPor !== '-' ? 'por ' + r.atualizadoPor : ''}</span>
+          </div>
+
+          <div style="display:flex;gap:0.5rem;">
+            <input type="number" min="0" step="1" class="form-control input-insumo-exato" id="insumo-exato-${idSeguro}" placeholder="Definir quantidade exata" style="flex:1;">
+            <button class="btn btn-sm btn-primary btn-insumo-definir" data-item="${r.item}" data-input="insumo-exato-${idSeguro}" type="button">Salvar</button>
+          </div>
+        </div>`;
+      }).join('')}
+    </div>`;
+
+  conteudo.querySelectorAll('.btn-insumo-menos').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const item = btn.getAttribute('data-item');
+      const registro = _insumosDadosAtuais.find(r => r.item === item);
+      if (!registro) return;
+      _insumosSalvarQuantidade(item, Math.max(0, registro.quantidadeAtual - 1));
+    });
+  });
+
+  conteudo.querySelectorAll('.btn-insumo-mais').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const item = btn.getAttribute('data-item');
+      const registro = _insumosDadosAtuais.find(r => r.item === item);
+      if (!registro) return;
+      _insumosSalvarQuantidade(item, registro.quantidadeAtual + 1);
+    });
+  });
+
+  conteudo.querySelectorAll('.btn-insumo-definir').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const item = btn.getAttribute('data-item');
+      const inputId = btn.getAttribute('data-input');
+      const input = document.getElementById(inputId);
+      const valor = Number(input.value);
+      if (input.value === '' || isNaN(valor) || valor < 0) { showToast('Digite uma quantidade válida.', 'error'); return; }
+      _insumosSalvarQuantidade(item, valor);
+      input.value = '';
+    });
+  });
+
+  if (typeof lucide !== 'undefined') lucide.createIcons();
 }
 
 
