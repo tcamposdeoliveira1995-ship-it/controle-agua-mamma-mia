@@ -2148,8 +2148,10 @@ function _pipaParseData(str) {
 
 // ================= MÓDULO HIGIENIZAÇÃO DE MOTORES =================
 
-const HIGIENIZACAO_CSV_URL =
-  'https://docs.google.com/spreadsheets/d/e/2PACX-1vSyKnl6d4trSwtVru3JQIcoqb_h2gTHKBqn-3zXM1JW7MTzm_Xj01UJh62eDPDNEOYjisMWrGrWfFJt/pub?gid=1973720702&single=true&output=csv';
+const HIGIENIZACAO_SPREADSHEET_ID = '1whesPHLd83XkPRTWwrktJRvlfKk_CkCyxj_8ioSnk6A';
+const HIGIENIZACAO_GID = '1973720702';
+const HIGIENIZACAO_GVIZ_URL =
+  `https://docs.google.com/spreadsheets/d/${HIGIENIZACAO_SPREADSHEET_ID}/gviz/tq?tqx=out:json&gid=${HIGIENIZACAO_GID}`;
 
 const HIGIENIZACAO_UNIDADES = ['Yuka', 'Tc', 'Cd'];
 
@@ -2159,56 +2161,33 @@ const HIGIENIZACAO_DATA_BASE = new Date(2026, 5, 1); // 01/06/2026
 
 let _higienizacaoHistoricoCompleto = [];
 
-function _higienizacaoParseCSV(texto) {
-  // Parser dedicado (mais rigoroso que o _parseCSVRobusto do Pipa): trata aspas
-  // e vírgulas/quebras de linha DENTRO de células corretamente, evitando
-  // desalinhamento de colunas quando há múltiplos links (fotos) numa célula.
-  const linhas = [];
-  let campo = '';
-  let linhaAtual = [];
-  let dentroAspas = false;
-  const chars = texto.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
-
-  for (let i = 0; i < chars.length; i++) {
-    const c = chars[i];
-    if (dentroAspas) {
-      if (c === '"') {
-        if (chars[i + 1] === '"') { campo += '"'; i++; }
-        else { dentroAspas = false; }
-      } else {
-        campo += c;
-      }
-    } else {
-      if (c === '"') { dentroAspas = true; }
-      else if (c === ',') { linhaAtual.push(campo.trim()); campo = ''; }
-      else if (c === '\n') { linhaAtual.push(campo.trim()); campo = ''; linhas.push(linhaAtual); linhaAtual = []; }
-      else { campo += c; }
-    }
-  }
-  if (campo !== '' || linhaAtual.length > 0) { linhaAtual.push(campo.trim()); linhas.push(linhaAtual); }
-
-  return linhas.filter(l => !(l.length === 1 && l[0] === ''));
-}
-
 function _higienizacaoAnoValido(data) {
   if (!data) return false;
   const ano = data.getFullYear();
   return ano >= 2023 && ano <= 2035;
 }
 
-function _higienizacaoParseData(str) {
-  if (!str || str === '-') return null;
-  const s = str.trim();
-  if (s.includes('/')) {
-    // A planilha exporta datas em formato regional MM/DD/AAAA (não DD/MM/AAAA)
-    const soData = s.split(' ')[0];
-    const [m, d, y] = soData.split('/');
-    if (!d || !m || !y) return null;
-    const data = new Date(`${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`);
-    return isNaN(data.getTime()) ? null : data;
+// Valores de data/hora do gviz vêm como texto tipo "Date(2026,6,2)" (ano, mês
+// já 0-indexado, dia) ou "Date(2026,6,2,15,20,0)" com hora — nunca ambíguo,
+// então não depende de nenhuma formatação regional da planilha.
+function _higienizacaoParseDataGviz(v) {
+  if (v === null || v === undefined || v === '') return null;
+  if (typeof v === 'string') {
+    const m = /^Date\((\d+),(\d+),(\d+)/.exec(v);
+    if (m) {
+      const ano = Number(m[1]), mes = Number(m[2]), dia = Number(m[3]);
+      const data = new Date(ano, mes, dia);
+      return isNaN(data.getTime()) ? null : data;
+    }
   }
-  const data = new Date(s);
-  return isNaN(data.getTime()) ? null : data;
+  return null;
+}
+
+function _higienizacaoFormatarDataBR(data) {
+  if (!data) return '-';
+  const dia = String(data.getDate()).padStart(2, '0');
+  const mes = String(data.getMonth() + 1).padStart(2, '0');
+  return `${dia}/${mes}/${data.getFullYear()}`;
 }
 
 function _higienizacaoNormalizarUnidade(raw) {
@@ -2259,63 +2238,64 @@ async function carregarHigienizacao() {
   if (historicoBody)  historicoBody.innerHTML  = '<tr><td colspan="3" style="text-align:center;color:var(--text-muted);">Carregando...</td></tr>';
 
   try {
-    console.log('[HIGIENIZACAO] Iniciando fetch...');
-    const response = await fetch(HIGIENIZACAO_CSV_URL, { cache: 'no-store' });
+    console.log('[HIGIENIZACAO] Iniciando fetch (gviz)...');
+    const response = await fetch(HIGIENIZACAO_GVIZ_URL, { cache: 'no-store' });
     console.log('[HIGIENIZACAO] Status:', response.status);
     if (!response.ok) throw new Error('HTTP ' + response.status);
-    const csv = await response.text();
+    const texto = await response.text();
 
-    const linhas = _higienizacaoParseCSV(csv);
-    console.log('[HIGIENIZACAO] Linhas parsed:', linhas.length, '| cab:', linhas[0]);
+    const match = /setResponse\(([\s\S]*)\);?\s*$/.exec(texto.trim());
+    if (!match) throw new Error('Resposta do Google em formato inesperado');
+    const payload = JSON.parse(match[1]);
 
-    if (linhas.length < 2) {
+    if (payload.status === 'error') {
+      throw new Error((payload.errors && payload.errors[0] && payload.errors[0].detailed_message) || 'Erro ao ler a planilha');
+    }
+
+    const colunas = (payload.table.cols || []).map(c => (c.label || '').toUpperCase());
+    const linhasDados = payload.table.rows || [];
+    console.log('[HIGIENIZACAO] Linhas parsed:', linhasDados.length, '| colunas:', colunas);
+
+    if (linhasDados.length === 0) {
       if (statusConteudo) statusConteudo.innerHTML = '<p style="color:var(--text-muted);">Nenhum dado encontrado.</p>';
       if (historicoBody)  historicoBody.innerHTML  = '<tr><td colspan="3" style="text-align:center;">Nenhum registro.</td></tr>';
       return;
     }
 
-    const cab = linhas[0].map(c => c.toUpperCase());
-
-    const idxTimestamp = cab.findIndex(c => c.includes('TIMESTAMP') || c.includes('CARIMBO'));
-    const idxData       = cab.findIndex(c => c.includes('HIGIENIZ'));
-    const idxResp        = cab.findIndex(c => c.includes('RESPONS'));
-    const idxUnidade      = cab.findIndex(c => c.includes('UNIDADE'));
+    const idxTimestamp = colunas.findIndex(c => c.includes('TIMESTAMP') || c.includes('CARIMBO'));
+    const idxData       = colunas.findIndex(c => c.includes('HIGIENIZ'));
+    const idxResp        = colunas.findIndex(c => c.includes('RESPONS'));
+    const idxUnidade      = colunas.findIndex(c => c.includes('UNIDADE'));
 
     console.log('[HIGIENIZACAO] Indices:', { idxTimestamp, idxData, idxResp, idxUnidade });
 
+    const valorCelula = (linha, idx) => {
+      if (idx < 0 || !linha.c || !linha.c[idx]) return null;
+      return linha.c[idx].v;
+    };
+
     const registros = [];
-    for (let i = 1; i < linhas.length; i++) {
-      const cols = linhas[i];
-      if (cols.every(c => c === '')) continue;
+    for (const linha of linhasDados) {
+      const dataPrincipal = _higienizacaoParseDataGviz(valorCelula(linha, idxData));
+      const dataTimestamp = _higienizacaoParseDataGviz(valorCelula(linha, idxTimestamp));
 
-      const dataStrPrincipal = idxData >= 0 ? cols[idxData] : '';
-      const dataStrTimestamp = idxTimestamp >= 0 ? cols[idxTimestamp] : '';
-
-      let data = _higienizacaoParseData(dataStrPrincipal);
-      let dataStrUsada = dataStrPrincipal;
-
-      // Sanidade: se a data principal veio absurda ou não parseou, usa o Timestamp como respaldo
-      if (!_higienizacaoAnoValido(data)) {
-        const dataFallback = _higienizacaoParseData(dataStrTimestamp);
-        if (_higienizacaoAnoValido(dataFallback)) {
-          console.warn('[HIGIENIZACAO] Data suspeita na linha', i, '- valor:', dataStrPrincipal, '- usando Timestamp:', dataStrTimestamp);
-          data = dataFallback;
-          dataStrUsada = dataStrTimestamp;
-        } else {
-          data = null;
-        }
+      let data = _higienizacaoAnoValido(dataPrincipal) ? dataPrincipal : null;
+      if (!data && _higienizacaoAnoValido(dataTimestamp)) {
+        data = dataTimestamp;
       }
 
-      const unidadeBruta = idxUnidade >= 0 ? cols[idxUnidade] : cols[3];
+      const unidadeBruta = valorCelula(linha, idxUnidade);
       const unidadeNormalizada = _higienizacaoNormalizarUnidade(unidadeBruta);
       if (!HIGIENIZACAO_UNIDADES.includes(unidadeNormalizada)) {
-        console.warn('[HIGIENIZACAO] Unidade não reconhecida na linha', i, '- valor bruto:', unidadeBruta);
+        console.warn('[HIGIENIZACAO] Unidade não reconhecida:', unidadeBruta);
       }
 
+      const respBruto = valorCelula(linha, idxResp);
+
       registros.push({
-        dataStr:    dataStrUsada || '-',
+        dataStr:    _higienizacaoFormatarDataBR(data),
         data:       data,
-        responsavel: idxResp    >= 0 ? (cols[idxResp]    || '-') : (cols[2] || '-'),
+        responsavel: respBruto || '-',
         unidade:    unidadeNormalizada,
       });
     }
