@@ -2200,9 +2200,9 @@ function _higienizacaoParseData(str) {
   if (!str || str === '-') return null;
   const s = str.trim();
   if (s.includes('/')) {
-    // aceita DD/MM/YYYY (com ou sem hora junto, ex: vindo do Timestamp)
+    // A planilha exporta datas em formato regional MM/DD/AAAA (não DD/MM/AAAA)
     const soData = s.split(' ')[0];
-    const [d, m, y] = soData.split('/');
+    const [m, d, y] = soData.split('/');
     if (!d || !m || !y) return null;
     const data = new Date(`${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`);
     return isNaN(data.getTime()) ? null : data;
