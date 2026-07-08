@@ -21,6 +21,8 @@ const LIMPEZA_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRt3TOj
 const MP_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTFEg4Bpk7evJs7NDYRCMBVWm5ZB6hQRD8SS_RwowjbNS_hI2kmtzH5ovhjYRpRssk0YH00yiCgoyCC/pub?gid=2077926267&single=true&output=csv';
 const PERDAS_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQ0QXaxvuAAaF7XzQWayifLZIflDtS1psT3gNJTmkQ0BvPWbuKPttlJ6EAcE8Zv8IG_UlAbScrhD4Nb/pub?output=csv';
 const OS_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSyKnl6d4trSwtVru3JQIcoqb_h2gTHKBqn-3zXM1JW7MTzm_Xj01UJh62eDPDNEOYjisMWrGrWfFJt/pub?gid=1728678619&single=true&output=csv';
+const INSUMOS_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTxAviEilfLLSjTjSznB3EyWWtrHVp6ClhabTSuzu5gQh2aoYbLeYKKoH6CcfRPkBpelcOG9bU2a0b3/pub?output=csv';
+const INSUMOS_EXEC_URL = 'https://script.google.com/macros/s/AKfycbxtrM875Sb92YmXJRQUyTTW1fYgEIyDYwg_D6FJqlQHcsyiPvg8frozc2nug8WbTJzM/exec';
 
 // --- ESTADO GLOBAL ---
 let state = {
@@ -145,6 +147,8 @@ function refreshApp() {
   if (state.currentTab === 'pipa') { carregarPipa(); if (typeof lucide !== 'undefined') lucide.createIcons(); return; }
 
   if (state.currentTab === 'higienizacao') { carregarHigienizacao(); if (typeof lucide !== 'undefined') lucide.createIcons(); return; }
+
+  if (state.currentTab === 'insumos') { carregarInsumos(); if (typeof lucide !== 'undefined') lucide.createIcons(); return; }
 
   if (state.currentTab === 'auditoria') { setTimeout(() => { initAuditoria(); if (typeof lucide !== 'undefined') lucide.createIcons(); }, 50); return; }
 
@@ -2409,6 +2413,133 @@ function _renderizarHistoricoHigienizacao(registros, countEl, historicoBody) {
       <td>${r.responsavel}</td>
       <td><strong>${r.unidade}</strong></td>
     </tr>`).join('');
+}
+
+
+// ================= MÓDULO INSUMOS CRÍTICOS =================
+
+async function carregarInsumos() {
+  const conteudo = document.getElementById('insumos-conteudo');
+  if (conteudo) conteudo.innerHTML = '<p style="color:var(--text-muted);">Carregando...</p>';
+
+  try {
+    console.log('[INSUMOS] Iniciando fetch (CSV)...');
+    const response = await fetch(INSUMOS_CSV_URL, { cache: 'no-store' });
+    console.log('[INSUMOS] Status:', response.status);
+    if (!response.ok) throw new Error('HTTP ' + response.status);
+    const csv = await response.text();
+
+    const linhas = parseCSVLinhas(csv);
+    if (linhas.length < 2) {
+      if (conteudo) conteudo.innerHTML = '<p style="color:var(--text-muted);">Nenhum insumo cadastrado.</p>';
+      return;
+    }
+
+    const cabecalho = linhas[0].map(h => h.trim().toUpperCase());
+    const idxItem = cabecalho.findIndex(c => c.includes('ITEM'));
+    const idxQtd  = cabecalho.findIndex(c => c.includes('QUANTIDADEATUAL'));
+    const idxMin  = cabecalho.findIndex(c => c.includes('ALERTAMINIMO'));
+    const idxUnid = cabecalho.findIndex(c => c.includes('UNIDADEMEDIDA'));
+    const idxData = cabecalho.findIndex(c => c.includes('ULTIMAATUALIZACAO'));
+    const idxPor  = cabecalho.findIndex(c => c.includes('ATUALIZADOPOR'));
+
+    const itens = [];
+    for (let i = 1; i < linhas.length; i++) {
+      const cols = linhas[i];
+      if (cols.every(c => !c || !c.trim())) continue;
+      const item = (cols[idxItem] || '').trim();
+      if (!item) continue;
+      itens.push({
+        item,
+        quantidadeAtual: Number((cols[idxQtd] || '0').trim().replace(',', '.')) || 0,
+        alertaMinimo: Number((cols[idxMin] || '0').trim().replace(',', '.')) || 0,
+        unidadeMedida: (cols[idxUnid] || '').trim() || '-',
+        ultimaAtualizacao: (cols[idxData] || '').trim() || '-',
+        atualizadoPor: (cols[idxPor] || '').trim() || '-'
+      });
+    }
+
+    console.log('[INSUMOS] Itens parsed:', itens.length);
+    _renderizarInsumos(itens, conteudo);
+
+    const btnAtualizar = document.getElementById('btn-atualizar-insumos');
+    if (btnAtualizar && !btnAtualizar._insEvt) {
+      btnAtualizar._insEvt = true;
+      btnAtualizar.addEventListener('click', () => {
+        carregarInsumos();
+        showToast('Dados de Insumos Críticos atualizados!', 'success');
+      });
+    }
+
+  } catch (erro) {
+    console.error('[INSUMOS] Erro:', erro);
+    if (conteudo) conteudo.innerHTML = `<p style="color:var(--color-red);">Erro ao carregar: ${erro.message}</p>`;
+  }
+}
+
+function _renderizarInsumos(itens, conteudo) {
+  if (!conteudo) return;
+  if (itens.length === 0) {
+    conteudo.innerHTML = '<p style="color:var(--text-muted);">Nenhum insumo cadastrado.</p>';
+    return;
+  }
+
+  conteudo.innerHTML = `
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:1rem;">
+      ${itens.map((it, idx) => {
+        const critico = it.quantidadeAtual <= it.alertaMinimo;
+        const cor = critico ? 'var(--color-red)' : 'var(--color-green)';
+        return `
+        <div class="kpi-card" style="border-left:3px solid ${cor};">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:0.5rem;">
+            <strong style="font-size:0.95rem;">${it.item}</strong>
+            ${critico ? '<span style="font-size:0.7rem;background:rgba(192,122,108,0.15);color:var(--color-red);padding:0.15rem 0.5rem;border-radius:999px;white-space:nowrap;">ALERTA</span>' : ''}
+          </div>
+          <div style="margin-top:0.5rem;font-size:1.6rem;font-weight:600;color:${cor};">
+            ${it.quantidadeAtual} <span style="font-size:0.85rem;color:var(--text-muted);font-weight:500;">${it.unidadeMedida}</span>
+          </div>
+          <div class="kpi-subtext">Mínimo: ${it.alertaMinimo} ${it.unidadeMedida}</div>
+          <div class="kpi-subtext">Atualizado: ${it.ultimaAtualizacao} — ${it.atualizadoPor}</div>
+          <div style="display:flex;gap:0.4rem;margin-top:0.75rem;">
+            <input type="number" id="insumo-input-${idx}" value="${it.quantidadeAtual}" min="0" step="1" style="flex:1;padding:0.35rem 0.5rem;font-size:0.85rem;border-radius:var(--border-radius-sm);border:1px solid var(--card-border);background:rgba(255,255,255,0.6);">
+            <button class="btn btn-sm btn-secondary" data-insumo-item="${it.item}" data-insumo-idx="${idx}">Salvar</button>
+          </div>
+        </div>`;
+      }).join('')}
+    </div>`;
+
+  conteudo.querySelectorAll('[data-insumo-item]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const idx = btn.getAttribute('data-insumo-idx');
+      const item = btn.getAttribute('data-insumo-item');
+      const input = document.getElementById(`insumo-input-${idx}`);
+      const novaQuantidade = Number(input.value);
+      if (isNaN(novaQuantidade) || novaQuantidade < 0) { showToast('Quantidade inválida.', 'error'); return; }
+      _salvarQuantidadeInsumo(item, novaQuantidade, btn);
+    });
+  });
+}
+
+async function _salvarQuantidadeInsumo(item, novaQuantidade, btn) {
+  const textoOriginal = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = 'Salvando...';
+  try {
+    const resposta = await fetch(INSUMOS_EXEC_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({ item, novaQuantidade, atualizadoPor: 'Thalita Campos' })
+    });
+    const resultado = await resposta.json();
+    if (!resultado.ok) throw new Error(resultado.erro || 'Erro desconhecido');
+    showToast(`${item} atualizado para ${novaQuantidade}!`, 'success');
+    carregarInsumos();
+  } catch (erro) {
+    console.error('[INSUMOS] Erro ao salvar:', erro);
+    showToast('Erro ao salvar: ' + erro.message, 'error');
+    btn.disabled = false;
+    btn.textContent = textoOriginal;
+  }
 }
 
 
