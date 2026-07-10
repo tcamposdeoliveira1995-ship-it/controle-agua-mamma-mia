@@ -152,9 +152,14 @@ function refreshApp() {
 
   if (state.currentTab === 'auditoria') { setTimeout(() => { initAuditoria(); if (typeof lucide !== 'undefined') lucide.createIcons(); }, 50); return; }
 
+  // O ciclo "real" de hoje é sempre calculado pela data atual (regra: vira todo dia 7),
+  // não apenas pelas leituras já lançadas. Isso evita o painel ficar "preso" no ciclo
+  // anterior quando ainda não há nenhuma leitura lançada no ciclo novo.
+  const currentRealCycleKey = getCycleStats(state.readings, 'current').cycleKey;
   const availableCycles = getAvailableCycles(state.readings);
+  if (!availableCycles.includes(currentRealCycleKey)) availableCycles.unshift(currentRealCycleKey);
   if (!state.selectedCycleKey || !availableCycles.includes(state.selectedCycleKey)) {
-    state.selectedCycleKey = availableCycles[0] || '';
+    state.selectedCycleKey = currentRealCycleKey;
   }
   if (!state.selectedCycleKey) return;
 
