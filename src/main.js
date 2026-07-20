@@ -24,6 +24,11 @@ const OS_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSyKnl6d4trS
 const INSUMOS_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTxAviEilfLLSjTjSznB3EyWWtrHVp6ClhabTSuzu5gQh2aoYbLeYKKoH6CcfRPkBpelcOG9bU2a0b3/pub?output=csv';
 const INSUMOS_EXEC_URL = 'https://script.google.com/macros/s/AKfycbxtrM875Sb92YmXJRQUyTTW1fYgEIyDYwg_D6FJqlQHcsyiPvg8frozc2nug8WbTJzM/exec';
 
+// --- SINCRONIZAÇÃO MÓDULO ÁGUA (gviz) ---
+const AGUA_SPREADSHEET_ID = '1tixTJ74aaEo-EuCfTFI-efWOT7p-TIgN0su8NzX8aKw';
+const AGUA_GID = '198559971';
+const AGUA_GVIZ_URL = `https://docs.google.com/spreadsheets/d/${AGUA_SPREADSHEET_ID}/gviz/tq?tqx=out:json&gid=${AGUA_GID}`;
+
 // --- ESTADO GLOBAL ---
 let state = {
   readings: [],
@@ -139,6 +144,110 @@ document.addEventListener('DOMContentLoaded', () => {
   initEventListeners();
   if (typeof lucide !== 'undefined') lucide.createIcons();
 });
+
+// ================= SINCRONIZAÇÃO ÁGUA <-> PLANILHA =================
+
+// Datas do gviz vêm como texto "Date(ano,mês,dia)" ou "Date(ano,mês,dia,h,m,s)"
+// (mês já 0-indexado). Sem ambiguidade de formato regional.
+function _aguaParseDataGviz(v) {
+  if (v === null || v === undefined || v === '') return null;
+  if (typeof v === 'string') {
+    const m = /^Date\((\d+),(\d+),(\d+)(?:,(\d+),(\d+),(\d+))?/.exec(v);
+    if (m) {
+      const ano = Number(m[1]), mes = Number(m[2]), dia = Number(m[3]);
+      const hora = m[4] !== undefined ? Number(m[4]) : 12;
+      const min = m[5] !== undefined ? Number(m[5]) : 0;
+      const seg = m[6] !== undefined ? Number(m[6]) : 0;
+      const data = new Date(ano, mes, dia, hora, min, seg);
+      return isNaN(data.getTime()) ? null : data;
+    }
+  }
+  return null;
+}
+
+// Busca as respostas do formulário (Form_Responses) na planilha e mescla no
+// state.readings. O cálculo de consumo (calculateConsumptions) já trata por
+// diferença sequencial entre leituras de um mesmo hidrômetro/coluna — então,
+// mesmo que a SABESP troque o relógio e a numeração reinicie do zero, o app
+// não gera consumo negativo: aquele dia específico fica com consumo 0 e a
+// soma volta ao normal a partir da leitura seguinte.
+async function sincronizarAguaComPlanilha() {
+  try {
+    const settings = getAppSettings();
+    const response = await fetch(AGUA_GVIZ_URL, { cache: 'no-store' });
+    if (!response.ok) throw new Error('HTTP ' + response.status);
+    const texto = await response.text();
+
+    const match = /setResponse\(([\s\S]*)\);?\s*$/.exec(texto.trim());
+    if (!match) throw new Error('Resposta do Google em formato inesperado');
+    const payload = JSON.parse(match[1]);
+    if (payload.status === 'error') {
+      throw new Error((payload.errors && payload.errors[0] && payload.errors[0].detailed_message) || 'Erro ao ler a planilha de Água');
+    }
+
+    const colunas = (payload.table.cols || []).map(c => (c.label || '').trim());
+    const linhas = payload.table.rows || [];
+    if (linhas.length === 0) return;
+
+    const idxTimestamp = colunas.findIndex(c => /carimbo|timestamp/i.test(c));
+    const meterColumns = {};
+    Object.keys(settings.hydrometers).forEach(id => {
+      const idx = colunas.findIndex(c => c.toUpperCase().includes(id.toUpperCase()));
+      if (idx !== -1) meterColumns[id] = idx;
+    });
+
+    if (idxTimestamp === -1 || Object.keys(meterColumns).length === 0) {
+      console.warn('[AGUA] Colunas não reconhecidas na planilha:', colunas);
+      return;
+    }
+
+    const valorCelula = (linha, idx) => (idx >= 0 && linha.c && linha.c[idx]) ? linha.c[idx].v : null;
+
+    const novasLeituras = [];
+    linhas.forEach((linha, i) => {
+      const data = _aguaParseDataGviz(valorCelula(linha, idxTimestamp));
+      if (!data) return;
+      Object.keys(meterColumns).forEach(meterId => {
+        const raw = valorCelula(linha, meterColumns[meterId]);
+        if (raw === null || raw === undefined || raw === '') return;
+        const valor = typeof raw === 'number' ? raw : parseFloat(String(raw).replace(',', '.'));
+        if (isNaN(valor) || valor < 0) return;
+        novasLeituras.push({
+          id: `sheet-${meterId}-${data.getTime()}-${i}`,
+          meterId,
+          date: data.toISOString(),
+          index: Number(valor.toFixed(3))
+        });
+      });
+    });
+
+    if (novasLeituras.length === 0) return;
+
+    // Mantém no máximo uma leitura por hidrômetro por dia. Em caso de conflito,
+    // a leitura vinda da planilha prevalece — exceto sobre leituras iniciais
+    // (isInitial), que servem apenas de base histórica e devem ser preservadas.
+    const mapa = new Map();
+    (state.readings || []).forEach(r => {
+      const rDate = new Date(r.date);
+      const chave = `${r.meterId}-${rDate.getFullYear()}-${String(rDate.getMonth() + 1).padStart(2, '0')}-${String(rDate.getDate()).padStart(2, '0')}`;
+      mapa.set(chave, r);
+    });
+
+    novasLeituras.sort((a, b) => new Date(a.date) - new Date(b.date));
+    novasLeituras.forEach(r => {
+      const rDate = new Date(r.date);
+      const chave = `${r.meterId}-${rDate.getFullYear()}-${String(rDate.getMonth() + 1).padStart(2, '0')}-${String(rDate.getDate()).padStart(2, '0')}`;
+      const existente = mapa.get(chave);
+      if (existente && existente.isInitial) return;
+      mapa.set(chave, r);
+    });
+
+    state.readings = Array.from(mapa.values()).sort((a, b) => new Date(b.date) - new Date(a.date));
+    saveReadings(state.readings);
+  } catch (err) {
+    console.error('[AGUA] Falha ao sincronizar com a planilha:', err);
+  }
+}
 
 // ================= REFRESH GERAL =================
 
@@ -784,6 +893,9 @@ function switchTab(tabName) {
   DOM.tabPanels.forEach(panel => { panel.getAttribute('id') === `tab-content-${tabName}` ? panel.classList.add('active') : panel.classList.remove('active'); });
   if (tabName === 'configuracoes') populateMetersSelectInputs();
   refreshApp();
+  if (tabName === 'dashboard') {
+    sincronizarAguaComPlanilha().then(() => { if (state.currentTab === 'dashboard') refreshApp(); });
+  }
 }
 
 function openModal(modal) { modal.classList.add('active'); modal.setAttribute('aria-hidden', 'false'); }
