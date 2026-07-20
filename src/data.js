@@ -20,7 +20,16 @@ const DEFAULT_SETTINGS = {
     'A25LM0975883': { id: 'A25LM0975883', name: 'Produção & Fornos', alias: 'PJ', color: '#f59e0b', unit: 'YUKA' },
     'A25LM0975884': { id: 'A25LM0975884', name: 'Jardim, Calçada & Limpeza', alias: 'PJ', color: '#8b5cf6', unit: 'YUKA' }
   },
-  units: ['YUKA']
+  units: ['YUKA'],
+  // Datas de vencimento de documentos (formato ISO 'AAAA-MM-DD'). null = sem entrada/data não informada.
+  documentosVencimento: {
+    tcVigilancia: '2026-08-08',
+    tcAvcb: '2028-06-18',
+    yukaVigilancia: null,
+    yukaAvcb: '2028-04-09',
+    cdVigilancia: null,
+    cdAvcb: null
+  }
 };
 
 export function getAppSettings() {
