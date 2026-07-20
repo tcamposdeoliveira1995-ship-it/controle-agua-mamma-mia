@@ -55,6 +55,9 @@
     </div>
   </header>
 
+  <!-- DATAS IMPORTANTES - sempre visível, independente da aba -->
+  <div class="documentos-vencimento-bar no-print" id="documentos-vencimento-bar"></div>
+
   <!-- NAVEGAÇÃO -->
   <nav class="navigation-tabs no-print" aria-label="Abas do Sistema">
     <button class="tab-btn active" data-tab="dashboard"><i data-lucide="droplets"></i>Água</button>
@@ -67,6 +70,7 @@
     <button class="tab-btn" data-tab="higienizacao"><i data-lucide="spray-can"></i>MOTORES EQ. REFRIGERADOS</button>
     <button class="tab-btn" data-tab="insumos"><i data-lucide="package-x"></i>Insumos Críticos</button>
     <button class="tab-btn" data-tab="auditoria"><i data-lucide="clipboard-list"></i>Auditoria</button>
+    <button class="tab-btn" data-tab="configuracoes"><i data-lucide="settings"></i>Configurações</button>
   </nav>
 
   <main id="app-main-content">
@@ -403,6 +407,17 @@
           <h3 style="font-size: 1.1rem; font-weight: 700; color: white; margin-top: 2rem; margin-bottom: 1rem; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 0.5rem;">📋 Operação</h3>
           <div class="admin-settings-grid">
             <div class="form-group"><label for="admin-checklist-horas" class="form-label">Tempo máximo sem checklist (horas)</label><input type="number" id="admin-checklist-horas" class="form-control" step="1" min="1" required><span class="form-help">Horas sem preenchimento de checklist para gerar alerta (Padrão: 12h). Monitoramento automático será ativado quando a planilha de respostas estiver integrada.</span></div>
+          </div>
+
+          <!-- Datas Importantes / Documentos -->
+          <h3 style="font-size: 1.1rem; font-weight: 700; color: white; margin-top: 2rem; margin-bottom: 1rem; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 0.5rem;">📅 Datas Importantes (Documentos)</h3>
+          <div class="admin-settings-grid">
+            <div class="form-group"><label for="admin-doc-tc-vigilancia" class="form-label">TC - Vigilância</label><input type="date" id="admin-doc-tc-vigilancia" class="form-control"><span class="form-help">Deixe em branco se não houver data de entrada/vencimento.</span></div>
+            <div class="form-group"><label for="admin-doc-tc-avcb" class="form-label">TC - AVCB</label><input type="date" id="admin-doc-tc-avcb" class="form-control"><span class="form-help">Deixe em branco se não houver data de entrada/vencimento.</span></div>
+            <div class="form-group"><label for="admin-doc-yuka-vigilancia" class="form-label">YUKA - Vigilância</label><input type="date" id="admin-doc-yuka-vigilancia" class="form-control"><span class="form-help">Deixe em branco se não houver data de entrada/vencimento.</span></div>
+            <div class="form-group"><label for="admin-doc-yuka-avcb" class="form-label">YUKA - AVCB</label><input type="date" id="admin-doc-yuka-avcb" class="form-control"><span class="form-help">Deixe em branco se não houver data de entrada/vencimento.</span></div>
+            <div class="form-group"><label for="admin-doc-cd-vigilancia" class="form-label">CD - Vigilância</label><input type="date" id="admin-doc-cd-vigilancia" class="form-control"><span class="form-help">Deixe em branco se não houver data de entrada/vencimento.</span></div>
+            <div class="form-group"><label for="admin-doc-cd-avcb" class="form-label">CD - AVCB</label><input type="date" id="admin-doc-cd-avcb" class="form-control"><span class="form-help">Deixe em branco se não houver data de entrada/vencimento.</span></div>
           </div>
 
           <!-- Hidrômetros -->
