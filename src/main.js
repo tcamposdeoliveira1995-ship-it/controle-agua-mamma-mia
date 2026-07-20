@@ -692,8 +692,7 @@ function renderIndividualMeterCards(stats) {
         <span class="${statusClass}">${statusText}</span>
       </div>
       <div class="meter-title-block">
-        <h3 title="${m.name}">${m.name.split(' & ')[0]}</h3>
-        <span class="meter-id-label">${id}</span>
+        <h3>${id}</h3>
       </div>
       <div class="faltam-indicator-tag ${faltamClass}">${textFaltam}</div>
       <div class="progress-container">
