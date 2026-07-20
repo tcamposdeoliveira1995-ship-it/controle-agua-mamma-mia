@@ -132,6 +132,12 @@ const DOM = {
   adminPerdasLimite: document.getElementById('admin-perdas-limite'),
   adminChecklistHoras: document.getElementById('admin-checklist-horas'),
   adminMetersList: document.getElementById('admin-meters-list'),
+  adminDocTcVigilancia: document.getElementById('admin-doc-tc-vigilancia'),
+  adminDocTcAvcb: document.getElementById('admin-doc-tc-avcb'),
+  adminDocYukaVigilancia: document.getElementById('admin-doc-yuka-vigilancia'),
+  adminDocYukaAvcb: document.getElementById('admin-doc-yuka-avcb'),
+  adminDocCdVigilancia: document.getElementById('admin-doc-cd-vigilancia'),
+  adminDocCdAvcb: document.getElementById('admin-doc-cd-avcb'),
   toastContainer: document.getElementById('toast-container-v2')
 };
 
@@ -141,6 +147,7 @@ document.addEventListener('DOMContentLoaded', () => {
   updateAppSelectors();
   resetReadingFormDate();
   switchTab(state.currentTab);
+  renderDocumentosVencimentoBar();
   initEventListeners();
   if (typeof lucide !== 'undefined') lucide.createIcons();
 });
@@ -247,6 +254,56 @@ async function sincronizarAguaComPlanilha() {
   } catch (err) {
     console.error('[AGUA] Falha ao sincronizar com a planilha:', err);
   }
+}
+
+// ================= DATAS IMPORTANTES (DOCUMENTOS) =================
+
+function renderDocumentosVencimentoBar() {
+  const container = document.getElementById('documentos-vencimento-bar');
+  if (!container) return;
+
+  const settings = getAppSettings();
+  const doc = settings.documentosVencimento || {};
+  const itens = [
+    { label: 'TC - Vigilância', valor: doc.tcVigilancia },
+    { label: 'TC - AVCB', valor: doc.tcAvcb },
+    { label: 'YUKA - Vigilância', valor: doc.yukaVigilancia },
+    { label: 'YUKA - AVCB', valor: doc.yukaAvcb },
+    { label: 'CD - Vigilância', valor: doc.cdVigilancia },
+    { label: 'CD - AVCB', valor: doc.cdAvcb }
+  ];
+
+  const hoje = new Date();
+  hoje.setHours(0, 0, 0, 0);
+
+  container.innerHTML = itens.map(item => {
+    if (!item.valor) {
+      return `<div class="doc-vencimento-chip doc-vencimento-alerta">
+        <span class="doc-vencimento-label">${item.label}</span>
+        <span class="doc-vencimento-status">⚠️ SEM ENTRADA</span>
+      </div>`;
+    }
+    const [ano, mes, dia] = item.valor.split('-').map(Number);
+    const dataVenc = new Date(ano, mes - 1, dia);
+    const diffDias = Math.ceil((dataVenc - hoje) / (1000 * 60 * 60 * 24));
+
+    let statusHtml, chipClass;
+    if (diffDias < 0) {
+      const diasAtraso = Math.abs(diffDias);
+      statusHtml = `🔴 Vencido há ${diasAtraso} dia${diasAtraso === 1 ? '' : 's'}`;
+      chipClass = 'doc-vencimento-alerta';
+    } else if (diffDias <= 30) {
+      statusHtml = `Faltam ${diffDias} dia${diffDias === 1 ? '' : 's'}`;
+      chipClass = 'doc-vencimento-atencao';
+    } else {
+      statusHtml = `Faltam ${diffDias} dias`;
+      chipClass = 'doc-vencimento-ok';
+    }
+    return `<div class="doc-vencimento-chip ${chipClass}">
+      <span class="doc-vencimento-label">${item.label}</span>
+      <span class="doc-vencimento-status">${statusHtml}</span>
+    </div>`;
+  }).join('');
 }
 
 // ================= REFRESH GERAL =================
@@ -802,6 +859,14 @@ function renderConfiguracoesTab() {
   if (DOM.adminPerdasLimite) DOM.adminPerdasLimite.value = settings.alertPerdasLimite;
   if (DOM.adminChecklistHoras) DOM.adminChecklistHoras.value = settings.alertChecklistHoras;
 
+  const doc = settings.documentosVencimento || {};
+  if (DOM.adminDocTcVigilancia) DOM.adminDocTcVigilancia.value = doc.tcVigilancia || '';
+  if (DOM.adminDocTcAvcb) DOM.adminDocTcAvcb.value = doc.tcAvcb || '';
+  if (DOM.adminDocYukaVigilancia) DOM.adminDocYukaVigilancia.value = doc.yukaVigilancia || '';
+  if (DOM.adminDocYukaAvcb) DOM.adminDocYukaAvcb.value = doc.yukaAvcb || '';
+  if (DOM.adminDocCdVigilancia) DOM.adminDocCdVigilancia.value = doc.cdVigilancia || '';
+  if (DOM.adminDocCdAvcb) DOM.adminDocCdAvcb.value = doc.cdAvcb || '';
+
   DOM.adminMetersList.innerHTML = '';
   Object.keys(settings.hydrometers).forEach(id => {
     const h = settings.hydrometers[id];
@@ -1031,6 +1096,15 @@ function submitAdminSettings() {
   settings.alertOsDiasAberta = alertOsDiasAberta; settings.alertOsDiasAguardando = alertOsDiasAguardando;
   settings.alertPerdasLimite = alertPerdasLimite; settings.alertChecklistHoras = alertChecklistHoras;
 
+  settings.documentosVencimento = {
+    tcVigilancia: DOM.adminDocTcVigilancia?.value || null,
+    tcAvcb: DOM.adminDocTcAvcb?.value || null,
+    yukaVigilancia: DOM.adminDocYukaVigilancia?.value || null,
+    yukaAvcb: DOM.adminDocYukaAvcb?.value || null,
+    cdVigilancia: DOM.adminDocCdVigilancia?.value || null,
+    cdAvcb: DOM.adminDocCdAvcb?.value || null
+  };
+
   const aliasInputs = DOM.adminMetersList.querySelectorAll('.admin-meter-alias-input');
   aliasInputs.forEach(input => { const id = input.getAttribute('data-id'); const aliasValue = input.value.trim().toUpperCase(); if (aliasValue && settings.hydrometers[id]) settings.hydrometers[id].alias = aliasValue; });
   const colorInputs = DOM.adminMetersList.querySelectorAll('input[type="color"]');
@@ -1040,6 +1114,7 @@ function submitAdminSettings() {
   // Invalida cache de alertas para recalcular com novos parâmetros
   state.alertasCache = null;
   updateAppSelectors(); refreshApp();
+  renderDocumentosVencimentoBar();
   showToast('Configurações salvas e aplicadas com sucesso!', 'success');
 }
 
