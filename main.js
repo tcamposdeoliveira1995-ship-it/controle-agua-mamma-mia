@@ -25,8 +25,8 @@ const INSUMOS_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTxAviE
 const INSUMOS_EXEC_URL = 'https://script.google.com/macros/s/AKfycbxtrM875Sb92YmXJRQUyTTW1fYgEIyDYwg_D6FJqlQHcsyiPvg8frozc2nug8WbTJzM/exec';
 
 // --- SINCRONIZAÇÃO MÓDULO ÁGUA (gviz) ---
-const AGUA_SPREADSHEET_ID = '1whesPHLd83XkPRTWwrktJRvlfKk_CkCyxj_8ioSnk6A';
-const AGUA_GID = '1728678619';
+const AGUA_SPREADSHEET_ID = '1tixTJ74aaEo-EuCfTFI-efWOT7p-TIgN0su8NzX8aKw';
+const AGUA_GID = '198559971';
 const AGUA_GVIZ_URL = `https://docs.google.com/spreadsheets/d/${AGUA_SPREADSHEET_ID}/gviz/tq?tqx=out:json&gid=${AGUA_GID}`;
 
 // --- ESTADO GLOBAL ---
