@@ -21,6 +21,13 @@ const LIMPEZA_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRt3TOj
 const MP_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTFEg4Bpk7evJs7NDYRCMBVWm5ZB6hQRD8SS_RwowjbNS_hI2kmtzH5ovhjYRpRssk0YH00yiCgoyCC/pub?gid=2077926267&single=true&output=csv';
 const PERDAS_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQ0QXaxvuAAaF7XzQWayifLZIflDtS1psT3gNJTmkQ0BvPWbuKPttlJ6EAcE8Zv8IG_UlAbScrhD4Nb/pub?output=csv';
 const OS_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSyKnl6d4trSwtVru3JQIcoqb_h2gTHKBqn-3zXM1JW7MTzm_Xj01UJh62eDPDNEOYjisMWrGrWfFJt/pub?gid=1728678619&single=true&output=csv';
+const INSUMOS_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTxAviEilfLLSjTjSznB3EyWWtrHVp6ClhabTSuzu5gQh2aoYbLeYKKoH6CcfRPkBpelcOG9bU2a0b3/pub?output=csv';
+const INSUMOS_EXEC_URL = 'https://script.google.com/macros/s/AKfycbxtrM875Sb92YmXJRQUyTTW1fYgEIyDYwg_D6FJqlQHcsyiPvg8frozc2nug8WbTJzM/exec';
+
+// --- SINCRONIZAÇÃO MÓDULO ÁGUA (gviz) ---
+const AGUA_SPREADSHEET_ID = '1whesPHLd83XkPRTWwrktJRvlfKk_CkCyxj_8ioSnk6A';
+const AGUA_GID = '1728678619';
+const AGUA_GVIZ_URL = `https://docs.google.com/spreadsheets/d/${AGUA_SPREADSHEET_ID}/gviz/tq?tqx=out:json&gid=${AGUA_GID}`;
 
 // --- ESTADO GLOBAL ---
 let state = {
@@ -138,6 +145,110 @@ document.addEventListener('DOMContentLoaded', () => {
   if (typeof lucide !== 'undefined') lucide.createIcons();
 });
 
+// ================= SINCRONIZAÇÃO ÁGUA <-> PLANILHA =================
+
+// Datas do gviz vêm como texto "Date(ano,mês,dia)" ou "Date(ano,mês,dia,h,m,s)"
+// (mês já 0-indexado). Sem ambiguidade de formato regional.
+function _aguaParseDataGviz(v) {
+  if (v === null || v === undefined || v === '') return null;
+  if (typeof v === 'string') {
+    const m = /^Date\((\d+),(\d+),(\d+)(?:,(\d+),(\d+),(\d+))?/.exec(v);
+    if (m) {
+      const ano = Number(m[1]), mes = Number(m[2]), dia = Number(m[3]);
+      const hora = m[4] !== undefined ? Number(m[4]) : 12;
+      const min = m[5] !== undefined ? Number(m[5]) : 0;
+      const seg = m[6] !== undefined ? Number(m[6]) : 0;
+      const data = new Date(ano, mes, dia, hora, min, seg);
+      return isNaN(data.getTime()) ? null : data;
+    }
+  }
+  return null;
+}
+
+// Busca as respostas do formulário (Form_Responses) na planilha e mescla no
+// state.readings. O cálculo de consumo (calculateConsumptions) já trata por
+// diferença sequencial entre leituras de um mesmo hidrômetro/coluna — então,
+// mesmo que a SABESP troque o relógio e a numeração reinicie do zero, o app
+// não gera consumo negativo: aquele dia específico fica com consumo 0 e a
+// soma volta ao normal a partir da leitura seguinte.
+async function sincronizarAguaComPlanilha() {
+  try {
+    const settings = getAppSettings();
+    const response = await fetch(AGUA_GVIZ_URL, { cache: 'no-store' });
+    if (!response.ok) throw new Error('HTTP ' + response.status);
+    const texto = await response.text();
+
+    const match = /setResponse\(([\s\S]*)\);?\s*$/.exec(texto.trim());
+    if (!match) throw new Error('Resposta do Google em formato inesperado');
+    const payload = JSON.parse(match[1]);
+    if (payload.status === 'error') {
+      throw new Error((payload.errors && payload.errors[0] && payload.errors[0].detailed_message) || 'Erro ao ler a planilha de Água');
+    }
+
+    const colunas = (payload.table.cols || []).map(c => (c.label || '').trim());
+    const linhas = payload.table.rows || [];
+    if (linhas.length === 0) return;
+
+    const idxTimestamp = colunas.findIndex(c => /carimbo|timestamp/i.test(c));
+    const meterColumns = {};
+    Object.keys(settings.hydrometers).forEach(id => {
+      const idx = colunas.findIndex(c => c.toUpperCase().includes(id.toUpperCase()));
+      if (idx !== -1) meterColumns[id] = idx;
+    });
+
+    if (idxTimestamp === -1 || Object.keys(meterColumns).length === 0) {
+      console.warn('[AGUA] Colunas não reconhecidas na planilha:', colunas);
+      return;
+    }
+
+    const valorCelula = (linha, idx) => (idx >= 0 && linha.c && linha.c[idx]) ? linha.c[idx].v : null;
+
+    const novasLeituras = [];
+    linhas.forEach((linha, i) => {
+      const data = _aguaParseDataGviz(valorCelula(linha, idxTimestamp));
+      if (!data) return;
+      Object.keys(meterColumns).forEach(meterId => {
+        const raw = valorCelula(linha, meterColumns[meterId]);
+        if (raw === null || raw === undefined || raw === '') return;
+        const valor = typeof raw === 'number' ? raw : parseFloat(String(raw).replace(',', '.'));
+        if (isNaN(valor) || valor < 0) return;
+        novasLeituras.push({
+          id: `sheet-${meterId}-${data.getTime()}-${i}`,
+          meterId,
+          date: data.toISOString(),
+          index: Number(valor.toFixed(3))
+        });
+      });
+    });
+
+    if (novasLeituras.length === 0) return;
+
+    // Mantém no máximo uma leitura por hidrômetro por dia. Em caso de conflito,
+    // a leitura vinda da planilha prevalece — exceto sobre leituras iniciais
+    // (isInitial), que servem apenas de base histórica e devem ser preservadas.
+    const mapa = new Map();
+    (state.readings || []).forEach(r => {
+      const rDate = new Date(r.date);
+      const chave = `${r.meterId}-${rDate.getFullYear()}-${String(rDate.getMonth() + 1).padStart(2, '0')}-${String(rDate.getDate()).padStart(2, '0')}`;
+      mapa.set(chave, r);
+    });
+
+    novasLeituras.sort((a, b) => new Date(a.date) - new Date(b.date));
+    novasLeituras.forEach(r => {
+      const rDate = new Date(r.date);
+      const chave = `${r.meterId}-${rDate.getFullYear()}-${String(rDate.getMonth() + 1).padStart(2, '0')}-${String(rDate.getDate()).padStart(2, '0')}`;
+      const existente = mapa.get(chave);
+      if (existente && existente.isInitial) return;
+      mapa.set(chave, r);
+    });
+
+    state.readings = Array.from(mapa.values()).sort((a, b) => new Date(b.date) - new Date(a.date));
+    saveReadings(state.readings);
+  } catch (err) {
+    console.error('[AGUA] Falha ao sincronizar com a planilha:', err);
+  }
+}
+
 // ================= REFRESH GERAL =================
 
 function refreshApp() {
@@ -146,11 +257,18 @@ function refreshApp() {
 
   if (state.currentTab === 'higienizacao') { carregarHigienizacao(); if (typeof lucide !== 'undefined') lucide.createIcons(); return; }
 
+  if (state.currentTab === 'insumos') { carregarInsumos(); if (typeof lucide !== 'undefined') lucide.createIcons(); return; }
+
   if (state.currentTab === 'auditoria') { setTimeout(() => { initAuditoria(); if (typeof lucide !== 'undefined') lucide.createIcons(); }, 50); return; }
 
+  // O ciclo "real" de hoje é sempre calculado pela data atual (regra: vira todo dia 7),
+  // não apenas pelas leituras já lançadas. Isso evita o painel ficar "preso" no ciclo
+  // anterior quando ainda não há nenhuma leitura lançada no ciclo novo.
+  const currentRealCycleKey = getCycleStats(state.readings, 'current').cycleKey;
   const availableCycles = getAvailableCycles(state.readings);
+  if (!availableCycles.includes(currentRealCycleKey)) availableCycles.unshift(currentRealCycleKey);
   if (!state.selectedCycleKey || !availableCycles.includes(state.selectedCycleKey)) {
-    state.selectedCycleKey = availableCycles[0] || '';
+    state.selectedCycleKey = currentRealCycleKey;
   }
   if (!state.selectedCycleKey) return;
 
@@ -775,6 +893,9 @@ function switchTab(tabName) {
   DOM.tabPanels.forEach(panel => { panel.getAttribute('id') === `tab-content-${tabName}` ? panel.classList.add('active') : panel.classList.remove('active'); });
   if (tabName === 'configuracoes') populateMetersSelectInputs();
   refreshApp();
+  if (tabName === 'dashboard') {
+    sincronizarAguaComPlanilha().then(() => { if (state.currentTab === 'dashboard') refreshApp(); });
+  }
 }
 
 function openModal(modal) { modal.classList.add('active'); modal.setAttribute('aria-hidden', 'false'); }
@@ -2148,26 +2269,46 @@ function _pipaParseData(str) {
 
 // ================= MÓDULO HIGIENIZAÇÃO DE MOTORES =================
 
-const HIGIENIZACAO_CSV_URL =
-  'https://docs.google.com/spreadsheets/d/e/2PACX-1vSyKnl6d4trSwtVru3JQIcoqb_h2gTHKBqn-3zXM1JW7MTzm_Xj01UJh62eDPDNEOYjisMWrGrWfFJt/pub?output=csv';
+const HIGIENIZACAO_SPREADSHEET_ID = '1whesPHLd83XkPRTWwrktJRvlfKk_CkCyxj_8ioSnk6A';
+const HIGIENIZACAO_GID = '1973720702';
+const HIGIENIZACAO_GVIZ_URL =
+  `https://docs.google.com/spreadsheets/d/${HIGIENIZACAO_SPREADSHEET_ID}/gviz/tq?tqx=out:json&gid=${HIGIENIZACAO_GID}`;
 
 const HIGIENIZACAO_UNIDADES = ['Yuka', 'Tc', 'Cd'];
 
+// Enquanto uma unidade não tem nenhuma resposta registrada no formulário,
+// a contagem de dias parte dessa data-base (definida manualmente).
+const HIGIENIZACAO_DATA_BASE = new Date(2026, 5, 1); // 01/06/2026
+
 let _higienizacaoHistoricoCompleto = [];
 
-function _higienizacaoParseData(str) {
-  if (!str || str === '-') return null;
-  const s = str.trim();
-  if (s.includes('/')) {
-    // aceita DD/MM/YYYY (com ou sem hora junto, ex: vindo do Timestamp)
-    const soData = s.split(' ')[0];
-    const [d, m, y] = soData.split('/');
-    if (!d || !m || !y) return null;
-    const data = new Date(`${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`);
-    return isNaN(data.getTime()) ? null : data;
+function _higienizacaoAnoValido(data) {
+  if (!data) return false;
+  const ano = data.getFullYear();
+  return ano >= 2023 && ano <= 2035;
+}
+
+// Valores de data/hora do gviz vêm como texto tipo "Date(2026,6,2)" (ano, mês
+// já 0-indexado, dia) ou "Date(2026,6,2,15,20,0)" com hora — nunca ambíguo,
+// então não depende de nenhuma formatação regional da planilha.
+function _higienizacaoParseDataGviz(v) {
+  if (v === null || v === undefined || v === '') return null;
+  if (typeof v === 'string') {
+    const m = /^Date\((\d+),(\d+),(\d+)/.exec(v);
+    if (m) {
+      const ano = Number(m[1]), mes = Number(m[2]), dia = Number(m[3]);
+      const data = new Date(ano, mes, dia);
+      return isNaN(data.getTime()) ? null : data;
+    }
   }
-  const data = new Date(s);
-  return isNaN(data.getTime()) ? null : data;
+  return null;
+}
+
+function _higienizacaoFormatarDataBR(data) {
+  if (!data) return '-';
+  const dia = String(data.getDate()).padStart(2, '0');
+  const mes = String(data.getMonth() + 1).padStart(2, '0');
+  return `${dia}/${mes}/${data.getFullYear()}`;
 }
 
 function _higienizacaoNormalizarUnidade(raw) {
@@ -2192,13 +2333,20 @@ function _higienizacaoCalcularStatus(registrosUnidade) {
     .filter(r => r.data)
     .sort((a, b) => b.data.getTime() - a.data.getTime());
 
-  const ultimo = ordenados[0] || null;
+  let ultimo = ordenados[0] || null;
+  let semRegistro = false;
+
+  if (!ultimo) {
+    // Nenhuma resposta ainda no formulário: conta a partir da data-base
+    ultimo = { data: HIGIENIZACAO_DATA_BASE, responsavel: '-', dataStr: '01/06/2026' };
+    semRegistro = true;
+  }
+
   const marco = _higienizacaoUltimoMarco(hoje);
+  const diasDesde = Math.floor((hoje.getTime() - ultimo.data.getTime()) / (1000 * 60 * 60 * 24));
+  const atrasado = ultimo.data.getTime() < marco.getTime();
 
-  const diasDesde = ultimo ? Math.floor((hoje.getTime() - ultimo.data.getTime()) / (1000 * 60 * 60 * 24)) : null;
-  const atrasado = !ultimo || ultimo.data.getTime() < marco.getTime();
-
-  return { ultimo, diasDesde, atrasado };
+  return { ultimo, diasDesde, atrasado, semRegistro };
 }
 
 async function carregarHigienizacao() {
@@ -2211,43 +2359,65 @@ async function carregarHigienizacao() {
   if (historicoBody)  historicoBody.innerHTML  = '<tr><td colspan="3" style="text-align:center;color:var(--text-muted);">Carregando...</td></tr>';
 
   try {
-    console.log('[HIGIENIZACAO] Iniciando fetch...');
-    const response = await fetch(HIGIENIZACAO_CSV_URL, { cache: 'no-store' });
+    console.log('[HIGIENIZACAO] Iniciando fetch (gviz)...');
+    const response = await fetch(HIGIENIZACAO_GVIZ_URL, { cache: 'no-store' });
     console.log('[HIGIENIZACAO] Status:', response.status);
     if (!response.ok) throw new Error('HTTP ' + response.status);
-    const csv = await response.text();
+    const texto = await response.text();
 
-    const linhas = _parseCSVRobusto(csv);
-    console.log('[HIGIENIZACAO] Linhas parsed:', linhas.length, '| cab:', linhas[0]);
+    const match = /setResponse\(([\s\S]*)\);?\s*$/.exec(texto.trim());
+    if (!match) throw new Error('Resposta do Google em formato inesperado');
+    const payload = JSON.parse(match[1]);
 
-    if (linhas.length < 2) {
+    if (payload.status === 'error') {
+      throw new Error((payload.errors && payload.errors[0] && payload.errors[0].detailed_message) || 'Erro ao ler a planilha');
+    }
+
+    const colunas = (payload.table.cols || []).map(c => (c.label || '').toUpperCase());
+    const linhasDados = payload.table.rows || [];
+    console.log('[HIGIENIZACAO] Linhas parsed:', linhasDados.length, '| colunas:', colunas);
+
+    if (linhasDados.length === 0) {
       if (statusConteudo) statusConteudo.innerHTML = '<p style="color:var(--text-muted);">Nenhum dado encontrado.</p>';
       if (historicoBody)  historicoBody.innerHTML  = '<tr><td colspan="3" style="text-align:center;">Nenhum registro.</td></tr>';
       return;
     }
 
-    const cab = linhas[0].map(c => c.toUpperCase());
-
-    const idxTimestamp = cab.findIndex(c => c.includes('TIMESTAMP') || c.includes('CARIMBO'));
-    const idxData       = cab.findIndex(c => c.includes('HIGIENIZ'));
-    const idxResp        = cab.findIndex(c => c.includes('RESPONS'));
-    const idxUnidade      = cab.findIndex(c => c.includes('UNIDADE'));
+    const idxTimestamp = colunas.findIndex(c => c.includes('TIMESTAMP') || c.includes('CARIMBO'));
+    const idxData       = colunas.findIndex(c => c.includes('HIGIENIZ'));
+    const idxResp        = colunas.findIndex(c => c.includes('RESPONS'));
+    const idxUnidade      = colunas.findIndex(c => c.includes('UNIDADE'));
 
     console.log('[HIGIENIZACAO] Indices:', { idxTimestamp, idxData, idxResp, idxUnidade });
 
-    const registros = [];
-    for (let i = 1; i < linhas.length; i++) {
-      const cols = linhas[i];
-      if (cols.every(c => c === '')) continue;
+    const valorCelula = (linha, idx) => {
+      if (idx < 0 || !linha.c || !linha.c[idx]) return null;
+      return linha.c[idx].v;
+    };
 
-      const dataStr = idxData >= 0 ? cols[idxData] : (idxTimestamp >= 0 ? cols[idxTimestamp] : cols[1]);
-      const data = _higienizacaoParseData(dataStr || (idxTimestamp >= 0 ? cols[idxTimestamp] : ''));
+    const registros = [];
+    for (const linha of linhasDados) {
+      const dataPrincipal = _higienizacaoParseDataGviz(valorCelula(linha, idxData));
+      const dataTimestamp = _higienizacaoParseDataGviz(valorCelula(linha, idxTimestamp));
+
+      let data = _higienizacaoAnoValido(dataPrincipal) ? dataPrincipal : null;
+      if (!data && _higienizacaoAnoValido(dataTimestamp)) {
+        data = dataTimestamp;
+      }
+
+      const unidadeBruta = valorCelula(linha, idxUnidade);
+      const unidadeNormalizada = _higienizacaoNormalizarUnidade(unidadeBruta);
+      if (!HIGIENIZACAO_UNIDADES.includes(unidadeNormalizada)) {
+        console.warn('[HIGIENIZACAO] Unidade não reconhecida:', unidadeBruta);
+      }
+
+      const respBruto = valorCelula(linha, idxResp);
 
       registros.push({
-        dataStr:    dataStr || '-',
+        dataStr:    _higienizacaoFormatarDataBR(data),
         data:       data,
-        responsavel: idxResp    >= 0 ? (cols[idxResp]    || '-') : (cols[2] || '-'),
-        unidade:    _higienizacaoNormalizarUnidade(idxUnidade >= 0 ? cols[idxUnidade] : cols[3]),
+        responsavel: respBruto || '-',
+        unidade:    unidadeNormalizada,
       });
     }
 
@@ -2260,18 +2430,19 @@ async function carregarHigienizacao() {
         <div class="dashboard-grid" style="grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:1rem;">
           ${HIGIENIZACAO_UNIDADES.map(unidade => {
             const regsUnidade = registros.filter(r => r.unidade === unidade);
-            const { ultimo, diasDesde, atrasado } = _higienizacaoCalcularStatus(regsUnidade);
+            const { ultimo, diasDesde, atrasado, semRegistro } = _higienizacaoCalcularStatus(regsUnidade);
             const corStatus = atrasado ? 'var(--color-red)' : 'var(--color-green)';
             const textoStatus = atrasado ? '🔴 Atrasado' : '🟢 Em dia';
-            const dataFormatada = ultimo && ultimo.data ? ultimo.data.toLocaleDateString('pt-BR') : 'Nunca registrada';
-            const diasTexto = diasDesde !== null ? `${diasDesde} dia(s) atrás` : '-';
+            const dataFormatada = ultimo.data.toLocaleDateString('pt-BR');
+            const diasTexto = `${diasDesde} dia(s) atrás`;
+            const rotuloData = semRegistro ? '📅 Sem registro — contando desde' : '📅 Última';
             return `
               <div class="kpi-card" style="text-align:left;">
                 <div class="kpi-label" style="font-size:1rem;font-weight:600;">${unidade}</div>
                 <div style="margin:0.5rem 0;font-size:0.9rem;color:${corStatus};font-weight:600;">${textoStatus}</div>
-                <div style="font-size:0.85rem;color:var(--text-muted);">📅 Última: ${dataFormatada}</div>
+                <div style="font-size:0.85rem;color:var(--text-muted);">${rotuloData}: ${dataFormatada}</div>
                 <div style="font-size:0.85rem;color:var(--text-muted);">⏱️ ${diasTexto}</div>
-                <div style="font-size:0.85rem;color:var(--text-muted);">👤 ${ultimo ? ultimo.responsavel : '-'}</div>
+                <div style="font-size:0.85rem;color:var(--text-muted);">👤 ${semRegistro ? '-' : ultimo.responsavel}</div>
               </div>`;
           }).join('')}
         </div>`;
@@ -2359,6 +2530,133 @@ function _renderizarHistoricoHigienizacao(registros, countEl, historicoBody) {
       <td>${r.responsavel}</td>
       <td><strong>${r.unidade}</strong></td>
     </tr>`).join('');
+}
+
+
+// ================= MÓDULO INSUMOS CRÍTICOS =================
+
+async function carregarInsumos() {
+  const conteudo = document.getElementById('insumos-conteudo');
+  if (conteudo) conteudo.innerHTML = '<p style="color:var(--text-muted);">Carregando...</p>';
+
+  try {
+    console.log('[INSUMOS] Iniciando fetch (CSV)...');
+    const response = await fetch(INSUMOS_CSV_URL, { cache: 'no-store' });
+    console.log('[INSUMOS] Status:', response.status);
+    if (!response.ok) throw new Error('HTTP ' + response.status);
+    const csv = await response.text();
+
+    const linhas = parseCSVLinhas(csv);
+    if (linhas.length < 2) {
+      if (conteudo) conteudo.innerHTML = '<p style="color:var(--text-muted);">Nenhum insumo cadastrado.</p>';
+      return;
+    }
+
+    const cabecalho = linhas[0].map(h => h.trim().toUpperCase());
+    const idxItem = cabecalho.findIndex(c => c.includes('ITEM'));
+    const idxQtd  = cabecalho.findIndex(c => c.includes('QUANTIDADEATUAL'));
+    const idxMin  = cabecalho.findIndex(c => c.includes('ALERTAMINIMO'));
+    const idxUnid = cabecalho.findIndex(c => c.includes('UNIDADEMEDIDA'));
+    const idxData = cabecalho.findIndex(c => c.includes('ULTIMAATUALIZACAO'));
+    const idxPor  = cabecalho.findIndex(c => c.includes('ATUALIZADOPOR'));
+
+    const itens = [];
+    for (let i = 1; i < linhas.length; i++) {
+      const cols = linhas[i];
+      if (cols.every(c => !c || !c.trim())) continue;
+      const item = (cols[idxItem] || '').trim();
+      if (!item) continue;
+      itens.push({
+        item,
+        quantidadeAtual: Number((cols[idxQtd] || '0').trim().replace(',', '.')) || 0,
+        alertaMinimo: Number((cols[idxMin] || '0').trim().replace(',', '.')) || 0,
+        unidadeMedida: (cols[idxUnid] || '').trim() || '-',
+        ultimaAtualizacao: (cols[idxData] || '').trim() || '-',
+        atualizadoPor: (cols[idxPor] || '').trim() || '-'
+      });
+    }
+
+    console.log('[INSUMOS] Itens parsed:', itens.length);
+    _renderizarInsumos(itens, conteudo);
+
+    const btnAtualizar = document.getElementById('btn-atualizar-insumos');
+    if (btnAtualizar && !btnAtualizar._insEvt) {
+      btnAtualizar._insEvt = true;
+      btnAtualizar.addEventListener('click', () => {
+        carregarInsumos();
+        showToast('Dados de Insumos Críticos atualizados!', 'success');
+      });
+    }
+
+  } catch (erro) {
+    console.error('[INSUMOS] Erro:', erro);
+    if (conteudo) conteudo.innerHTML = `<p style="color:var(--color-red);">Erro ao carregar: ${erro.message}</p>`;
+  }
+}
+
+function _renderizarInsumos(itens, conteudo) {
+  if (!conteudo) return;
+  if (itens.length === 0) {
+    conteudo.innerHTML = '<p style="color:var(--text-muted);">Nenhum insumo cadastrado.</p>';
+    return;
+  }
+
+  conteudo.innerHTML = `
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:1rem;">
+      ${itens.map((it, idx) => {
+        const critico = it.quantidadeAtual <= it.alertaMinimo;
+        const cor = critico ? 'var(--color-red)' : 'var(--color-green)';
+        return `
+        <div class="kpi-card" style="border-left:3px solid ${cor};">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:0.5rem;">
+            <strong style="font-size:0.95rem;">${it.item}</strong>
+            ${critico ? '<span style="font-size:0.7rem;background:rgba(192,122,108,0.15);color:var(--color-red);padding:0.15rem 0.5rem;border-radius:999px;white-space:nowrap;">ALERTA</span>' : ''}
+          </div>
+          <div style="margin-top:0.5rem;font-size:1.6rem;font-weight:600;color:${cor};">
+            ${it.quantidadeAtual} <span style="font-size:0.85rem;color:var(--text-muted);font-weight:500;">${it.unidadeMedida}</span>
+          </div>
+          <div class="kpi-subtext">Mínimo: ${it.alertaMinimo} ${it.unidadeMedida}</div>
+          <div class="kpi-subtext">Atualizado: ${it.ultimaAtualizacao} — ${it.atualizadoPor}</div>
+          <div style="display:flex;gap:0.4rem;margin-top:0.75rem;">
+            <input type="number" id="insumo-input-${idx}" value="${it.quantidadeAtual}" min="0" step="1" style="flex:1;padding:0.35rem 0.5rem;font-size:0.85rem;border-radius:var(--border-radius-sm);border:1px solid var(--card-border);background:rgba(255,255,255,0.6);">
+            <button class="btn btn-sm btn-secondary" data-insumo-item="${it.item}" data-insumo-idx="${idx}">Salvar</button>
+          </div>
+        </div>`;
+      }).join('')}
+    </div>`;
+
+  conteudo.querySelectorAll('[data-insumo-item]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const idx = btn.getAttribute('data-insumo-idx');
+      const item = btn.getAttribute('data-insumo-item');
+      const input = document.getElementById(`insumo-input-${idx}`);
+      const novaQuantidade = Number(input.value);
+      if (isNaN(novaQuantidade) || novaQuantidade < 0) { showToast('Quantidade inválida.', 'error'); return; }
+      _salvarQuantidadeInsumo(item, novaQuantidade, btn);
+    });
+  });
+}
+
+async function _salvarQuantidadeInsumo(item, novaQuantidade, btn) {
+  const textoOriginal = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = 'Salvando...';
+  try {
+    const resposta = await fetch(INSUMOS_EXEC_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({ item, novaQuantidade, atualizadoPor: 'Thalita Campos' })
+    });
+    const resultado = await resposta.json();
+    if (!resultado.ok) throw new Error(resultado.erro || 'Erro desconhecido');
+    showToast(`${item} atualizado para ${novaQuantidade}!`, 'success');
+    carregarInsumos();
+  } catch (erro) {
+    console.error('[INSUMOS] Erro ao salvar:', erro);
+    showToast('Erro ao salvar: ' + erro.message, 'error');
+    btn.disabled = false;
+    btn.textContent = textoOriginal;
+  }
 }
 
 
