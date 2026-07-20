@@ -136,6 +136,30 @@ header {
 }
 .tab-btn:hover { color: var(--text-primary); background: rgba(255,255,255,0.03); }
 .tab-btn.active { color: var(--text-primary); background: var(--color-blue); box-shadow: 0 4px 12px rgba(59,130,246,0.25); }
+
+.documentos-vencimento-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  margin: 0.75rem 0 1.25rem 0;
+}
+.doc-vencimento-chip {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  padding: 0.5rem 0.9rem;
+  border-radius: var(--border-radius-md);
+  border: 1px solid var(--card-border);
+  background: var(--card-bg);
+  min-width: 150px;
+}
+.doc-vencimento-label { font-size: 0.72rem; font-weight: 700; letter-spacing: 0.3px; color: var(--text-muted); text-transform: uppercase; }
+.doc-vencimento-status { font-size: 0.85rem; font-weight: 700; }
+.doc-vencimento-chip.doc-vencimento-ok .doc-vencimento-status { color: var(--color-green); }
+.doc-vencimento-chip.doc-vencimento-atencao { border-color: var(--color-orange); }
+.doc-vencimento-chip.doc-vencimento-atencao .doc-vencimento-status { color: var(--color-orange); }
+.doc-vencimento-chip.doc-vencimento-alerta { border-color: var(--color-red); background: rgba(192, 122, 108, 0.14); }
+.doc-vencimento-chip.doc-vencimento-alerta .doc-vencimento-status { color: var(--color-red); font-weight: 800; }
 .tab-btn i { width: 16px; height: 16px; }
 
 .tab-panel { display: none; }
