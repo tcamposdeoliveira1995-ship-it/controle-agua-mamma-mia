@@ -652,6 +652,12 @@ function renderizarAlertas(alertas, filtroPrioridade = 'todos', filtroCategoria 
 
 // ================= ABA DASHBOARD =================
 
+function getExpectedPercentToday(stats) {
+  if (typeof stats.expectedPercentToday === 'number' && !isNaN(stats.expectedPercentToday)) return stats.expectedPercentToday;
+  if (!stats.totalDays) return 0;
+  return Math.min(100, Number(((stats.elapsedDays / stats.totalDays) * 100).toFixed(1)));
+}
+
 function renderDashboardTab(stats, prevStats) {
   const settings = getAppSettings();
   DOM.mainExecPeriodLabel.textContent = `${formatDate(stats.startDate)} a ${formatDate(stats.endDate)}`;
@@ -664,8 +670,9 @@ function renderDashboardTab(stats, prevStats) {
   DOM.mainExecDaysLeft.innerHTML = `${stats.remainingDays} <span class="exec-unit">dias</span>`;
   DOM.mainExecProgressBar.style.width = `${Math.min(100, stats.globalPercentUsed)}%`;
   if (DOM.mainExecTodayMarker) {
-    DOM.mainExecTodayMarker.style.left = `${stats.expectedPercentToday}%`;
-    DOM.mainExecTodayMarker.title = `Ritmo esperado hoje: ${stats.expectedPercentToday}% (${stats.elapsedDays}/${stats.totalDays} dias do ciclo)`;
+    const expectedPercentToday = getExpectedPercentToday(stats);
+    DOM.mainExecTodayMarker.style.left = `${expectedPercentToday}%`;
+    DOM.mainExecTodayMarker.title = `Ritmo esperado hoje: ${expectedPercentToday}% (${stats.elapsedDays}/${stats.totalDays} dias do ciclo)`;
   }
   if (stats.totalConsumption > stats.metaGlobal) DOM.mainExecProgressBar.style.background = 'var(--grad-danger)';
   else if (stats.totalConsumption > (stats.metaGlobal * (settings.alertThreshold / 100))) DOM.mainExecProgressBar.style.background = 'var(--grad-warning)';
@@ -766,7 +773,7 @@ function renderIndividualMeterCards(stats) {
         <div class="progress-track">
           <div class="progress-bar" style="width: ${Math.min(100, m.percentUsed)}%; background: ${barGradient};"></div>
           <div class="progress-marker" style="left: ${settings.alertThreshold}%;" title="Aviso (${settings.alertThreshold}%)"></div>
-          <div class="today-marker" style="left: ${stats.expectedPercentToday}%;" title="Ritmo esperado hoje: ${stats.expectedPercentToday}% (${stats.elapsedDays}/${stats.totalDays} dias do ciclo)"></div>
+          <div class="today-marker" style="left: ${getExpectedPercentToday(stats)}%;" title="Ritmo esperado hoje: ${getExpectedPercentToday(stats)}% (${stats.elapsedDays}/${stats.totalDays} dias do ciclo)"></div>
         </div>
       </div>
       <div class="meter-stats-list">
@@ -802,8 +809,9 @@ function renderDiretoriaTab(stats, prevStats) {
   DOM.dirExecProjectionSub.textContent = stats.totalProjection > stats.metaGlobal ? 'Possível excesso ao fechar o ciclo' : 'Projeção dentro do esperado';
   DOM.dirExecProgressBar.style.width = `${Math.min(100, stats.globalPercentUsed)}%`;
   if (DOM.dirExecTodayMarker) {
-    DOM.dirExecTodayMarker.style.left = `${stats.expectedPercentToday}%`;
-    DOM.dirExecTodayMarker.title = `Ritmo esperado hoje: ${stats.expectedPercentToday}% (${stats.elapsedDays}/${stats.totalDays} dias do ciclo)`;
+    const expectedPercentToday = getExpectedPercentToday(stats);
+    DOM.dirExecTodayMarker.style.left = `${expectedPercentToday}%`;
+    DOM.dirExecTodayMarker.title = `Ritmo esperado hoje: ${expectedPercentToday}% (${stats.elapsedDays}/${stats.totalDays} dias do ciclo)`;
   }
   if (prevStats) {
     const comp = compareCycles(state.readings, stats.cycleKey, prevStats.cycleKey);
