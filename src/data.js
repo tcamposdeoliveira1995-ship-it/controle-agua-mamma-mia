@@ -203,6 +203,7 @@ export function getCycleStats(readings, cycleKey) {
   const now = today > endCycleDate ? endCycleDate : (today < startCycleDate ? startCycleDate : today);
   const elapsedDays = Math.max(1, Math.ceil((now - startCycleDate) / (1000 * 60 * 60 * 24)));
   const remainingDays = Math.max(0, totalDays - elapsedDays);
+  const expectedPercentToday = Math.min(100, Number(((elapsedDays / totalDays) * 100).toFixed(1)));
 
   const metersData = {};
   Object.keys(settings.hydrometers).forEach(id => {
@@ -276,7 +277,7 @@ export function getCycleStats(readings, cycleKey) {
   else if (totalProjection > settings.metaGlobal || totalConsumption > (settings.metaGlobal * 0.8)) globalStatus = 'warning';
 
   return {
-    cycleKey, label, startDate: startCycleDate, endDate: endCycleDate, totalDays, elapsedDays, remainingDays,
+    cycleKey, label, startDate: startCycleDate, endDate: endCycleDate, totalDays, elapsedDays, remainingDays, expectedPercentToday,
     meters: metersData, totalConsumption: Number(totalConsumption.toFixed(3)), totalProjection: Number(totalProjection.toFixed(3)),
     globalPercentUsed, globalBalance, globalStatus, alertMetersCount, readingsCount: cycleReadings.length,
     highestConsumer, lowestConsumer, generalDailyAverage, projectedEconomy, ranking, metaGlobal: settings.metaGlobal
