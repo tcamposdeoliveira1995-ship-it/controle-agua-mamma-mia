@@ -51,6 +51,7 @@ const DOM = {
   mainExecPercent: document.getElementById('main-exec-percent'),
   mainExecDaysLeft: document.getElementById('main-exec-days-left'),
   mainExecProgressBar: document.getElementById('main-exec-progress-bar'),
+  mainExecTodayMarker: document.getElementById('main-exec-today-marker'),
   valAlertsV2: document.getElementById('val-alerts-v2'),
   valAlertsSubtextV2: document.getElementById('val-alerts-subtext-v2'),
   valAvgGeneral: document.getElementById('val-avg-general'),
@@ -106,6 +107,7 @@ const DOM = {
   dirExecProjection: document.getElementById('dir-exec-projection'),
   dirExecProjectionSub: document.getElementById('dir-exec-projection-sub'),
   dirExecProgressBar: document.getElementById('dir-exec-progress-bar'),
+  dirExecTodayMarker: document.getElementById('dir-exec-today-marker'),
   dirKpiEconomy: document.getElementById('dir-kpi-economy'),
   dirKpiEconomySub: document.getElementById('dir-kpi-economy-sub'),
   dirKpiAlerts: document.getElementById('dir-kpi-alerts'),
@@ -661,6 +663,10 @@ function renderDashboardTab(stats, prevStats) {
   DOM.mainExecPercent.textContent = `${stats.globalPercentUsed}%`;
   DOM.mainExecDaysLeft.innerHTML = `${stats.remainingDays} <span class="exec-unit">dias</span>`;
   DOM.mainExecProgressBar.style.width = `${Math.min(100, stats.globalPercentUsed)}%`;
+  if (DOM.mainExecTodayMarker) {
+    DOM.mainExecTodayMarker.style.left = `${stats.expectedPercentToday}%`;
+    DOM.mainExecTodayMarker.title = `Ritmo esperado hoje: ${stats.expectedPercentToday}% (${stats.elapsedDays}/${stats.totalDays} dias do ciclo)`;
+  }
   if (stats.totalConsumption > stats.metaGlobal) DOM.mainExecProgressBar.style.background = 'var(--grad-danger)';
   else if (stats.totalConsumption > (stats.metaGlobal * (settings.alertThreshold / 100))) DOM.mainExecProgressBar.style.background = 'var(--grad-warning)';
   else DOM.mainExecProgressBar.style.background = 'var(--grad-primary)';
@@ -760,6 +766,7 @@ function renderIndividualMeterCards(stats) {
         <div class="progress-track">
           <div class="progress-bar" style="width: ${Math.min(100, m.percentUsed)}%; background: ${barGradient};"></div>
           <div class="progress-marker" style="left: ${settings.alertThreshold}%;" title="Aviso (${settings.alertThreshold}%)"></div>
+          <div class="today-marker" style="left: ${stats.expectedPercentToday}%;" title="Ritmo esperado hoje: ${stats.expectedPercentToday}% (${stats.elapsedDays}/${stats.totalDays} dias do ciclo)"></div>
         </div>
       </div>
       <div class="meter-stats-list">
@@ -794,6 +801,10 @@ function renderDiretoriaTab(stats, prevStats) {
   DOM.dirExecProjection.textContent = `${stats.totalProjection.toFixed(2)} m³`;
   DOM.dirExecProjectionSub.textContent = stats.totalProjection > stats.metaGlobal ? 'Possível excesso ao fechar o ciclo' : 'Projeção dentro do esperado';
   DOM.dirExecProgressBar.style.width = `${Math.min(100, stats.globalPercentUsed)}%`;
+  if (DOM.dirExecTodayMarker) {
+    DOM.dirExecTodayMarker.style.left = `${stats.expectedPercentToday}%`;
+    DOM.dirExecTodayMarker.title = `Ritmo esperado hoje: ${stats.expectedPercentToday}% (${stats.elapsedDays}/${stats.totalDays} dias do ciclo)`;
+  }
   if (prevStats) {
     const comp = compareCycles(state.readings, stats.cycleKey, prevStats.cycleKey);
     DOM.dirKpiEconomy.textContent = `${comp.diff.toFixed(2)} m³`;
