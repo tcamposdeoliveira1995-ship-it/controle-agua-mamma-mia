@@ -195,8 +195,8 @@ header {
 .text-glow-green { color: var(--color-green) !important; text-shadow: 0 0 15px rgba(16,185,129,0.25); }
 .text-glow-red { color: var(--color-red) !important; text-shadow: 0 0 15px rgba(239,68,68,0.25); }
 .exec-metric.highlight-info .exec-label { color: var(--color-blue); font-weight: 600; }
-.main-exec-progress-track { height: 8px; background: rgba(255,255,255,0.05); border-radius: 4px; overflow: hidden; }
-.main-exec-progress-bar { height: 100%; background: var(--grad-primary); border-radius: 4px; transition: width 1s cubic-bezier(0.1, 0.8, 0.2, 1); }
+.main-exec-progress-track { height: 8px; background: rgba(255,255,255,0.05); border-radius: 4px; overflow: visible; position: relative; margin-top: 14px; }
+.main-exec-progress-bar { height: 100%; background: var(--grad-primary); border-radius: 4px; transition: width 1s cubic-bezier(0.1, 0.8, 0.2, 1); overflow: hidden; }
 
 /* KPIs */
 .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1.25rem; }
@@ -371,11 +371,47 @@ header {
 .faltam-indicator-tag.warning { color: var(--color-orange); }
 .faltam-indicator-tag.danger { color: var(--color-red); }
 
-.progress-container { margin: 1rem 0 1.25rem 0; position: relative; }
+.progress-container { margin: 1.6rem 0 1.25rem 0; position: relative; }
 .progress-label-row { display: flex; justify-content: space-between; font-size: 0.78rem; font-weight: 600; margin-bottom: 0.4rem; }
-.progress-track { height: 9px; background: rgba(255,255,255,0.05); border-radius: 5px; overflow: hidden; position: relative; }
-.progress-bar { height: 100%; border-radius: 5px; width: 0%; transition: width 1.2s cubic-bezier(0.1, 0.8, 0.2, 1); }
+.progress-track { height: 9px; background: rgba(255,255,255,0.05); border-radius: 5px; overflow: visible; position: relative; }
+.progress-bar { height: 100%; border-radius: 5px; width: 0%; transition: width 1.2s cubic-bezier(0.1, 0.8, 0.2, 1); overflow: hidden; }
 .progress-marker { position: absolute; top: 0; width: 2px; height: 100%; background-color: var(--text-muted); z-index: 2; }
+
+/* Marcador de ritmo esperado ("Hoje") — mostra onde o consumo deveria estar na data atual */
+.today-marker {
+  position: absolute;
+  top: -4px;
+  bottom: -4px;
+  width: 2px;
+  transform: translateX(-1px);
+  background: repeating-linear-gradient(to bottom, #ffffff 0, #ffffff 3px, transparent 3px, transparent 6px);
+  z-index: 3;
+  cursor: help;
+}
+.today-marker::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  bottom: -3px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #ffffff;
+  box-shadow: 0 0 5px rgba(255,255,255,0.7);
+  transform: translateX(-50%);
+}
+.today-marker::after {
+  content: '📍 Hoje';
+  position: absolute;
+  left: 50%;
+  top: -20px;
+  transform: translateX(-50%);
+  font-size: 0.65rem;
+  font-weight: 700;
+  white-space: nowrap;
+  color: var(--text-secondary);
+  letter-spacing: 0.2px;
+}
 
 .meter-stats-list { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem 1rem; padding-top: 1rem; border-top: 1px solid rgba(255,255,255,0.05); }
 .stat-item { display: flex; flex-direction: column; }
