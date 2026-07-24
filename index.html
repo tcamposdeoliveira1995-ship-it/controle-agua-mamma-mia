@@ -595,6 +595,37 @@
     </div>
   </div>
 
+  <!-- MODAL: DEDETIZAÇÃO -->
+  <div id="modal-dedetizacao" class="modal-overlay" aria-hidden="true" role="dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3 id="dedetizacao-modal-titulo"><i data-lucide="bug-off"></i> Dedetização</h3>
+        <button id="btn-close-dedetizacao-modal" class="modal-close" type="button">&times;</button>
+      </div>
+      <form id="form-dedetizacao">
+        <input type="hidden" id="dedetizacao-unidade">
+        <div class="form-group">
+          <label for="dedetizacao-empresa" class="form-label">Empresa Dedetizadora</label>
+          <input type="text" id="dedetizacao-empresa" class="form-control" placeholder="Ex: Dedetizadora XYZ Ltda" required>
+        </div>
+        <div class="form-group">
+          <label for="dedetizacao-data" class="form-label">Data Realizada</label>
+          <input type="date" id="dedetizacao-data" class="form-control" required>
+          <span class="form-help">O sistema alerta automaticamente quando passar 1 mês desta data (período mensal).</span>
+        </div>
+        <div class="form-group">
+          <label for="dedetizacao-certificado-input" class="form-label">Certificado</label>
+          <input type="file" id="dedetizacao-certificado-input" class="form-control" accept=".pdf,image/*">
+          <span class="form-help" id="dedetizacao-certificado-atual"></span>
+        </div>
+        <div class="modal-footer">
+          <button type="button" id="btn-cancel-dedetizacao" class="btn btn-secondary">Cancelar</button>
+          <button type="submit" id="btn-save-dedetizacao" class="btn btn-primary">Salvar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
   <!-- CONTAINER DE TOASTS -->
   <div class="toast-container" id="toast-container-v2"></div>
 
