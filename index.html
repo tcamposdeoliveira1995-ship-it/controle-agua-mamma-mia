@@ -151,6 +151,10 @@
 
     <!-- ================= ABA: OS ================= -->
     <div id="tab-content-os" class="tab-panel">
+      <section class="panel-card" style="margin-bottom:1.25rem;">
+        <div class="panel-header"><h2><i data-lucide="zap"></i> Armadilhas Luminosas</h2></div>
+        <div class="documentos-vencimento-bar no-print" id="armadilhas-vencimento-bar" style="margin:0.5rem 0 0 0;"></div>
+      </section>
       <section class="panel-card">
         <div class="panel-header"><h2>🔧 Ordens de Serviço</h2><button id="btn-refresh-os" class="btn btn-primary">Atualizar OS</button></div>
         <div class="dashboard-grid">
@@ -604,8 +608,9 @@
       </div>
       <form id="form-dedetizacao">
         <input type="hidden" id="dedetizacao-unidade">
+        <input type="hidden" id="dedetizacao-tipo" value="DEDETIZACAO">
         <div class="form-group">
-          <label for="dedetizacao-empresa" class="form-label">Empresa Dedetizadora</label>
+          <label for="dedetizacao-empresa" class="form-label" id="dedetizacao-empresa-label">Empresa Dedetizadora</label>
           <input type="text" id="dedetizacao-empresa" class="form-control" placeholder="Ex: Dedetizadora XYZ Ltda" required>
         </div>
         <div class="form-group">
