@@ -139,10 +139,23 @@ header {
 
 .documentos-vencimento-bar {
   display: flex;
-  flex-wrap: wrap;
+  flex-direction: column;
   gap: 0.6rem;
   margin: 0.75rem 0 1.25rem 0;
 }
+.doc-vencimento-grupo { display: flex; flex-direction: column; gap: 0.45rem; }
+.doc-vencimento-grupo-titulo {
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.6px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+.doc-vencimento-grupo-titulo i { width: 14px; height: 14px; }
+.doc-vencimento-grupo-chips { display: flex; flex-wrap: wrap; gap: 0.6rem; }
 .doc-vencimento-chip {
   display: flex;
   flex-direction: column;
