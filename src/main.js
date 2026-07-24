@@ -23,6 +23,7 @@ const PERDAS_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQ0QXaxv
 const OS_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSyKnl6d4trSwtVru3JQIcoqb_h2gTHKBqn-3zXM1JW7MTzm_Xj01UJh62eDPDNEOYjisMWrGrWfFJt/pub?gid=1728678619&single=true&output=csv';
 const INSUMOS_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTxAviEilfLLSjTjSznB3EyWWtrHVp6ClhabTSuzu5gQh2aoYbLeYKKoH6CcfRPkBpelcOG9bU2a0b3/pub?output=csv';
 const INSUMOS_EXEC_URL = 'https://script.google.com/macros/s/AKfycbxtrM875Sb92YmXJRQUyTTW1fYgEIyDYwg_D6FJqlQHcsyiPvg8frozc2nug8WbTJzM/exec';
+const DEDETIZACAO_EXEC_URL = 'https://script.google.com/macros/s/AKfycbzboegVJXJT55v2iOPr51DvgHFRShIN-dLnZzhGdfpTh1pnohV92k9LiIn6M6jE9ekt/exec';
 
 // --- SINCRONIZAÇÃO MÓDULO ÁGUA (gviz) ---
 const AGUA_SPREADSHEET_ID = '1tixTJ74aaEo-EuCfTFl-efWOT7p-TIgN0su8NzX8aKw';
@@ -151,6 +152,7 @@ document.addEventListener('DOMContentLoaded', () => {
   switchTab(state.currentTab);
   renderDocumentosVencimentoBar();
   initEventListeners();
+  carregarDedetizacaoRemoto();
   if (typeof lucide !== 'undefined') lucide.createIcons();
 });
 
@@ -305,7 +307,162 @@ function renderDocumentosVencimentoBar() {
       <span class="doc-vencimento-label">${item.label}</span>
       <span class="doc-vencimento-status">${statusHtml}</span>
     </div>`;
-  }).join('');
+  }).join('') + DEDETIZACAO_UNIDADES.map(unidade => _dedetizacaoChipHtml(unidade)).join('');
+
+  container.querySelectorAll('[data-dedetizacao-unidade]').forEach(chip => {
+    chip.addEventListener('click', () => _abrirModalDedetizacao(chip.getAttribute('data-dedetizacao-unidade')));
+  });
+}
+
+// ================= MÓDULO DEDETIZAÇÃO =================
+
+const DEDETIZACAO_CACHE_KEY = 'mamma_mia_dedetizacao_cache_v1';
+const DEDETIZACAO_UNIDADES = ['TC', 'YUKA', 'CD'];
+
+function _getDedetizacaoCache() {
+  try {
+    return JSON.parse(localStorage.getItem(DEDETIZACAO_CACHE_KEY)) || {};
+  } catch (e) {
+    return {};
+  }
+}
+
+function _saveDedetizacaoCache(registros) {
+  localStorage.setItem(DEDETIZACAO_CACHE_KEY, JSON.stringify(registros));
+}
+
+// Calcula o status do card com base na regra de período mensal:
+// próxima dedetização prevista = dataRealizada + 30 dias.
+function _dedetizacaoChipHtml(unidade) {
+  const cache = _getDedetizacaoCache();
+  const registro = cache[unidade];
+
+  if (!registro || !registro.dataRealizada) {
+    return `<div class="doc-vencimento-chip doc-vencimento-alerta" data-dedetizacao-unidade="${unidade}" style="cursor:pointer;" title="Clique para registrar a dedetização">
+      <span class="doc-vencimento-label">${unidade} - Dedetização</span>
+      <span class="doc-vencimento-status">⚠️ SEM ENTRADA</span>
+    </div>`;
+  }
+
+  const [ano, mes, dia] = registro.dataRealizada.split('-').map(Number);
+  const dataRealizada = new Date(ano, mes - 1, dia);
+  const proximaData = new Date(dataRealizada);
+  proximaData.setDate(proximaData.getDate() + 30);
+
+  const hoje = new Date();
+  hoje.setHours(0, 0, 0, 0);
+  const diffDias = Math.ceil((proximaData - hoje) / (1000 * 60 * 60 * 24));
+
+  let statusHtml, chipClass;
+  if (diffDias < 0) {
+    const diasAtraso = Math.abs(diffDias);
+    statusHtml = `🔴 Atrasada há ${diasAtraso} dia${diasAtraso === 1 ? '' : 's'}`;
+    chipClass = 'doc-vencimento-alerta';
+  } else if (diffDias <= 7) {
+    statusHtml = `Faltam ${diffDias} dia${diffDias === 1 ? '' : 's'}`;
+    chipClass = 'doc-vencimento-atencao';
+  } else {
+    statusHtml = `Faltam ${diffDias} dias`;
+    chipClass = 'doc-vencimento-ok';
+  }
+
+  const tituloTip = `${registro.empresa || 'Empresa não informada'} — realizada em ${formatDate(registro.dataRealizada)}. Clique para editar.`;
+
+  return `<div class="doc-vencimento-chip ${chipClass}" data-dedetizacao-unidade="${unidade}" style="cursor:pointer;" title="${tituloTip}">
+    <span class="doc-vencimento-label">${unidade} - Dedetização</span>
+    <span class="doc-vencimento-status">${statusHtml}</span>
+  </div>`;
+}
+
+async function carregarDedetizacaoRemoto() {
+  try {
+    const resposta = await fetch(DEDETIZACAO_EXEC_URL, { cache: 'no-store' });
+    const resultado = await resposta.json();
+    if (!resultado.ok) throw new Error(resultado.erro || 'Erro desconhecido');
+    _saveDedetizacaoCache(resultado.registros || {});
+    renderDocumentosVencimentoBar();
+    if (typeof lucide !== 'undefined') lucide.createIcons();
+  } catch (erro) {
+    console.error('[DEDETIZACAO] Erro ao carregar:', erro);
+  }
+}
+
+function _abrirModalDedetizacao(unidade) {
+  const modal = document.getElementById('modal-dedetizacao');
+  if (!modal) return;
+
+  const cache = _getDedetizacaoCache();
+  const registro = cache[unidade] || {};
+
+  document.getElementById('dedetizacao-unidade').value = unidade;
+  document.getElementById('dedetizacao-modal-titulo').innerHTML = `<i data-lucide="bug-off"></i> Dedetização — ${unidade}`;
+  document.getElementById('dedetizacao-empresa').value = registro.empresa || '';
+  document.getElementById('dedetizacao-data').value = registro.dataRealizada || '';
+  document.getElementById('dedetizacao-certificado-input').value = '';
+
+  const spanCertAtual = document.getElementById('dedetizacao-certificado-atual');
+  spanCertAtual.innerHTML = registro.certificadoUrl
+    ? `<a href="${registro.certificadoUrl}" target="_blank" rel="noopener">📄 Ver certificado atual (${registro.certificadoNome || 'arquivo'})</a>`
+    : 'Nenhum certificado anexado ainda.';
+
+  openModal(modal);
+  if (typeof lucide !== 'undefined') lucide.createIcons();
+}
+
+function _fecharModalDedetizacao() {
+  const modal = document.getElementById('modal-dedetizacao');
+  if (modal) closeModal(modal);
+}
+
+function _lerArquivoComoBase64(arquivo) {
+  return new Promise((resolve, reject) => {
+    const leitor = new FileReader();
+    leitor.onload = (e) => resolve(e.target.result);
+    leitor.onerror = reject;
+    leitor.readAsDataURL(arquivo);
+  });
+}
+
+async function _submeterFormDedetizacao(e) {
+  e.preventDefault();
+  const btnSalvar = document.getElementById('btn-save-dedetizacao');
+  const unidade = document.getElementById('dedetizacao-unidade').value;
+  const empresa = document.getElementById('dedetizacao-empresa').value.trim();
+  const dataRealizada = document.getElementById('dedetizacao-data').value;
+  const arquivoInput = document.getElementById('dedetizacao-certificado-input');
+  const arquivo = arquivoInput.files && arquivoInput.files[0];
+
+  if (!empresa || !dataRealizada) { showToast('Preencha empresa e data realizada.', 'error'); return; }
+
+  const textoOriginal = btnSalvar.textContent;
+  btnSalvar.disabled = true;
+  btnSalvar.textContent = 'Salvando...';
+
+  try {
+    const payload = { unidade, empresa, dataRealizada, registradoPor: 'Thalita Campos' };
+    if (arquivo) {
+      payload.certificadoBase64 = await _lerArquivoComoBase64(arquivo);
+      payload.certificadoNome = arquivo.name;
+    }
+
+    const resposta = await fetch(DEDETIZACAO_EXEC_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify(payload)
+    });
+    const resultado = await resposta.json();
+    if (!resultado.ok) throw new Error(resultado.erro || 'Erro desconhecido');
+
+    showToast(`Dedetização de ${unidade} registrada!`, 'success');
+    _fecharModalDedetizacao();
+    await carregarDedetizacaoRemoto();
+  } catch (erro) {
+    console.error('[DEDETIZACAO] Erro ao salvar:', erro);
+    showToast('Erro ao salvar: ' + erro.message, 'error');
+  } finally {
+    btnSalvar.disabled = false;
+    btnSalvar.textContent = textoOriginal;
+  }
 }
 
 // ================= REFRESH GERAL =================
@@ -968,6 +1125,13 @@ function initEventListeners() {
 
   const osFilterStatus = document.getElementById('os-filter-status');
   if (osFilterStatus) osFilterStatus.addEventListener('change', () => { carregarOS(); });
+
+  const btnCloseDedetizacao = document.getElementById('btn-close-dedetizacao-modal');
+  if (btnCloseDedetizacao) btnCloseDedetizacao.addEventListener('click', _fecharModalDedetizacao);
+  const btnCancelDedetizacao = document.getElementById('btn-cancel-dedetizacao');
+  if (btnCancelDedetizacao) btnCancelDedetizacao.addEventListener('click', _fecharModalDedetizacao);
+  const formDedetizacao = document.getElementById('form-dedetizacao');
+  if (formDedetizacao) formDedetizacao.addEventListener('submit', _submeterFormDedetizacao);
 }
 
 function switchTab(tabName) {
