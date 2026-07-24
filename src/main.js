@@ -151,6 +151,7 @@ document.addEventListener('DOMContentLoaded', () => {
   resetReadingFormDate();
   switchTab(state.currentTab);
   renderDocumentosVencimentoBar();
+  renderArmadilhasBar();
   initEventListeners();
   carregarDedetizacaoRemoto();
   if (typeof lucide !== 'undefined') lucide.createIcons();
@@ -309,7 +310,7 @@ function renderDocumentosVencimentoBar() {
     </div>`;
   }).join('');
 
-  const chipsDedetizacao = DEDETIZACAO_UNIDADES.map(unidade => _dedetizacaoChipHtml(unidade)).join('');
+  const chipsDedetizacao = PRAGAS_TIPOS.DEDETIZACAO.unidades.map(unidade => _pragaChipHtml('DEDETIZACAO', unidade)).join('');
 
   container.innerHTML = `
     <div class="doc-vencimento-grupo">
@@ -321,38 +322,41 @@ function renderDocumentosVencimentoBar() {
       <div class="doc-vencimento-grupo-chips">${chipsDedetizacao}</div>
     </div>`;
 
-  container.querySelectorAll('[data-dedetizacao-unidade]').forEach(chip => {
-    chip.addEventListener('click', () => _abrirModalDedetizacao(chip.getAttribute('data-dedetizacao-unidade')));
-  });
+  _wirePragaChipClicks(container);
   if (typeof lucide !== 'undefined') lucide.createIcons();
 }
 
 // ================= MÓDULO DEDETIZAÇÃO =================
 
-const DEDETIZACAO_CACHE_KEY = 'mamma_mia_dedetizacao_cache_v1';
-const DEDETIZACAO_UNIDADES = ['TC', 'YUKA', 'CD'];
+const PRAGAS_CACHE_KEY = 'mamma_mia_pragas_cache_v1';
+const PRAGAS_TIPOS = {
+  DEDETIZACAO: { label: 'Dedetização', unidades: ['TC', 'YUKA', 'CD'], icon: 'bug-off', empresaLabel: 'Empresa Dedetizadora' },
+  ARMADILHA_LUMINOSA: { label: 'Armadilha Luminosa', unidades: ['TC', 'YUKA'], icon: 'zap', empresaLabel: 'Empresa/Responsável pela Troca' }
+};
 
-function _getDedetizacaoCache() {
+function _getPragasCache() {
   try {
-    return JSON.parse(localStorage.getItem(DEDETIZACAO_CACHE_KEY)) || {};
+    return JSON.parse(localStorage.getItem(PRAGAS_CACHE_KEY)) || {};
   } catch (e) {
     return {};
   }
 }
 
-function _saveDedetizacaoCache(registros) {
-  localStorage.setItem(DEDETIZACAO_CACHE_KEY, JSON.stringify(registros));
+function _savePragasCache(registros) {
+  localStorage.setItem(PRAGAS_CACHE_KEY, JSON.stringify(registros));
 }
 
-// Calcula o status do card com base na regra de período mensal:
-// próxima dedetização prevista = dataRealizada + 30 dias.
-function _dedetizacaoChipHtml(unidade) {
-  const cache = _getDedetizacaoCache();
-  const registro = cache[unidade];
+// Calcula o card com base na regra de período mensal:
+// próxima ação prevista = dataRealizada + 30 dias.
+function _pragaChipHtml(tipo, unidade) {
+  const cache = _getPragasCache();
+  const registro = (cache[tipo] || {})[unidade];
+  const config = PRAGAS_TIPOS[tipo];
+  const label = `${unidade} - ${config.label}`;
 
   if (!registro || !registro.dataRealizada) {
-    return `<div class="doc-vencimento-chip doc-vencimento-alerta" data-dedetizacao-unidade="${unidade}" style="cursor:pointer;" title="Clique para registrar a dedetização">
-      <span class="doc-vencimento-label">${unidade} - Dedetização</span>
+    return `<div class="doc-vencimento-chip doc-vencimento-alerta" data-praga-tipo="${tipo}" data-praga-unidade="${unidade}" style="cursor:pointer;" title="Clique para registrar">
+      <span class="doc-vencimento-label">${label}</span>
       <span class="doc-vencimento-status">⚠️ SEM ENTRADA</span>
     </div>`;
   }
@@ -379,12 +383,26 @@ function _dedetizacaoChipHtml(unidade) {
     chipClass = 'doc-vencimento-ok';
   }
 
-  const tituloTip = `${registro.empresa || 'Empresa não informada'} — realizada em ${formatDate(registro.dataRealizada)}. Clique para editar.`;
+  const tituloTip = `${registro.empresa || 'Não informado'} — realizada em ${formatDate(registro.dataRealizada)}. Clique para editar.`;
 
-  return `<div class="doc-vencimento-chip ${chipClass}" data-dedetizacao-unidade="${unidade}" style="cursor:pointer;" title="${tituloTip}">
-    <span class="doc-vencimento-label">${unidade} - Dedetização</span>
+  return `<div class="doc-vencimento-chip ${chipClass}" data-praga-tipo="${tipo}" data-praga-unidade="${unidade}" style="cursor:pointer;" title="${tituloTip}">
+    <span class="doc-vencimento-label">${label}</span>
     <span class="doc-vencimento-status">${statusHtml}</span>
   </div>`;
+}
+
+function _wirePragaChipClicks(container) {
+  container.querySelectorAll('[data-praga-tipo]').forEach(chip => {
+    chip.addEventListener('click', () => _abrirModalPraga(chip.getAttribute('data-praga-tipo'), chip.getAttribute('data-praga-unidade')));
+  });
+}
+
+function renderArmadilhasBar() {
+  const container = document.getElementById('armadilhas-vencimento-bar');
+  if (!container) return;
+  container.innerHTML = PRAGAS_TIPOS.ARMADILHA_LUMINOSA.unidades.map(unidade => _pragaChipHtml('ARMADILHA_LUMINOSA', unidade)).join('');
+  _wirePragaChipClicks(container);
+  if (typeof lucide !== 'undefined') lucide.createIcons();
 }
 
 async function carregarDedetizacaoRemoto() {
@@ -392,23 +410,27 @@ async function carregarDedetizacaoRemoto() {
     const resposta = await fetch(DEDETIZACAO_EXEC_URL, { cache: 'no-store' });
     const resultado = await resposta.json();
     if (!resultado.ok) throw new Error(resultado.erro || 'Erro desconhecido');
-    _saveDedetizacaoCache(resultado.registros || {});
+    _savePragasCache(resultado.registros || {});
     renderDocumentosVencimentoBar();
+    renderArmadilhasBar();
     if (typeof lucide !== 'undefined') lucide.createIcons();
   } catch (erro) {
-    console.error('[DEDETIZACAO] Erro ao carregar:', erro);
+    console.error('[PRAGAS] Erro ao carregar:', erro);
   }
 }
 
-function _abrirModalDedetizacao(unidade) {
+function _abrirModalPraga(tipo, unidade) {
   const modal = document.getElementById('modal-dedetizacao');
   if (!modal) return;
 
-  const cache = _getDedetizacaoCache();
-  const registro = cache[unidade] || {};
+  const config = PRAGAS_TIPOS[tipo];
+  const cache = _getPragasCache();
+  const registro = (cache[tipo] || {})[unidade] || {};
 
   document.getElementById('dedetizacao-unidade').value = unidade;
-  document.getElementById('dedetizacao-modal-titulo').innerHTML = `<i data-lucide="bug-off"></i> Dedetização — ${unidade}`;
+  document.getElementById('dedetizacao-tipo').value = tipo;
+  document.getElementById('dedetizacao-modal-titulo').innerHTML = `<i data-lucide="${config.icon}"></i> ${config.label} — ${unidade}`;
+  document.getElementById('dedetizacao-empresa-label').textContent = config.empresaLabel;
   document.getElementById('dedetizacao-empresa').value = registro.empresa || '';
   document.getElementById('dedetizacao-data').value = registro.dataRealizada || '';
   document.getElementById('dedetizacao-certificado-input').value = '';
@@ -439,6 +461,7 @@ function _lerArquivoComoBase64(arquivo) {
 async function _submeterFormDedetizacao(e) {
   e.preventDefault();
   const btnSalvar = document.getElementById('btn-save-dedetizacao');
+  const tipo = document.getElementById('dedetizacao-tipo').value || 'DEDETIZACAO';
   const unidade = document.getElementById('dedetizacao-unidade').value;
   const empresa = document.getElementById('dedetizacao-empresa').value.trim();
   const dataRealizada = document.getElementById('dedetizacao-data').value;
@@ -452,7 +475,7 @@ async function _submeterFormDedetizacao(e) {
   btnSalvar.textContent = 'Salvando...';
 
   try {
-    const payload = { unidade, empresa, dataRealizada, registradoPor: 'Thalita Campos' };
+    const payload = { tipo, unidade, empresa, dataRealizada, registradoPor: 'Thalita Campos' };
     if (arquivo) {
       payload.certificadoBase64 = await _lerArquivoComoBase64(arquivo);
       payload.certificadoNome = arquivo.name;
@@ -466,11 +489,11 @@ async function _submeterFormDedetizacao(e) {
     const resultado = await resposta.json();
     if (!resultado.ok) throw new Error(resultado.erro || 'Erro desconhecido');
 
-    showToast(`Dedetização de ${unidade} registrada!`, 'success');
+    showToast(`${PRAGAS_TIPOS[tipo].label} de ${unidade} registrada!`, 'success');
     _fecharModalDedetizacao();
     await carregarDedetizacaoRemoto();
   } catch (erro) {
-    console.error('[DEDETIZACAO] Erro ao salvar:', erro);
+    console.error('[PRAGAS] Erro ao salvar:', erro);
     showToast('Erro ao salvar: ' + erro.message, 'error');
   } finally {
     btnSalvar.disabled = false;
