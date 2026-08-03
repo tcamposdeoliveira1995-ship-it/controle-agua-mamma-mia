@@ -575,6 +575,7 @@
         <div class="form-group"><label for="input-meter-v2" class="form-label">Selecione o Hidrômetro</label><select id="input-meter-v2" class="form-control" required></select></div>
         <div class="form-group"><label for="input-index-v2" class="form-label">Leitura Acumulada Atual (m³)</label><input type="number" id="input-index-v2" class="form-control" step="0.001" min="0" placeholder="Ex: 1254.450" required><span class="form-help" id="last-reading-help-v2">Última leitura registrada: --</span></div>
         <div class="form-group"><label for="input-date-v2" class="form-label">Data e Hora do Registro</label><input type="datetime-local" id="input-date-v2" class="form-control" required></div>
+        <div class="form-group form-checkbox-group"><label class="form-checkbox-label"><input type="checkbox" id="input-reset-v2"> Troca de Relógio / Reset (não contar como consumo)</label><span class="form-help">Marque quando o hidrômetro físico foi substituído (ex: SABESP trocou por um digital). Essa leitura vira o novo marco inicial e não entra na conta de consumo do ciclo.</span></div>
         <div class="modal-footer"><button type="button" id="btn-cancel-reading-v2" class="btn btn-secondary">Cancelar</button><button type="submit" class="btn btn-primary">Salvar Leitura</button></div>
       </form>
     </div>
