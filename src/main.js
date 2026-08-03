@@ -148,6 +148,9 @@ const DOM = {
 // --- INICIALIZAÇÃO ---
 document.addEventListener('DOMContentLoaded', () => {
   state.readings = initializeData();
+  const totalAntes = state.readings.length;
+  state.readings = state.readings.filter(r => !String(r.id).startsWith('mock-'));
+  if (state.readings.length !== totalAntes) { saveReadings(state.readings); console.log(`[AGUA] Removidas ${totalAntes - state.readings.length} leitura(s) fictícia(s) de teste.`); }
   updateAppSelectors();
   resetReadingFormDate();
   switchTab(state.currentTab);
