@@ -1087,6 +1087,9 @@ function renderConfiguracoesTab() {
     div.innerHTML = `<div class="meter-config-header"><h4>${id}</h4><span>${h.name}</span></div><div class="form-group" style="margin-bottom: 0;"><label class="form-label" style="font-size:0.75rem;">Apelido</label><input type="text" class="form-control admin-meter-alias-input" data-id="${id}" value="${h.alias}" required></div><div class="form-group" style="margin-bottom: 0;"><label class="form-label" style="font-size:0.75rem;">Cor do Indicador</label><input type="color" class="form-control" data-id="${id}" value="${h.color}" style="height:38px; padding:2px; cursor:pointer;" required></div>`;
     DOM.adminMetersList.appendChild(div);
   });
+
+  populateMetersSelectInputs();
+  renderReadingsTable();
 }
 
 // ================= TABELA DE LEITURAS =================
@@ -1199,6 +1202,17 @@ function populateMetersSelectInputs() {
     const option = document.createElement('option'); option.value = id; option.textContent = `${id} - ${h.name} (${h.alias})`;
     DOM.inputMeter.appendChild(option);
   });
+  if (DOM.filterMeter) {
+    const previousValue = DOM.filterMeter.value || state.filters.meter || 'all';
+    DOM.filterMeter.innerHTML = '<option value="all">Todos</option>';
+    Object.keys(settings.hydrometers).forEach(id => {
+      const h = settings.hydrometers[id];
+      const option = document.createElement('option'); option.value = id; option.textContent = `${id} (${h.alias})`;
+      DOM.filterMeter.appendChild(option);
+    });
+    DOM.filterMeter.value = previousValue;
+    if (DOM.filterMeter.value !== previousValue) DOM.filterMeter.value = 'all';
+  }
 }
 
 function updateLastReadingHelp() {
