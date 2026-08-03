@@ -89,6 +89,7 @@ const DOM = {
   inputMeter: document.getElementById('input-meter-v2'),
   inputIndex: document.getElementById('input-index-v2'),
   inputDate: document.getElementById('input-date-v2'),
+  inputReset: document.getElementById('input-reset-v2'),
   lastReadingHelp: document.getElementById('last-reading-help-v2'),
   modalCsv: document.getElementById('modal-csv-v2'),
   btnCloseCsvModal: document.getElementById('btn-close-csv-modal-v2'),
@@ -1121,9 +1122,10 @@ function initEventListeners() {
   if (DOM.cycleSelect) { DOM.cycleSelect.addEventListener('change', (e) => { state.selectedCycleKey = e.target.value; refreshApp(); }); }
   if (DOM.filterMeter) { DOM.filterMeter.addEventListener('change', (e) => { state.filters.meter = e.target.value; renderReadingsTable(); if (typeof lucide !== 'undefined') lucide.createIcons(); }); }
   if (DOM.btnOpenReadingModal) { DOM.btnOpenReadingModal.addEventListener('click', () => { resetReadingFormDate(); updateLastReadingHelp(); openModal(DOM.modalReading); }); }
-  if (DOM.btnCloseReadingModal) DOM.btnCloseReadingModal.addEventListener('click', () => closeModal(DOM.modalReading));
-  if (DOM.btnCancelReading) DOM.btnCancelReading.addEventListener('click', () => closeModal(DOM.modalReading));
+  if (DOM.btnCloseReadingModal) DOM.btnCloseReadingModal.addEventListener('click', () => { closeModal(DOM.modalReading); DOM.formReading.reset(); });
+  if (DOM.btnCancelReading) DOM.btnCancelReading.addEventListener('click', () => { closeModal(DOM.modalReading); DOM.formReading.reset(); });
   if (DOM.inputMeter) DOM.inputMeter.addEventListener('change', updateLastReadingHelp);
+  if (DOM.inputReset) DOM.inputReset.addEventListener('change', () => { if (DOM.inputReset.checked) { DOM.inputIndex.removeAttribute('min'); DOM.inputIndex.placeholder = 'Ex: 0.000 (nova leitura do relógio trocado)'; } else { updateLastReadingHelp(); } });
   if (DOM.formReading) { DOM.formReading.addEventListener('submit', (e) => { e.preventDefault(); submitReadingForm(); }); }
   if (DOM.btnOpenCsvModal) { DOM.btnOpenCsvModal.addEventListener('click', () => { DOM.csvErrorsContainer.style.display = 'none'; DOM.csvFileInput.value = ''; openModal(DOM.modalCsv); }); }
   if (DOM.btnCloseCsvModal) DOM.btnCloseCsvModal.addEventListener('click', () => closeModal(DOM.modalCsv));
@@ -1216,11 +1218,12 @@ function submitReadingForm() {
   const newDate = new Date(dateStr);
   if (isNaN(newDate.getTime())) { showToast('Data e hora inválidas.', 'error'); return; }
   if (checkDuplicateDayReading(state.readings, meterId, newDate)) { showToast(`Bloqueado: O hidrômetro ${meterId} já possui uma leitura registrada para o dia civil ${formatDate(newDate)}. Limite de 1 por dia.`, 'error'); return; }
+  const isReset = !!(DOM.inputReset && DOM.inputReset.checked);
   const previousReading = state.readings.filter(r => r.meterId === meterId && new Date(r.date) < newDate).sort((a, b) => new Date(b.date) - new Date(a.date))[0];
-  if (previousReading && index < previousReading.index) { showToast(`Erro: Leitura (${index} m³) menor que o registro anterior (${previousReading.index} m³) do dia ${formatDate(previousReading.date, true)}.`, 'error'); return; }
+  if (!isReset && previousReading && index < previousReading.index) { showToast(`Erro: Leitura (${index} m³) menor que o registro anterior (${previousReading.index} m³) do dia ${formatDate(previousReading.date, true)}.`, 'error'); return; }
   const nextReading = state.readings.filter(r => r.meterId === meterId && new Date(r.date) > newDate).sort((a, b) => new Date(a.date) - new Date(b.date))[0];
-  if (nextReading && index > nextReading.index) { showToast(`Erro: Leitura (${index} m³) maior que o registro posterior (${nextReading.index} m³) do dia ${formatDate(nextReading.date, true)}.`, 'error'); return; }
-  const newReading = { id: `reading-${meterId}-${newDate.getTime()}-${Math.floor(Math.random() * 1000)}`, meterId, date: newDate.toISOString(), index: Number(index.toFixed(3)) };
+  if (!isReset && nextReading && index > nextReading.index) { showToast(`Erro: Leitura (${index} m³) maior que o registro posterior (${nextReading.index} m³) do dia ${formatDate(nextReading.date, true)}.`, 'error'); return; }
+  const newReading = { id: `reading-${meterId}-${newDate.getTime()}-${Math.floor(Math.random() * 1000)}`, meterId, date: newDate.toISOString(), index: Number(index.toFixed(3)), ...(isReset ? { isInitial: true } : {}) };
   state.readings.push(newReading); state.readings.sort((a, b) => new Date(b.date) - new Date(a.date));
   saveReadings(state.readings); updateAppSelectors(); refreshApp();
   closeModal(DOM.modalReading); DOM.formReading.reset(); showToast('Leitura adicionada com sucesso!', 'success');
