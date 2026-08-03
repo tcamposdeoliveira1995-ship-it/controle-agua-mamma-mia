@@ -439,6 +439,21 @@
           </div>
         </form>
       </section>
+
+      <!-- Gerenciar Leituras -->
+      <section class="panel-card" style="margin-top: 2rem;">
+        <div class="panel-header" style="border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 1rem; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem;">
+          <h2><i data-lucide="list" style="color: var(--color-blue);"></i> 🧾 Gerenciar Leituras</h2>
+          <button id="btn-open-reading-modal-v2" class="btn btn-primary" type="button"><i data-lucide="plus"></i> Nova Leitura</button>
+        </div>
+        <div class="filters-row" style="margin-bottom: 1rem; align-items: center; justify-content: space-between;">
+          <div class="filter-group"><label for="filter-meter-v2" class="form-label" style="margin-bottom: 0;">Hidrômetro:</label><select id="filter-meter-v2" class="filter-select"><option value="all">Todos</option></select></div>
+          <span id="table-record-count-v2" style="font-size: 0.8rem; color: var(--text-muted);">0 registro(s) no ciclo</span>
+        </div>
+        <div class="table-responsive">
+          <table><thead><tr><th>Data e Hora</th><th>Hidrômetro</th><th>Leitura</th><th>Consumo</th><th>Ações</th></tr></thead><tbody id="readings-table-body-v2"></tbody></table>
+        </div>
+      </section>
     </div>
 
     <!-- ABA: CAMINHAO PIPA -->
