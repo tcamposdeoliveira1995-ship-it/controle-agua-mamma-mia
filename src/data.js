@@ -1,417 +1,667 @@
-/**
- * src/data.js - Lógica de Negócios e Dados de Teste (Versão 2.1)
- * Controle de Consumo de Água - Mamma Mia
- */
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mamma Mia - Controle de Consumo de Água</title>
+<meta name="description" content="Sistema web de alta fidelidade para controle, análise e auditoria do consumo de água do restaurante Mamma Mia.">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="logo-mamma-mia.jpg">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="theme-color" content="#050816">
+<link rel="stylesheet" href="style.css">
+<script src="https://cdn.jsdelivr.net/npm/chart.js" defer></script>
+<script src="https://unpkg.com/lucide@latest" defer></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js" defer></script>
+</head>
 
-// --- CONFIGURAÇÃO E CONFIGS ADMINISTRATIVAS ---
-const DEFAULT_SETTINGS = {
-  metaIndividual: 20,
-  metaGlobal: 80,
-  alertThreshold: 75,
-  leakThreshold: 3.0,
-  // Novos parâmetros para Central de Alertas
-  alertOsDiasAberta: 7,
-  alertOsDiasAguardando: 3,
-  alertPerdasLimite: 5,
-  alertChecklistHoras: 12,
-  hydrometers: {
-    'Y21T156506': { id: 'Y21T156506', name: 'Cozinha Principal & Massas', alias: 'YUKA', color: '#3b82f6', unit: 'YUKA' },
-    'A25LM0975882': { id: 'A25LM0975882', name: 'Salão & Banheiros', alias: 'PJ', color: '#10b981', unit: 'YUKA' },
-    'A25LM0975883': { id: 'A25LM0975883', name: 'Produção & Fornos', alias: 'PJ', color: '#f59e0b', unit: 'YUKA' },
-    'A25LM0975884': { id: 'A25LM0975884', name: 'Jardim, Calçada & Limpeza', alias: 'PJ', color: '#8b5cf6', unit: 'YUKA' }
-  },
-  units: ['YUKA'],
-  // Datas de vencimento de documentos (formato ISO 'AAAA-MM-DD'). null = sem entrada/data não informada.
-  documentosVencimento: {
-    tcVigilancia: '2026-08-08',
-    tcAvcb: '2028-06-18',
-    yukaVigilancia: null,
-    yukaAvcb: '2028-04-09',
-    cdVigilancia: null,
-    cdAvcb: null
-  }
-};
-
-export function getAppSettings() {
-  const settingsStr = localStorage.getItem('mamma_mia_water_settings_v2');
-  if (!settingsStr) {
-    localStorage.setItem('mamma_mia_water_settings_v2', JSON.stringify(DEFAULT_SETTINGS));
-    return DEFAULT_SETTINGS;
-  }
-  try {
-    const parsed = JSON.parse(settingsStr);
-    return { ...DEFAULT_SETTINGS, ...parsed };
-  } catch (e) {
-    return DEFAULT_SETTINGS;
-  }
-}
-
-export function saveAppSettings(settings) {
-  localStorage.setItem('mamma_mia_water_settings_v2', JSON.stringify(settings));
-}
-
-export function getCycleInfo(date) {
-  const d = new Date(date);
-  const year = d.getFullYear();
-  const month = d.getMonth();
-  const day = d.getDate();
-
-  let startYear, startMonth, endYear, endMonth;
-
-  if (day >= 7) {
-    startYear = year;
-    startMonth = month;
-    endYear = month === 11 ? year + 1 : year;
-    endMonth = month === 11 ? 0 : month + 1;
-  } else {
-    startYear = month === 0 ? year - 1 : year;
-    startMonth = month === 0 ? 11 : month - 1;
-    endYear = year;
-    endMonth = month;
-  }
-
-  const start = new Date(startYear, startMonth, 7, 0, 0, 0, 0);
-  const end = new Date(endYear, endMonth, 6, 23, 59, 59, 999);
-
-  const startLabel = start.toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' }).replace('.', '');
-  const endLabel = end.toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' }).replace('.', '');
-  const label = `${startLabel.toUpperCase()} - ${endLabel.toUpperCase()}`;
-  const key = `${startYear}-${String(startMonth + 1).padStart(2, '0')}`;
-
-  return { start, end, label, key };
-}
-
-export function formatDate(dateStr, includeTime = false) {
-  const date = new Date(dateStr);
-  if (isNaN(date.getTime())) return dateStr;
-  const options = { day: '2-digit', month: '2-digit', year: 'numeric' };
-  if (includeTime) { options.hour = '2-digit'; options.minute = '2-digit'; }
-  return date.toLocaleDateString('pt-BR', options);
-}
-
-export function checkDuplicateDayReading(readings, meterId, dateStr, excludeId = null) {
-  const targetDate = new Date(dateStr);
-  const targetDayKey = `${targetDate.getFullYear()}-${targetDate.getMonth()}-${targetDate.getDate()}`;
-  return readings.some(r => {
-    if (r.id === excludeId || r.meterId !== meterId) return false;
-    const rDate = new Date(r.date);
-    const rDayKey = `${rDate.getFullYear()}-${rDate.getMonth()}-${rDate.getDate()}`;
-    return targetDayKey === rDayKey;
-  });
-}
-
-export function initializeData() {
-  const STORAGE_KEY = 'mamma_mia_water_readings_v2';
-  let readings = JSON.parse(localStorage.getItem(STORAGE_KEY));
-  if (!readings || readings.length === 0) {
-    readings = generateMockReadings();
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(readings));
-  }
-  return readings;
-}
-
-export function saveReadings(readings) {
-  const STORAGE_KEY = 'mamma_mia_water_readings_v2';
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(readings));
-}
-
-function generateMockReadings() {
-  const list = [];
-  const startDay = new Date(2026, 3, 6, 12, 0, 0);
-  const endDay = new Date(); endDay.setHours(12, 0, 0, 0);
-
-  const accumulators = {
-    'Y21T156506': 1250.00,
-    'A25LM0975882': 840.00,
-    'A25LM0975883': 2110.00,
-    'A25LM0975884': 450.00
-  };
-
-  Object.keys(accumulators).forEach(id => {
-    list.push({ id: `mock-base-${id}`, meterId: id, date: new Date(startDay).toISOString(), index: accumulators[id], isInitial: true });
-  });
-
-  let currentDay = new Date(startDay);
-  currentDay.setDate(currentDay.getDate() + 1);
-
-  while (currentDay <= endDay) {
-    const dayOfWeek = currentDay.getDay();
-    let factor = 1.0;
-    if (dayOfWeek === 0 || dayOfWeek === 6 || dayOfWeek === 5) factor = 1.45;
-    else if (dayOfWeek === 1) factor = 0.50;
-
-    Object.keys(accumulators).forEach(id => {
-      let dailyBase = 0;
-      switch (id) {
-        case 'Y21T156506': dailyBase = 0.52; break;
-        case 'A25LM0975882': dailyBase = 0.40; break;
-        case 'A25LM0975883':
-          const isMayCycle = currentDay >= new Date(2026, 4, 7) && currentDay <= new Date(2026, 5, 6);
-          dailyBase = isMayCycle ? 0.78 : 0.55; break;
-        case 'A25LM0975884': dailyBase = 0.22; break;
-      }
-      let isLeakDay = id === 'A25LM0975883' && currentDay.getDate() === 20 && currentDay.getMonth() === 4;
-      const randomNoise = 0.85 + Math.random() * 0.30;
-      const consumptionToday = isLeakDay ? 3.450 : Number((dailyBase * factor * randomNoise).toFixed(3));
-      accumulators[id] = Number((accumulators[id] + consumptionToday).toFixed(3));
-      list.push({ id: `mock-${id}-${currentDay.getTime()}`, meterId: id, date: new Date(currentDay).toISOString(), index: accumulators[id] });
-    });
-    currentDay.setDate(currentDay.getDate() + 1);
-  }
-
-  return list.sort((a, b) => new Date(b.date) - new Date(a.date));
-}
-
-export function calculateConsumptions(readings) {
-  const sorted = [...readings].sort((a, b) => new Date(a.date) - new Date(b.date));
-  const lastIndices = {};
-  const processed = sorted.map(reading => {
-    const meterId = reading.meterId;
-    let consumption = 0;
-    if (reading.isInitial) { consumption = 0; }
-    else if (lastIndices[meterId] !== undefined) {
-      consumption = Number((reading.index - lastIndices[meterId]).toFixed(3));
-      if (consumption < 0) consumption = 0;
+<body>
+<!-- TELA DE BLOQUEIO -->
+<div id="lock-screen" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: var(--bg-primary); display: flex; align-items: center; justify-content: center; z-index: 9999;">
+  <div style="background: var(--card-bg); border: 1px solid var(--card-border); border-radius: var(--border-radius-lg); padding: 2.5rem; max-width: 360px; width: 90%; text-align: center; box-shadow: 0 20px 50px rgba(0,0,0,0.2);">
+    <img src="logo-mamma-mia.jpg" alt="Mamma Mia Salgados" style="max-width: 160px; margin-bottom: 1.5rem;">
+    <h2 style="font-size: 1.2rem; font-weight: 700; color: var(--text-primary); margin-bottom: 1.5rem;">Acesso Restrito</h2>
+    <input type="password" id="lock-screen-input" class="form-control" placeholder="Digite a senha" style="text-align: center; margin-bottom: 1rem;" autofocus>
+    <button id="lock-screen-btn" class="btn btn-primary" type="button" style="width: 100%;">Entrar</button>
+    <p id="lock-screen-error" style="color: var(--color-red); font-size: 0.85rem; margin-top: 0.75rem; display: none;">Senha incorreta. Tente novamente.</p>
+  </div>
+</div>
+<script>
+  (function() {
+    const SENHA_CORRETA = '30154';
+    const lockScreen = document.getElementById('lock-screen');
+    const input = document.getElementById('lock-screen-input');
+    const btn = document.getElementById('lock-screen-btn');
+    const erro = document.getElementById('lock-screen-error');
+    function tentarEntrar() {
+      if (input.value === SENHA_CORRETA) { lockScreen.style.display = 'none'; }
+      else { erro.style.display = 'block'; input.value = ''; input.focus(); }
     }
-    lastIndices[meterId] = reading.index;
-    return { ...reading, consumption };
-  });
-  return processed.sort((a, b) => new Date(b.date) - new Date(a.date));
-}
+    btn.addEventListener('click', tentarEntrar);
+    input.addEventListener('keydown', (e) => { if (e.key === 'Enter') tentarEntrar(); });
+  })();
+</script>
 
-export function getCycleStats(readings, cycleKey) {
-  const settings = getAppSettings();
-  const processedReadings = calculateConsumptions(readings);
-  let startCycleDate, endCycleDate, label;
+<div class="app-container">
+  <!-- HEADER -->
+  <header class="no-print">
+    <div class="logo-section">
+      <img src="logo-mamma-mia.jpg" alt="Mamma Mia Salgados" class="logo-real">
+      <div>
+        <div style="display: flex; align-items: baseline; gap: 0.5rem;"><h1>Mamma Mia</h1></div>
+        <p class="logo-subtitle">Mamma Mia Control - Gestão Inteligente</p>
+      </div>
+    </div>
+  </header>
 
-  if (cycleKey === 'current') {
-    const info = getCycleInfo(new Date());
-    startCycleDate = info.start; endCycleDate = info.end; label = info.label; cycleKey = info.key;
-  } else {
-    const [year, month] = cycleKey.split('-').map(Number);
-    const info = getCycleInfo(new Date(year, month - 1, 15));
-    startCycleDate = info.start; endCycleDate = info.end; label = info.label;
-  }
+  <!-- DATAS IMPORTANTES - sempre visível, independente da aba -->
+  <div class="documentos-vencimento-bar no-print" id="documentos-vencimento-bar"></div>
 
-  const cycleReadings = processedReadings.filter(r => {
-    const rDate = new Date(r.date);
-    return rDate >= startCycleDate && rDate <= endCycleDate && !r.isInitial;
-  });
+  <!-- NAVEGAÇÃO -->
+  <nav class="navigation-tabs no-print" aria-label="Abas do Sistema">
+    <button class="tab-btn active" data-tab="dashboard"><i data-lucide="droplets"></i>Água</button>
+    <button class="tab-btn" data-tab="os"><i data-lucide="wrench"></i>OS</button>
+    <button class="tab-btn" data-tab="perdas"><i data-lucide="trending-down"></i>Perdas</button>
+    <button class="tab-btn" data-tab="requisicoes"><i data-lucide="package"></i>Requisições</button>
+    <button class="tab-btn" data-tab="central"><i data-lucide="radio"></i>Central</button>
+    <button class="tab-btn" data-tab="operacao"><i data-lucide="clipboard-check"></i>Operação</button>
+    <button class="tab-btn" data-tab="pipa"><i data-lucide="truck"></i>Pipa</button>
+    <button class="tab-btn" data-tab="higienizacao"><i data-lucide="spray-can"></i>MOTORES EQ. REFRIGERADOS</button>
+    <button class="tab-btn" data-tab="insumos"><i data-lucide="package-x"></i>Insumos Críticos</button>
+    <button class="tab-btn" data-tab="auditoria"><i data-lucide="clipboard-list"></i>Auditoria</button>
+    <button class="tab-btn" data-tab="configuracoes"><i data-lucide="settings"></i>Configurações</button>
+  </nav>
 
-  const totalDays = Math.ceil((endCycleDate - startCycleDate) / (1000 * 60 * 60 * 24));
-  const today = new Date();
-  const now = today > endCycleDate ? endCycleDate : (today < startCycleDate ? startCycleDate : today);
-  const elapsedDays = Math.max(1, Math.ceil((now - startCycleDate) / (1000 * 60 * 60 * 24)));
-  const remainingDays = Math.max(0, totalDays - elapsedDays);
-  const expectedPercentToday = Math.min(100, Number(((elapsedDays / totalDays) * 100).toFixed(1)));
+  <main id="app-main-content">
 
-  const metersData = {};
-  Object.keys(settings.hydrometers).forEach(id => {
-    metersData[id] = {
-      ...settings.hydrometers[id], limit: settings.metaIndividual, consumption: 0, readingsCount: 0,
-      minDate: null, maxDate: null, firstIndex: null, lastIndex: null,
-      dailyGoal: Number((settings.metaIndividual / totalDays).toFixed(3)), hasLeak: false, operationalAlerts: []
-    };
-  });
+    <!-- ================= ABA: ÁGUA / DASHBOARD ================= -->
+    <div id="tab-content-dashboard" class="tab-panel active">
+      <section class="main-executive-card" aria-label="Meta do Ciclo Atual">
+        <div class="main-exec-header">
+          <h3><span style="font-size: 1.25rem; vertical-align: middle;">🛰</span> META DO CICLO</h3>
+          <span class="main-exec-period" id="main-exec-period-label">07/06/2026 a 06/07/2026</span>
+        </div>
+        <div class="main-exec-body">
+          <div class="exec-metric"><span class="exec-label">Meta Total</span><span class="exec-val" id="main-exec-meta">80.00 <span class="exec-unit">m³</span></span></div>
+          <div class="exec-metric"><span class="exec-label">Consumido</span><span class="exec-val" id="main-exec-consumed">0.00 <span class="exec-unit">m³</span></span></div>
+          <div class="exec-metric highlight-success"><span class="exec-label">Saldo para Meta</span><span class="exec-val text-glow-green" id="main-exec-balance">0.00 <span class="exec-unit">m³</span></span></div>
+          <div class="exec-metric"><span class="exec-label">% Utilizado</span><span class="exec-val" id="main-exec-percent">0.0<span class="exec-unit">%</span></span></div>
+          <div class="exec-metric highlight-info"><span class="exec-label">Dias Restantes</span><span class="exec-val" id="main-exec-days-left">0 <span class="exec-unit">dias</span></span></div>
+        </div>
+        <div class="main-exec-progress-track"><div class="main-exec-progress-bar" id="main-exec-progress-bar" style="width: 0%;"></div><div class="today-marker" id="main-exec-today-marker" style="left: 0%;"></div></div>
+      </section>
 
-  cycleReadings.forEach(r => {
-    const id = r.meterId;
-    if (metersData[id]) {
-      metersData[id].consumption += r.consumption;
-      metersData[id].readingsCount++;
-      const rDate = new Date(r.date);
-      if (!metersData[id].minDate || rDate < metersData[id].minDate) { metersData[id].minDate = rDate; metersData[id].firstIndex = r.index; }
-      if (!metersData[id].maxDate || rDate > metersData[id].maxDate) { metersData[id].maxDate = rDate; metersData[id].lastIndex = r.index; }
-      if (r.consumption > settings.leakThreshold) metersData[id].hasLeak = true;
-    }
-  });
+      <section class="kpi-grid" style="margin-bottom: 2rem;" aria-label="Indicadores de Gestão">
+        <div class="kpi-card" id="kpi-alerts-v2">
+          <div class="kpi-label">Hidrômetros em Alerta</div>
+          <div class="kpi-value" id="val-alerts-v2">0</div>
+          <div class="kpi-subtext" id="val-alerts-subtext-v2">Nenhum hidrômetro crítico</div>
+        </div>
+        <div class="kpi-card"><div class="kpi-label">Consumo Médio Geral</div><div class="kpi-value" id="val-avg-general">0.00 <span class="unit">m³/d</span></div><div class="kpi-subtext">Média somada diária</div></div>
+        <div class="kpi-card"><div class="kpi-label">Maior Consumidor</div><div class="kpi-value" id="val-highest-consumer" style="font-size: 1.4rem; padding-top: 0.15rem; color: var(--color-orange);">--</div><div class="kpi-subtext" id="val-highest-consumer-sub">Consumo máximo registrado</div></div>
+        <div class="kpi-card"><div class="kpi-label">Menor Consumidor</div><div class="kpi-value" id="val-lowest-consumer" style="font-size: 1.4rem; padding-top: 0.15rem; color: var(--color-green);">--</div><div class="kpi-subtext" id="val-lowest-consumer-sub">Consumo mínimo registrado</div></div>
+        <div class="kpi-card"><div class="kpi-label">Projeção Final Global</div><div class="kpi-value" id="val-proj-global">0.00 <span class="unit">m³</span></div><div class="kpi-subtext" id="val-proj-global-sub">Estima consumo até dia 06</div></div>
+        <div class="kpi-card"><div class="kpi-label">Economia Projetada</div><div class="kpi-value" id="val-economy-projected">0.00 <span class="unit">m³</span></div><div class="kpi-subtext" id="val-economy-projected-sub">Economia estimada do ciclo</div></div>
+      </section>
 
-  let alertMetersCount = 0;
-  Object.keys(metersData).forEach(id => {
-    const m = metersData[id];
-    m.consumption = Number(m.consumption.toFixed(3));
-    m.balance = Number((m.limit - m.consumption).toFixed(3));
-    m.dailyAverage = elapsedDays > 0 ? Number((m.consumption / elapsedDays).toFixed(3)) : 0;
-    m.projection = Number((m.consumption + (m.dailyAverage * remainingDays)).toFixed(3));
-    m.percentUsed = Number(((m.consumption / m.limit) * 100).toFixed(1));
-    const thresholdVal = m.limit * (settings.alertThreshold / 100);
-    if (m.consumption > m.limit) { m.status = 'danger'; alertMetersCount++; }
-    else if (m.consumption >= thresholdVal || m.projection > m.limit) { m.status = 'warning'; alertMetersCount++; }
-    else { m.status = 'success'; }
-    if (m.dailyAverage > m.dailyGoal) m.dailyGoalStatus = 'danger';
-    else if (m.dailyAverage >= (m.dailyGoal * 0.9)) m.dailyGoalStatus = 'warning';
-    else m.dailyGoalStatus = 'success';
-    if (m.maxDate) {
-      const hoursSinceLastReading = (today - new Date(m.maxDate)) / (1000 * 60 * 60);
-      if (hoursSinceLastReading > 24) m.operationalAlerts.push('Atraso: Sem leituras registradas há mais de 24 horas.');
-    } else {
-      m.operationalAlerts.push('Atraso: Nenhuma leitura no ciclo atual.');
-    }
-    const meterReadings = cycleReadings.filter(r => r.meterId === id);
-    meterReadings.forEach(r => {
-      if (r.consumption > m.dailyAverage * 1.5 && r.consumption > 0.5) m.operationalAlerts.push(`Pico: Consumo de +${r.consumption} m³ em ${formatDate(r.date)} está acima da média.`);
-      if (r.consumption > settings.leakThreshold) m.operationalAlerts.push(`Vazamento: Possível vazamento detectado em ${formatDate(r.date)} (Consumo: +${r.consumption} m³).`);
-    });
-  });
+      <div class="double-panel-row">
+        <div class="comparador-secao-v2" id="comparador-ciclos-v2">
+          <div class="comparador-info">
+            <div class="comparador-icon"><i data-lucide="arrow-left-right"></i></div>
+            <div class="comparador-text"><h3>Balanço vs. Ciclo Anterior</h3><p id="comparador-details-v2">Consumo Atual: -- m³ | Anterior: -- m³</p></div>
+          </div>
+          <div id="comparador-badge-v2" class="comparador-resultado economia"><span>Carregando dados...</span></div>
+        </div>
+        <div class="leak-alert-card" id="leak-alert-banner" style="display: none;">
+          <div class="leak-alert-icon"><i data-lucide="droplet-off"></i></div>
+          <div class="leak-alert-text"><h3>🔴 Possível Vazamento Detectado</h3><p id="leak-alert-desc">Verifique o hidrômetro com pico anômalo.</p></div>
+        </div>
+      </div>
 
-  const totalConsumption = Object.values(metersData).reduce((sum, m) => sum + m.consumption, 0);
-  const totalProjection = Object.values(metersData).reduce((sum, m) => sum + m.projection, 0);
-  const globalPercentUsed = Number(((totalConsumption / settings.metaGlobal) * 100).toFixed(1));
-  const globalBalance = Number((settings.metaGlobal - totalConsumption).toFixed(3));
-  const generalDailyAverage = elapsedDays > 0 ? Number((totalConsumption / elapsedDays).toFixed(3)) : 0;
-  const projectedEconomy = Number((settings.metaGlobal - totalProjection).toFixed(3));
+      <section class="panel-card no-print" id="operational-alerts-panel" style="margin-bottom: 2rem; display: none;">
+        <div class="panel-header" style="margin-bottom: 1rem;"><h2 style="color: var(--color-red);"><i data-lucide="alert-octagon"></i> Alertas Operacionais Ativos</h2></div>
+        <div class="alerts-list-wrapper" id="operational-alerts-list"></div>
+      </section>
 
-  let highestConsumer = { name: 'N/A', consumption: 0 };
-  let lowestConsumer = { name: 'N/A', consumption: Infinity };
-  Object.values(metersData).forEach(m => {
-    if (m.consumption > highestConsumer.consumption) highestConsumer = { name: m.alias || m.id, consumption: m.consumption };
-    if (m.consumption < lowestConsumer.consumption && m.consumption > 0) lowestConsumer = { name: m.alias || m.id, consumption: m.consumption };
-  });
-  if (lowestConsumer.consumption === Infinity) lowestConsumer = { name: 'N/A', consumption: 0 };
+      <section class="hidrometros-grid" id="hidrometros-cards-container-v2" aria-label="Consumo por Hidrômetro"></section>
 
-  const ranking = Object.values(metersData).sort((a, b) => a.percentUsed - b.percentUsed)
-    .map((m, index) => ({ position: index + 1, id: m.id, name: m.name, alias: m.alias, percentUsed: m.percentUsed, consumption: m.consumption }));
+      <div class="layout-panels">
+        <section class="panel-card" aria-label="Evolução Temporal do Consumo">
+          <div class="panel-header"><h2><i data-lucide="bar-chart-3" style="color: var(--color-blue);"></i> Tendência de Consumo</h2><span style="font-size: 0.8rem; color: var(--text-muted);">Acumulado Diário no Ciclo</span></div>
+          <div class="chart-wrapper"><canvas id="trendChartV2"></canvas></div>
+        </section>
+        <section class="panel-card" style="display: flex; flex-direction: column; justify-content: space-between;">
+          <div>
+            <div class="panel-header"><h2><i data-lucide="pie-chart" style="color: var(--color-purple);"></i> Divisão por Hidrômetro</h2></div>
+            <div class="chart-wrapper" style="height: 180px; margin-bottom: 1rem;"><canvas id="comparisonChartV2"></canvas></div>
+          </div>
+          <div>
+            <div class="panel-header" style="margin-bottom: 0.75rem; margin-top: 1rem; border-top: 1px solid rgba(255,255,255,0.05); padding-top: 1rem;"><h2 style="font-size: 1.1rem;"><i data-lucide="download" style="color: var(--color-blue);"></i> Relatórios e Exportação</h2></div>
+            <div class="export-actions-grid">
+              <button id="btn-export-pdf" class="btn btn-primary" type="button"><i data-lucide="file-text"></i> PDF Executivo</button>
+              <button id="btn-export-xlsx" class="btn btn-secondary" type="button"><i data-lucide="table"></i> Planilha Excel</button>
+              <button id="btn-export-csv" class="btn btn-secondary" type="button"><i data-lucide="file-spreadsheet"></i> CSV</button>
+              <button id="btn-export-json" class="btn btn-secondary" type="button"><i data-lucide="braces"></i> Backup JSON</button>
+            </div>
+          </div>
+        </section>
+      </div>
+    </div>
 
-  let globalStatus = 'success';
-  if (totalConsumption > settings.metaGlobal) globalStatus = 'danger';
-  else if (totalProjection > settings.metaGlobal || totalConsumption > (settings.metaGlobal * 0.8)) globalStatus = 'warning';
+    <!-- ================= ABA: OS ================= -->
+    <div id="tab-content-os" class="tab-panel">
+      <section class="panel-card" style="margin-bottom:1.25rem;">
+        <div class="panel-header"><h2><i data-lucide="zap"></i> Armadilhas Luminosas</h2></div>
+        <div class="documentos-vencimento-bar no-print" id="armadilhas-vencimento-bar" style="margin:0.5rem 0 0 0;"></div>
+      </section>
+      <section class="panel-card">
+        <div class="panel-header"><h2>🔧 Ordens de Serviço</h2><button id="btn-refresh-os" class="btn btn-primary">Atualizar OS</button></div>
+        <div class="dashboard-grid">
+          <div class="kpi-card"><span class="kpi-label">OS Abertas</span><div class="kpi-value" id="os-open-count">0</div></div>
+          <div class="kpi-card"><span class="kpi-label">Em Andamento</span><div class="kpi-value" id="os-progress-count">0</div></div>
+          <div class="kpi-card"><span class="kpi-label">Aguardando Peça</span><div class="kpi-value" id="os-parts-count">0</div></div>
+          <div class="kpi-card"><span class="kpi-label">Concluídas</span><div class="kpi-value" id="os-closed-count">0</div></div>
+        </div>
+        <div class="kpi-card"><span class="kpi-label">🔴 Críticas</span><div class="kpi-value" id="os-critical-count">0</div></div>
+        <div class="kpi-card"><span class="kpi-label">🟡 Altas</span><div class="kpi-value" id="os-high-count">0</div></div>
+        <div class="kpi-card"><span class="kpi-label">🟢 Baixas</span><div class="kpi-value" id="os-low-count">0</div></div>
+      </section>
+      <section class="panel-card">
+        <div class="panel-header">
+          <h2>📋 Últimas Ordens de Serviço</h2>
+          <select id="os-filter-status" class="filter-select">
+          <option value="TODOS">Todos</option>
+          <option value="ABERTO">Abertos</option>
+          <option value="AGUARDANDO PEÇA">Aguardando Peça</option>
+          <option value="CONCLUÍDO">Concluídas</option>
+  </select>
+  <select id="os-filter-prioridade" class="filter-select" style="margin-left:0.5rem;">
+  <option value="TODOS">Todas Prioridades</option>
+  <option value="CRÍTICA">🔴 Crítica</option>
+  <option value="ALTA">🟠 Alta</option>
+  <option value="MÉDIA">🟡 Média</option>
+  <option value="BAIXA">🟢 Baixa</option>
+</select>
+        </div>
+        <table class="modern-table"><thead><tr><th>OS</th><th>Status</th><th>Prioridade</th><th>Unidade</th><th>Equipamento</th><th>PDF</th></tr></thead><tbody id="os-table-body"></tbody></table>
+      </section>
+    </div>
 
-  return {
-    cycleKey, label, startDate: startCycleDate, endDate: endCycleDate, totalDays, elapsedDays, remainingDays, expectedPercentToday,
-    meters: metersData, totalConsumption: Number(totalConsumption.toFixed(3)), totalProjection: Number(totalProjection.toFixed(3)),
-    globalPercentUsed, globalBalance, globalStatus, alertMetersCount, readingsCount: cycleReadings.length,
-    highestConsumer, lowestConsumer, generalDailyAverage, projectedEconomy, ranking, metaGlobal: settings.metaGlobal
-  };
-}
+    <!-- ================= ABA: PERDAS ================= -->
+    <div id="tab-content-perdas" class="tab-panel">
+      <div id="perdas-conteudo">
+        <section class="panel-card"><div class="panel-header"><h2>📉 Gestão de Perdas YUKA</h2></div><p>Carregando dados...</p></section>
+      </div>
+    </div>
 
-export function getAvailableCycles(readings) {
-  const cycles = new Set();
-  readings.forEach(r => {
-    const date = new Date(r.date);
-    if (!isNaN(date.getTime())) { const info = getCycleInfo(date); cycles.add(info.key); }
-  });
-  return Array.from(cycles).sort((a, b) => b.localeCompare(a));
-}
+    <!-- ================= ABA: REQUISIÇÕES ================= -->
+    <div id="tab-content-requisicoes" class="tab-panel">
+      <section class="panel-card">
+        <div class="panel-header"><h2>📦 Central de Requisições</h2></div>
+        <div class="dashboard-grid">
+          <div class="kpi-card requisicao-card" id="btn-limpeza">
+            <div class="kpi-value">🧹</div>
+            <span class="kpi-label">Limpeza e EPI</span>
+            <p style="margin-top:10px;color:var(--text-muted);">Materiais de limpeza, EPIs e utilidades.</p>
+          </div>
+          <div class="kpi-card requisicao-card" id="btn-mp">
+            <div class="kpi-value">🥩</div>
+            <span class="kpi-label">MP e Recheios</span>
+            <p style="margin-top:10px;color:var(--text-muted);">Matéria-prima e recheios.</p>
+          </div>
+        </div>
+      </section>
+      <section class="panel-card" id="requisicoes-conteudo"><div class="panel-header"><h2>Selecione um módulo</h2></div></section>
+    </div>
 
-export function compareCycles(readings, currentCycleKey, previousCycleKey) {
-  const currentStats = getCycleStats(readings, currentCycleKey);
-  if (!previousCycleKey) return { diff: 0, percentDiff: 0, isEconomy: true, meters: {}, prevLabel: 'N/A', currentLabel: currentStats.label };
-  const prevStats = getCycleStats(readings, previousCycleKey);
-  const diff = Number((currentStats.totalConsumption - prevStats.totalConsumption).toFixed(3));
-  const percentDiff = prevStats.totalConsumption > 0 ? Number(((diff / prevStats.totalConsumption) * 100).toFixed(1)) : 0;
-  const isEconomy = diff < 0;
-  const metersComparison = {};
-  const settings = getAppSettings();
-  Object.keys(settings.hydrometers).forEach(id => {
-    const currM = currentStats.meters[id] ? currentStats.meters[id].consumption : 0;
-    const prevM = prevStats.meters[id] ? prevStats.meters[id].consumption : 0;
-    const mDiff = Number((currM - prevM).toFixed(3));
-    const mPercentDiff = prevM > 0 ? Number(((mDiff / prevM) * 100).toFixed(1)) : 0;
-    metersComparison[id] = { current: currM, previous: prevM, diff: mDiff, percentDiff: mPercentDiff, isEconomy: mDiff < 0 };
-  });
-  return { diff: Math.abs(diff), percentDiff: Math.abs(percentDiff), isEconomy, meters: metersComparison, prevLabel: prevStats.label, currentLabel: currentStats.label, prevConsumption: prevStats.totalConsumption, currentConsumption: currentStats.totalConsumption };
-}
+    <!-- ================= ABA: CENTRAL OPERACIONAL ================= -->
+    <div id="tab-content-central" class="tab-panel">
 
-export function parseCSV(csvText, existingReadings) {
-  const settings = getAppSettings();
-  const lines = csvText.split(/\r?\n/);
-  if (lines.length < 2) throw new Error('O arquivo CSV está vazio ou possui formato inválido.');
-  const headerLine = lines[0];
-  const delimiter = headerLine.includes(';') ? ';' : ',';
-  const headers = headerLine.split(delimiter).map(h => h.trim().replace(/^["']|["']$/g, '').toLowerCase());
-  const dateIdx = headers.findIndex(h => h.includes('data') || h.includes('date') || h.includes('time') || h.includes('timestamp'));
-  const meterIdx = headers.findIndex(h => h.includes('hidrometro') || h.includes('hidrômetro') || h.includes('meter') || h.includes('id') || h.includes('dispositivo'));
-  const valueIdx = headers.findIndex(h => h.includes('leitura') || h.includes('valor') || h.includes('index') || h.includes('acumulad'));
-  const newReadings = [];
-  const errors = [];
-  const isSheetsColFormat = headers.some(h => Object.keys(settings.hydrometers).some(id => h.includes(id.toLowerCase())));
+      <section class="panel-card">
 
-  if (isSheetsColFormat && dateIdx !== -1) {
-    const meterColumns = {};
-    Object.keys(settings.hydrometers).forEach(id => {
-      const colIdx = headers.findIndex(h => h.includes(id.toLowerCase()));
-      if (colIdx !== -1) meterColumns[id] = colIdx;
-    });
-    for (let i = 1; i < lines.length; i++) {
-      const line = lines[i].trim();
-      if (!line) continue;
-      const columns = line.split(delimiter).map(c => c.trim().replace(/^["']|["']$/g, ''));
-      if (columns.length <= dateIdx) continue;
-      const rawDate = columns[dateIdx];
-      let parsedDate = parseDateString(rawDate);
-      if (!parsedDate) { errors.push(`Linha ${i + 1}: Data inválida "${rawDate}".`); continue; }
-      Object.keys(meterColumns).forEach(meterId => {
-        const colIdx = meterColumns[meterId];
-        if (colIdx < columns.length && columns[colIdx]) {
-          const rawValue = columns[colIdx];
-          const cleanValue = rawValue.replace(',', '.');
-          const parsedValue = parseFloat(cleanValue);
-          if (!isNaN(parsedValue) && parsedValue >= 0) {
-            newReadings.push({ id: `imported-${meterId}-${parsedDate.getTime()}-${Math.floor(Math.random() * 1000)}`, meterId, date: parsedDate.toISOString(), index: Number(parsedValue.toFixed(3)) });
-          }
-        }
+        <div class="panel-header">
+          <h2>📡 Central Operacional</h2>
+        </div>
+
+        <div id="central-conteudo">
+
+          <div class="dashboard-grid">
+
+            <div class="kpi-card">
+              <div class="kpi-value">0</div>
+              <span class="kpi-label">🟡 Aguardando</span>
+            </div>
+
+            <div class="kpi-card">
+              <div class="kpi-value">0</div>
+              <span class="kpi-label">🔵 Em Separação</span>
+            </div>
+
+            <div class="kpi-card">
+              <div class="kpi-value">0</div>
+              <span class="kpi-label">🟢 Concluído</span>
+            </div>
+
+            <div class="kpi-card">
+              <div class="kpi-value">0</div>
+              <span class="kpi-label">🔴 Cancelado</span>
+            </div>
+
+          </div>
+
+          <p style="margin-top:20px;color:var(--text-muted);">
+            Central Operacional em desenvolvimento...
+          </p>
+
+        </div>
+
+      </section>
+
+    </div>
+
+    <!-- ================= ABA: OPERAÇÃO ================= -->
+    <div id="tab-content-operacao" class="tab-panel">
+      <section class="panel-card">
+        <div class="panel-header"><h2>📋 Formulários Operacionais</h2></div>
+        <div class="dashboard-grid">
+          <div class="kpi-card requisicao-card"><div class="kpi-value">📉</div><a href="https://docs.google.com/forms/d/e/1FAIpQLSdGz8GgzVjqK-Zt9fVUXK09Safz0eQIqc4rM0_Q7PEE9HKmCg/viewform?usp=header" target="_blank" rel="noopener" class="kpi-label" style="text-decoration: none; color: var(--text-primary);">Registro de Perdas – Mamma Mia</a></div>
+          <div class="kpi-card requisicao-card"><div class="kpi-value">🔧</div><a href="https://docs.google.com/forms/d/e/1FAIpQLSdbnjll-8FQA8fpSYDsFi6fb_2lxydvucvhmGNZ1ptViMDJxg/viewform?usp=header" target="_blank" rel="noopener" class="kpi-label" style="text-decoration: none; color: var(--text-primary);">Chamado de Manutenção</a></div>
+          <div class="kpi-card requisicao-card"><div class="kpi-value">💧</div><a href="https://docs.google.com/forms/d/e/1FAIpQLSfisK8w1mNz6Z4iR62GEo2l58FEg9EBZQ9vVmRiwdfkXH9Mag/viewform?usp=header" target="_blank" rel="noopener" class="kpi-label" style="text-decoration: none; color: var(--text-primary);">Controle de Água</a></div>
+        </div>
+      </section>
+      <section class="panel-card">
+        <div class="panel-header"><h2>✅ Checklists e Controles Operacionais</h2></div>
+        <div class="dashboard-grid">
+          <div class="kpi-card requisicao-card"><div class="kpi-value">🏭</div><a href="https://docs.google.com/forms/d/e/1FAIpQLScu-Jzfh8CH5tlzUMxTWxWo5VGd0bZRKwgokyRHJadg2C37yA/viewform?usp=header" target="_blank" rel="noopener" class="kpi-label" style="text-decoration: none; color: var(--text-primary);">Abertura de Fábrica - YUKA</a></div>
+          <div class="kpi-card requisicao-card"><div class="kpi-value">🏭</div><a href="https://docs.google.com/forms/d/e/1FAIpQLSczqxdvozpSVsc5eWqTAviPQxyzxaXS4htKwmn2Va-_RSQD3Q/viewform?usp=header" target="_blank" rel="noopener" class="kpi-label" style="text-decoration: none; color: var(--text-primary);">Abertura de Fábrica - TC</a></div>
+          <div class="kpi-card requisicao-card"><div class="kpi-value">🔒</div><a href="https://docs.google.com/forms/d/e/1FAIpQLSdc979u_GeGxfbIB5MyjUuOhz9jdYPdASOhoznP33G1n_Nx5g/viewform?usp=header" target="_blank" rel="noopener" class="kpi-label" style="text-decoration: none; color: var(--text-primary);">Fechamento de Fábrica - YUKA</a></div>
+          <div class="kpi-card requisicao-card"><div class="kpi-value">🔒</div><a href="https://docs.google.com/forms/d/e/1FAIpQLScwOvE4okSQoVn_dALhSOCaK4g9KDcOlFvWJwL2OiPlyrR1Ew/viewform?usp=header" target="_blank" rel="noopener" class="kpi-label" style="text-decoration: none; color: var(--text-primary);">Fechamento de Fábrica - TC</a></div>
+          <div class="kpi-card requisicao-card"><div class="kpi-value">✅</div><a href="https://docs.google.com/forms/d/e/1FAIpQLSdPHVwU5_7iCX-j0jNOp_sb5Y6NtWVe3P3j_ZeC27BLCSbJ3g/viewform?usp=header" target="_blank" rel="noopener" class="kpi-label" style="text-decoration: none; color: var(--text-primary);">Controle de Boas Práticas (BPF)</a></div>
+          <div class="kpi-card requisicao-card"><div class="kpi-value">📦</div><a href="https://docs.google.com/forms/d/e/1FAIpQLSfS0FGuovjr1I8Tk-UxGHwxaIusmHM8XVXM865Bw_gAogQJTQ/viewform?usp=header" target="_blank" rel="noopener" class="kpi-label" style="text-decoration: none; color: var(--text-primary);">Controle de Produção</a></div>
+        </div>
+      </section>
+    </div>
+
+    <!-- ================= ABA: DIRETORIA ================= -->
+    <div id="tab-content-diretoria" class="tab-panel">
+      <div class="presentation-header no-print">
+        <h2><i data-lucide="presentation"></i> Apresentação Executiva para Diretoria</h2>
+        <button id="btn-print-presentation" class="btn btn-primary" type="button"><i data-lucide="printer"></i> Imprimir / Salvar PDF</button>
+      </div>
+      <div class="diretoria-print-wrapper" id="diretoria-print-content">
+        <div class="print-header-logo">
+          <div style="display: flex; align-items: center; gap: 10px;"><span style="font-size: 32px;">🇮🇹</span><div><h2>Mamma Mia</h2><p>Projeto Água - Gestão Inteligente do Consumo</p></div></div>
+          <div style="text-align: right; font-size: 0.85rem; color: #4b5563;"><p>Emitido em: <span id="dir-emission-date">--</span></p><p>Ciclo analisado: <strong id="dir-cycle-label">--</strong></p></div>
+        </div>
+        <div class="main-executive-card diretoria-card-bg">
+          <div class="main-exec-header"><h3>🛰 RELATÓRIO OPERACIONAL DA DIRETORIA</h3><span class="main-exec-period" id="dir-exec-period">--</span></div>
+          <div class="main-exec-body" style="grid-template-columns: repeat(3, 1fr);">
+            <div class="exec-metric"><span class="exec-label">Consumo Acumulado Geral</span><span class="exec-val" id="dir-exec-consumed">0.00 m³</span><span class="dir-exec-sub">Meta Limite: <strong id="dir-exec-meta-val">80.00</strong> m³</span></div>
+            <div class="exec-metric highlight-success"><span class="exec-label">Saldo de Economia Global</span><span class="exec-val text-glow-green" id="dir-exec-balance" style="color: #10b981;">0.00 m³</span><span class="dir-exec-sub" id="dir-exec-balance-sub">Dentro do limite global</span></div>
+            <div class="exec-metric"><span class="exec-label">Projeção Final de Fechamento</span><span class="exec-val" id="dir-exec-projection">0.00 m³</span><span class="dir-exec-sub" id="dir-exec-projection-sub">Com base na média móvel</span></div>
+          </div>
+          <div class="main-exec-progress-track"><div class="main-exec-progress-bar" id="dir-exec-progress-bar" style="width: 0%;"></div><div class="today-marker" id="dir-exec-today-marker" style="left: 0%;"></div></div>
+        </div>
+        <div class="kpi-grid" style="margin-bottom: 2rem;">
+          <div class="kpi-card"><div class="kpi-label">Economia Gerada</div><div class="kpi-value" id="dir-kpi-economy" style="color: var(--color-green);">0.00 <span class="unit">m³</span></div><div class="kpi-subtext" id="dir-kpi-economy-sub">Em relação ao ciclo anterior</div></div>
+          <div class="kpi-card"><div class="kpi-label">Hidrômetros em Alerta</div><div class="kpi-value" id="dir-kpi-alerts">0 <span class="unit">/ 4</span></div><div class="kpi-subtext">Pontos de consumo crítico</div></div>
+          <div class="kpi-card"><div class="kpi-label">Média Geral Diária</div><div class="kpi-value" id="dir-kpi-avg-general">0.00 <span class="unit">m³/d</span></div><div class="kpi-subtext">Meta diária geral de 2.66 m³/d</div></div>
+        </div>
+        <div class="print-charts-row">
+          <div class="panel-card">
+            <div class="panel-header"><h2>🏆 RANKING DE DESEMPENHO E ECONOMIA</h2></div>
+            <div class="ranking-list" id="dir-ranking-list"></div>
+          </div>
+          <div class="panel-card">
+            <div class="panel-header"><h2>📊 DISTRIBUIÇÃO E HISTÓRICO NO PERÍODO</h2></div>
+            <div class="table-responsive">
+              <table style="font-size: 0.8rem;"><thead><tr><th>Hidrômetro</th><th>Apelido</th><th>Consumo</th><th>Meta</th><th>Status</th></tr></thead><tbody id="dir-table-summary"></tbody></table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ================= ABA: CICLOS ================= -->
+    <div id="tab-content-ciclos" class="tab-panel">
+      <section class="panel-card" style="margin-bottom: 2rem;">
+        <div class="panel-header"><h2><i data-lucide="history" style="color: var(--color-blue);"></i> Registro Histórico de Ciclos Fechados</h2></div>
+        <div class="table-responsive">
+          <table><thead><tr><th>Ciclo</th><th>Consumo Total (m³)</th><th>Meta Global (m³)</th><th>Economia vs. Anterior (m³)</th><th>Alertas Ativos</th><th>Status Meta</th></tr></thead><tbody id="history-cycles-tbody"></tbody></table>
+        </div>
+      </section>
+      <section class="panel-card">
+        <div class="panel-header"><h2><i data-lucide="arrow-left-right" style="color: var(--color-purple);"></i> Comparador de Ciclos Históricos</h2></div>
+        <div class="filters-row" style="margin-bottom: 1.5rem;">
+          <div class="filter-group"><label for="comp-cycle-1" class="form-label" style="margin-bottom: 0;">Ciclo A (Principal):</label><select id="comp-cycle-1" class="filter-select"></select></div>
+          <div class="filter-group"><label for="comp-cycle-2" class="form-label" style="margin-bottom: 0;">Ciclo B (Comparativo):</label><select id="comp-cycle-2" class="filter-select"></select></div>
+          <button id="btn-run-cycles-comparison" class="btn btn-primary" type="button">Comparar Períodos</button>
+        </div>
+        <div id="cycles-comparison-results" style="display: none;">
+          <div class="comparador-secao-v2" style="background: rgba(255,255,255,0.02); margin-bottom: 1.5rem;">
+            <div class="comparador-info"><div class="comparador-icon"><i data-lucide="info"></i></div><div class="comparador-text"><h3 id="comp-results-title">Balanço do Ciclo A vs. Ciclo B</h3><p id="comp-results-sub">Carregando comparação...</p></div></div>
+            <div id="comp-results-badge" class="comparador-resultado economia"><span>--</span></div>
+          </div>
+          <div class="table-responsive">
+            <table><thead><tr><th>Hidrômetro</th><th>Apelido</th><th>Consumo no Ciclo A (m³)</th><th>Consumo no Ciclo B (m³)</th><th>Diferença (m³)</th><th>Status Comparativo</th></tr></thead><tbody id="comp-results-tbody"></tbody></table>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <!-- ================= ABA: CONFIGURAÇÕES ================= -->
+    <div id="tab-content-configuracoes" class="tab-panel">
+      <section class="panel-card">
+        <div class="panel-header" style="border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 1rem; margin-bottom: 1.5rem;">
+          <h2><i data-lucide="settings" style="color: var(--color-blue);"></i>⚙️ Painel Administrativo de Controle</h2>
+          <button id="btn-save-admin-settings" class="btn btn-primary" type="button"><i data-lucide="save"></i> Salvar Configurações</button>
+        </div>
+
+        <form id="form-admin-settings">
+
+          <!-- Informações Gerais -->
+          <div class="panel-card" style="margin-bottom:20px;">
+            <div class="panel-header"><h3>👤 Informações Gerais</h3></div>
+            <p><strong>Responsável:</strong> Thalita Campos</p>
+            <p><strong>Contato:</strong> thalita@mammamiasalgados.com.br</p>
+          </div>
+
+          <!-- Formulários Oficiais -->
+          <div class="panel-card" style="margin-bottom:20px;">
+            <div class="panel-header"><h3>📋 Formulários Oficiais</h3></div>
+            <div class="dashboard-grid">
+              <div class="kpi-card"><div class="kpi-value">💧</div><a href="https://docs.google.com/forms/d/e/1FAIpQLSfisK8w1mNz6Z4iR62GEo2l58FEg9EBZQ9vVmRiwdfkXH9Mag/viewform?usp=header" target="_blank" rel="noopener" class="kpi-label" style="text-decoration: none; color: var(--text-primary);">Controle de Água</a></div>
+              <div class="kpi-card"><div class="kpi-value">🔧</div><a href="https://docs.google.com/forms/d/e/1FAIpQLSf3EYS-UrlFKDx-QBudOCF9fP4egxL6wY7RcYnlPI-HEA_6Rw/viewform?usp=header" target="_blank" rel="noopener" class="kpi-label" style="text-decoration: none; color: var(--text-primary);">Ordem de Serviço</a></div>
+              <div class="kpi-card"><div class="kpi-value">📉</div><a href="https://docs.google.com/forms/d/e/1FAIpQLSdGz8GgzVjqK-Zt9fVUXK09Safz0eQIqc4rM0_Q7PEE9HKmCg/viewform?usp=header" target="_blank" rel="noopener" class="kpi-label" style="text-decoration: none; color: var(--text-primary);">Controle de Perdas</a></div>
+              <div class="kpi-card" style="position: relative;">
+                <div class="kpi-value">📦</div>
+                <span class="kpi-label" id="formularios-requisicoes-toggle" style="cursor: pointer; text-decoration: underline; text-decoration-style: dotted;">Requisições</span>
+                <div id="formularios-requisicoes-menu" style="display:none; position:absolute; top:100%; left:0; right:0; background: var(--card-bg); border:1px solid var(--card-border); border-radius: var(--border-radius-md); box-shadow: 0 8px 20px rgba(0,0,0,0.15); z-index: 10; margin-top: 6px; overflow:hidden;">
+                  <a href="https://docs.google.com/forms/d/e/1FAIpQLScOLcHL8fFQpXg3LMPZTmlYfmmfdJ-PX8GqmQyIbKDb5iM-RA/viewform?usp=header" target="_blank" rel="noopener" style="display:block; padding: 0.6rem 0.9rem; color: var(--text-primary); text-decoration:none; font-size:0.85rem; border-bottom: 1px solid var(--card-border);">🧹 Limpeza e EPIs</a>
+                  <a href="https://docs.google.com/forms/d/e/1FAIpQLSeEPlg0wMPk-zwtOPa5p8fnl3_J0wwjWSGPRGpZNw-1nscWbw/viewform?usp=header" target="_blank" rel="noopener" style="display:block; padding: 0.6rem 0.9rem; color: var(--text-primary); text-decoration:none; font-size:0.85rem;">🥩 Matéria-prima e Recheio</a>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Parâmetros de Água -->
+          <h3 style="font-size: 1.1rem; font-weight: 700; color: white; margin-top: 2rem; margin-bottom: 1rem; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 0.5rem;">💧 Água</h3>
+          <div class="admin-settings-grid">
+            <div class="form-group"><label for="admin-meta-global" class="form-label">Meta Global</label><input type="number" id="admin-meta-global" class="form-control" step="1" required><span class="form-help">Consumo máximo somado dos 4 hidrômetros (Padrão: 80 m³).</span></div>
+            <div class="form-group"><label for="admin-meta-individual" class="form-label">Meta Individual</label><input type="number" id="admin-meta-individual" class="form-control" step="1" required><span class="form-help">Consumo máximo permitido para cada hidrômetro (Padrão: 20 m³).</span></div>
+            <div class="form-group"><label for="admin-alert-threshold" class="form-label">Limite de Alerta (%)</label><input type="number" id="admin-alert-threshold" class="form-control" step="1" max="100" min="50" required><span class="form-help">Percentual de uso da meta individual para alertar o painel (Padrão: 75%).</span></div>
+            <div class="form-group"><label for="admin-leak-threshold" class="form-label">Limite de Vazamento (m³/dia)</label><input type="number" id="admin-leak-threshold" class="form-control" step="0.1" required><span class="form-help">Consumo diário máximo aceitável antes de alertar possível vazamento (Padrão: 3 m³).</span></div>
+          </div>
+
+          <!-- Parâmetros de OS -->
+          <h3 style="font-size: 1.1rem; font-weight: 700; color: white; margin-top: 2rem; margin-bottom: 1rem; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 0.5rem;">🔧 Ordens de Serviço</h3>
+          <div class="admin-settings-grid">
+            <div class="form-group"><label for="admin-os-dias-aberta" class="form-label">Dias para alerta OS aberta</label><input type="number" id="admin-os-dias-aberta" class="form-control" step="1" min="1" required><span class="form-help">OS aberta há mais de X dias gera alerta CRÍTICO (Padrão: 7 dias).</span></div>
+            <div class="form-group"><label for="admin-os-dias-aguardando" class="form-label">Dias para alerta Aguardando Peça</label><input type="number" id="admin-os-dias-aguardando" class="form-control" step="1" min="1" required><span class="form-help">OS aguardando peça há mais de X dias gera alerta ATENÇÃO (Padrão: 3 dias).</span></div>
+          </div>
+
+          <!-- Parâmetros de Perdas -->
+          <h3 style="font-size: 1.1rem; font-weight: 700; color: white; margin-top: 2rem; margin-bottom: 1rem; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 0.5rem;">📉 Perdas</h3>
+          <div class="admin-settings-grid">
+            <div class="form-group"><label for="admin-perdas-limite" class="form-label">Limite máximo de Perdas (registros)</label><input type="number" id="admin-perdas-limite" class="form-control" step="1" min="1" required><span class="form-help">Número máximo de registros de perdas antes de gerar alerta CRÍTICO (Padrão: 5).</span></div>
+          </div>
+
+          <!-- Parâmetros de Operação -->
+          <h3 style="font-size: 1.1rem; font-weight: 700; color: white; margin-top: 2rem; margin-bottom: 1rem; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 0.5rem;">📋 Operação</h3>
+          <div class="admin-settings-grid">
+            <div class="form-group"><label for="admin-checklist-horas" class="form-label">Tempo máximo sem checklist (horas)</label><input type="number" id="admin-checklist-horas" class="form-control" step="1" min="1" required><span class="form-help">Horas sem preenchimento de checklist para gerar alerta (Padrão: 12h). Monitoramento automático será ativado quando a planilha de respostas estiver integrada.</span></div>
+          </div>
+
+          <!-- Datas Importantes / Documentos -->
+          <h3 style="font-size: 1.1rem; font-weight: 700; color: white; margin-top: 2rem; margin-bottom: 1rem; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 0.5rem;">📅 Datas Importantes (Documentos)</h3>
+          <div class="admin-settings-grid">
+            <div class="form-group"><label for="admin-doc-tc-vigilancia" class="form-label">TC - Vigilância</label><input type="date" id="admin-doc-tc-vigilancia" class="form-control"><span class="form-help">Deixe em branco se não houver data de entrada/vencimento.</span></div>
+            <div class="form-group"><label for="admin-doc-tc-avcb" class="form-label">TC - AVCB</label><input type="date" id="admin-doc-tc-avcb" class="form-control"><span class="form-help">Deixe em branco se não houver data de entrada/vencimento.</span></div>
+            <div class="form-group"><label for="admin-doc-yuka-vigilancia" class="form-label">YUKA - Vigilância</label><input type="date" id="admin-doc-yuka-vigilancia" class="form-control"><span class="form-help">Deixe em branco se não houver data de entrada/vencimento.</span></div>
+            <div class="form-group"><label for="admin-doc-yuka-avcb" class="form-label">YUKA - AVCB</label><input type="date" id="admin-doc-yuka-avcb" class="form-control"><span class="form-help">Deixe em branco se não houver data de entrada/vencimento.</span></div>
+            <div class="form-group"><label for="admin-doc-cd-vigilancia" class="form-label">CD - Vigilância</label><input type="date" id="admin-doc-cd-vigilancia" class="form-control" disabled><span class="form-help">CD é isento de alvará da vigilância sanitária — campo bloqueado.</span></div>
+            <div class="form-group"><label for="admin-doc-cd-avcb" class="form-label">CD - AVCB</label><input type="date" id="admin-doc-cd-avcb" class="form-control"><span class="form-help">Deixe em branco se não houver data de entrada/vencimento.</span></div>
+            <div class="form-group"><label for="admin-doc-cd-vre" class="form-label">CD - VRE (CLI)</label><input type="date" id="admin-doc-cd-vre" class="form-control"><span class="form-help">Deixe em branco se não houver data de entrada/vencimento.</span></div>
+          </div>
+
+          <!-- Hidrômetros -->
+          <h3 style="font-size: 1.1rem; font-weight: 700; color: white; margin-top: 2.5rem; margin-bottom: 1rem; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 0.5rem;">🛰 Cadastro de Hidrômetros</h3>
+          <div class="hydrometer-settings-list" id="admin-meters-list"></div>
+
+          <!-- Multi-Unidade -->
+          <h3 style="font-size: 1.1rem; font-weight: 700; color: white; margin-top: 2.5rem; margin-bottom: 1rem; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 0.5rem;">Estrutura e Multi-Unidade (Preparação Futura)</h3>
+          <div class="admin-settings-grid">
+            <div class="form-group">
+              <label class="form-label">Unidade Ativa</label>
+              <select class="form-control" disabled style="background: rgba(255,255,255,0.02); cursor: not allowed;"><option>YUKA (Ativo)</option></select>
+              <span class="form-help">Outras unidades como 'TC' ou 'Unidade 3' estão preparadas no banco e serão liberadas na interface operacional assim que novos hidrômetros físicos forem instalados.</span>
+            </div>
+          </div>
+        </form>
+      </section>
+
+      <!-- Gerenciar Leituras -->
+      <section class="panel-card" style="margin-top: 2rem;">
+        <div class="panel-header" style="border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 1rem; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem;">
+          <h2><i data-lucide="list" style="color: var(--color-blue);"></i> 🧾 Gerenciar Leituras</h2>
+          <button id="btn-open-reading-modal-v2" class="btn btn-primary" type="button"><i data-lucide="plus"></i> Nova Leitura</button>
+        </div>
+        <div class="filters-row" style="margin-bottom: 1rem; align-items: center; justify-content: space-between;">
+          <div class="filter-group"><label for="filter-meter-v2" class="form-label" style="margin-bottom: 0;">Hidrômetro:</label><select id="filter-meter-v2" class="filter-select"><option value="all">Todos</option></select></div>
+          <span id="table-record-count-v2" style="font-size: 0.8rem; color: var(--text-muted);">0 registro(s) no ciclo</span>
+        </div>
+        <div class="table-responsive">
+          <table><thead><tr><th>Data e Hora</th><th>Hidrômetro</th><th>Leitura</th><th>Consumo</th><th>Ações</th></tr></thead><tbody id="readings-table-body-v2"></tbody></table>
+        </div>
+      </section>
+    </div>
+
+    <!-- ABA: CAMINHAO PIPA -->
+    <div id="tab-content-pipa" class="tab-panel">
+      <section class="panel-card" id="pipa-ultimo-card">
+        <div class="panel-header">
+          <h2>Ultimo Abastecimento - Caminhao Pipa</h2>
+          <button id="btn-atualizar-pipa" class="btn btn-sm btn-secondary" style="margin-left:auto;">
+            <i data-lucide="refresh-cw"></i> Atualizar
+          </button>
+        </div>
+        <div id="pipa-ultimo-conteudo" style="padding:1rem 0;">
+          <p style="color:var(--text-muted);">Carregando...</p>
+        </div>
+      </section>
+      <section class="panel-card">
+        <div class="panel-header" style="display:flex;align-items:center;gap:1rem;flex-wrap:wrap;">
+          <h2>Historico de Abastecimentos</h2>
+          <div style="display:flex;gap:0.5rem;align-items:center;margin-left:auto;flex-wrap:wrap;">
+            <label style="font-size:0.85rem;color:var(--text-muted);">Filtrar por placa:</label>
+            <select id="pipa-filtro-placa" class="form-control" style="width:auto;min-width:140px;">
+              <option value="">Todas as placas</option>
+            </select>
+            <label style="font-size:0.85rem;color:var(--text-muted);">Periodo:</label>
+            <input type="date" id="pipa-filtro-de" class="form-control" style="width:auto;">
+            <input type="date" id="pipa-filtro-ate" class="form-control" style="width:auto;">
+            <button id="btn-pipa-filtrar" class="btn btn-sm btn-primary">Filtrar</button>
+            <button id="btn-pipa-limpar" class="btn btn-sm btn-secondary">Limpar</button>
+          </div>
+        </div>
+        <div id="pipa-historico-count" style="font-size:0.85rem;color:var(--text-muted);margin-bottom:0.75rem;"></div>
+        <div style="overflow-x:auto;">
+          <table class="data-table" id="pipa-historico-table">
+            <thead>
+              <tr>
+                <th>Pedido</th>
+                <th>Qtd. Requisitada</th>
+                <th>Qtd. Recebida</th>
+                <th>Placa</th>
+                <th>Relogio Inicio</th>
+                <th>Relogio Fim</th>
+                <th>Nr. Recibo</th>
+              </tr>
+            </thead>
+            <tbody id="pipa-historico-body">
+              <tr><td colspan="7" style="text-align:center;color:var(--text-muted);">Carregando...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+
+    <!-- ABA: HIGIENIZAÇÃO DE MOTORES -->
+    <div id="tab-content-higienizacao" class="tab-panel">
+      <section class="panel-card" id="higienizacao-status-card">
+        <div class="panel-header">
+          <h2>Status de Higienização por Unidade</h2>
+          <button id="btn-atualizar-higienizacao" class="btn btn-sm btn-secondary" style="margin-left:auto;">
+            <i data-lucide="refresh-cw"></i> Atualizar
+          </button>
+        </div>
+        <div id="higienizacao-status-conteudo" style="padding:1rem 0;">
+          <p style="color:var(--text-muted);">Carregando...</p>
+        </div>
+      </section>
+      <section class="panel-card">
+        <div class="panel-header" style="display:flex;align-items:center;gap:1rem;flex-wrap:wrap;">
+          <h2>Historico de Higienizacoes</h2>
+          <div style="display:flex;gap:0.5rem;align-items:center;margin-left:auto;flex-wrap:wrap;">
+            <label style="font-size:0.85rem;color:var(--text-muted);">Filtrar por unidade:</label>
+            <select id="higienizacao-filtro-unidade" class="form-control" style="width:auto;min-width:140px;">
+              <option value="">Todas as unidades</option>
+            </select>
+            <label style="font-size:0.85rem;color:var(--text-muted);">Periodo:</label>
+            <input type="date" id="higienizacao-filtro-de" class="form-control" style="width:auto;">
+            <input type="date" id="higienizacao-filtro-ate" class="form-control" style="width:auto;">
+            <button id="btn-higienizacao-filtrar" class="btn btn-sm btn-primary">Filtrar</button>
+            <button id="btn-higienizacao-limpar" class="btn btn-sm btn-secondary">Limpar</button>
+          </div>
+        </div>
+        <div id="higienizacao-historico-count" style="font-size:0.85rem;color:var(--text-muted);margin-bottom:0.75rem;"></div>
+        <div style="overflow-x:auto;">
+          <table class="data-table" id="higienizacao-historico-table">
+            <thead>
+              <tr>
+                <th>Data</th>
+                <th>Responsavel</th>
+                <th>Unidade</th>
+              </tr>
+            </thead>
+            <tbody id="higienizacao-historico-body">
+              <tr><td colspan="3" style="text-align:center;color:var(--text-muted);">Carregando...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+
+    <!-- ABA: INSUMOS CRÍTICOS -->
+    <div id="tab-content-insumos" class="tab-panel">
+      <section class="panel-card" id="insumos-status-card">
+        <div class="panel-header">
+          <h2><i data-lucide="package-x"></i> Controle de Insumos Críticos</h2>
+          <button id="btn-atualizar-insumos" class="btn btn-sm btn-secondary" style="margin-left:auto;">
+            <i data-lucide="refresh-cw"></i> Atualizar
+          </button>
+        </div>
+        <div id="insumos-conteudo" style="padding:1rem 0;">
+          <p style="color:var(--text-muted);">Carregando...</p>
+        </div>
+      </section>
+    </div>
+
+    <!-- ================= ABA: AUDITORIA DE HIGIENIZAÇÃO ================= -->
+    <div id="tab-content-auditoria" class="tab-panel">
+      <div style="text-align:center; padding:3rem 1rem; color:var(--text-muted);">
+        <div style="font-size:2rem; margin-bottom:0.5rem;">🧼</div>
+        <p>Carregando módulo de auditoria...</p>
+      </div>
+    </div>
+  </main>
+
+  <!-- FOOTER -->
+  <footer class="system-footer">
+    <p>Mamma Mia Control - Gestão Inteligente</p>
+    <p>© 2026 Mamma Mia Salgados - By Thalita Campos - Processos e Automações</p>
+  </footer>
+
+  <!-- MODAL: NOVA LEITURA -->
+  <div id="modal-reading-v2" class="modal-overlay" aria-hidden="true" role="dialog">
+    <div class="modal-content">
+      <div class="modal-header"><h3>Lançar Nova Leitura</h3><button id="btn-close-reading-modal-v2" class="modal-close" type="button">&times;</button></div>
+      <form id="form-reading-v2">
+        <div class="form-group"><label for="input-meter-v2" class="form-label">Selecione o Hidrômetro</label><select id="input-meter-v2" class="form-control" required></select></div>
+        <div class="form-group"><label for="input-index-v2" class="form-label">Leitura Acumulada Atual (m³)</label><input type="number" id="input-index-v2" class="form-control" step="0.001" min="0" placeholder="Ex: 1254.450" required><span class="form-help" id="last-reading-help-v2">Última leitura registrada: --</span></div>
+        <div class="form-group"><label for="input-date-v2" class="form-label">Data e Hora do Registro</label><input type="datetime-local" id="input-date-v2" class="form-control" required></div>
+        <div class="form-group form-checkbox-group"><label class="form-checkbox-label"><input type="checkbox" id="input-reset-v2"> Troca de Relógio / Reset (não contar como consumo)</label><span class="form-help">Marque quando o hidrômetro físico foi substituído (ex: SABESP trocou por um digital). Essa leitura vira o novo marco inicial e não entra na conta de consumo do ciclo.</span></div>
+        <div class="modal-footer"><button type="button" id="btn-cancel-reading-v2" class="btn btn-secondary">Cancelar</button><button type="submit" class="btn btn-primary">Salvar Leitura</button></div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL: IMPORTAR CSV -->
+  <div id="modal-csv-v2" class="modal-overlay" aria-hidden="true" role="dialog">
+    <div class="modal-content" style="max-width: 550px;">
+      <div class="modal-header"><h3>Importar do Google Sheets (CSV)</h3><button id="btn-close-csv-modal-v2" class="modal-close" type="button">&times;</button></div>
+      <div class="drag-drop-zone" id="csv-drag-zone-v2">
+        <i data-lucide="upload-cloud" class="drag-drop-icon"></i>
+        <div class="drag-drop-text"><h4>Arraste o arquivo CSV aqui</h4><p>ou clique para selecionar do seu dispositivo</p></div>
+        <input type="file" id="csv-file-input-v2" accept=".csv" style="display: none;">
+      </div>
+      <div style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 1.5rem; background: rgba(255,255,255,0.02); padding: 0.75rem; border-radius: var(--border-radius-md); border: 1px solid var(--card-border);">
+        <h4 style="color: var(--color-blue); margin-bottom: 0.25rem; font-weight: 600;">Formatos de CSV Suportados:</h4>
+        <p>1. <strong>Tabela de Colunas (Recomendado Sheets):</strong></p>
+        <p style="font-family: monospace; font-size: 0.7rem; background: rgba(0,0,0,0.2); padding: 0.25rem; border-radius: 4px; margin: 0.25rem 0;">Data/Hora; Y21T156506; A25LM0975882; A25LM0975883; A25LM0975884</p>
+      </div>
+      <div id="csv-errors-container-v2" class="import-errors" style="display: none;"><h5>Alguns registros continham problemas:</h5><ul id="csv-errors-list-v2" style="margin-left: 1rem;"></ul></div>
+      <div class="modal-footer" style="margin-top: 1.5rem;"><button type="button" id="btn-close-csv-modal-footer-v2" class="btn btn-secondary">Fechar</button></div>
+    </div>
+  </div>
+
+  <!-- MODAL: DEDETIZAÇÃO -->
+  <div id="modal-dedetizacao" class="modal-overlay" aria-hidden="true" role="dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3 id="dedetizacao-modal-titulo"><i data-lucide="bug-off"></i> Dedetização</h3>
+        <button id="btn-close-dedetizacao-modal" class="modal-close" type="button">&times;</button>
+      </div>
+      <form id="form-dedetizacao">
+        <input type="hidden" id="dedetizacao-unidade">
+        <input type="hidden" id="dedetizacao-tipo" value="DEDETIZACAO">
+        <div class="form-group">
+          <label for="dedetizacao-empresa" class="form-label" id="dedetizacao-empresa-label">Empresa Dedetizadora</label>
+          <input type="text" id="dedetizacao-empresa" class="form-control" placeholder="Ex: Dedetizadora XYZ Ltda" required>
+        </div>
+        <div class="form-group">
+          <label for="dedetizacao-data" class="form-label">Data Realizada</label>
+          <input type="date" id="dedetizacao-data" class="form-control" required>
+          <span class="form-help">O sistema alerta automaticamente quando passar 1 mês desta data (período mensal).</span>
+        </div>
+        <div class="form-group">
+          <label for="dedetizacao-certificado-input" class="form-label">Certificado</label>
+          <input type="file" id="dedetizacao-certificado-input" class="form-control" accept=".pdf,image/*">
+          <span class="form-help" id="dedetizacao-certificado-atual"></span>
+        </div>
+        <div class="modal-footer">
+          <button type="button" id="btn-cancel-dedetizacao" class="btn btn-secondary">Cancelar</button>
+          <button type="submit" id="btn-save-dedetizacao" class="btn btn-primary">Salvar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- CONTAINER DE TOASTS -->
+  <div class="toast-container" id="toast-container-v2"></div>
+
+  <!-- SCRIPT CENTRAL -->
+  <script type="module" src="src/main.js"></script>
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js')
+          .then(() => console.log('Service Worker registrado com sucesso.'))
+          .catch((err) => console.error('Erro ao registrar Service Worker:', err));
       });
     }
-  } else {
-    if (dateIdx === -1 || meterIdx === -1 || valueIdx === -1) throw new Error('Formato de colunas inválido. O CSV deve conter colunas para Data, Hidrômetro e Leitura.');
-    for (let i = 1; i < lines.length; i++) {
-      const line = lines[i].trim();
-      if (!line) continue;
-      const columns = line.split(delimiter).map(c => c.trim().replace(/^["']|["']$/g, ''));
-      if (columns.length <= Math.max(dateIdx, meterIdx, valueIdx)) { errors.push(`Linha ${i + 1}: Colunas insuficientes.`); continue; }
-      const rawDate = columns[dateIdx]; const rawMeter = columns[meterIdx]; const rawValue = columns[valueIdx];
-      let matchedMeterId = null;
-      const cleanMeterStr = rawMeter.toUpperCase().trim();
-      if (settings.hydrometers[cleanMeterStr]) matchedMeterId = cleanMeterStr;
-      else {
-        const foundKey = Object.keys(settings.hydrometers).find(key => key.includes(cleanMeterStr) || settings.hydrometers[key].alias.toUpperCase().includes(cleanMeterStr) || settings.hydrometers[key].name.toUpperCase().includes(cleanMeterStr));
-        if (foundKey) matchedMeterId = foundKey;
-      }
-      if (!matchedMeterId) { errors.push(`Linha ${i + 1}: Hidrômetro "${rawMeter}" não cadastrado.`); continue; }
-      let parsedDate = parseDateString(rawDate);
-      if (!parsedDate) { errors.push(`Linha ${i + 1}: Data inválida "${rawDate}".`); continue; }
-      const cleanValue = rawValue.replace(',', '.');
-      const parsedValue = parseFloat(cleanValue);
-      if (isNaN(parsedValue) || parsedValue < 0) { errors.push(`Linha ${i + 1}: Leitura acumulada inválida "${rawValue}".`); continue; }
-      newReadings.push({ id: `imported-${matchedMeterId}-${parsedDate.getTime()}-${Math.floor(Math.random() * 1000)}`, meterId: matchedMeterId, date: parsedDate.toISOString(), index: Number(parsedValue.toFixed(3)) });
-    }
-  }
-
-  if (newReadings.length === 0) throw new Error('Nenhuma leitura válida pôde ser importada. Detalhes:\n' + errors.slice(0, 5).join('\n'));
-
-  const mergedMap = new Map();
-  existingReadings.forEach(r => {
-    const rDate = new Date(r.date);
-    const dayKey = `${r.meterId}-${rDate.getFullYear()}-${String(rDate.getMonth() + 1).padStart(2, '0')}-${String(rDate.getDate()).padStart(2, '0')}`;
-    mergedMap.set(dayKey, r);
-  });
-
-  let countImported = 0; let countOverwritten = 0;
-  newReadings.sort((a, b) => new Date(a.date) - new Date(b.date));
-  newReadings.forEach(r => {
-    const rDate = new Date(r.date);
-    const dayKey = `${r.meterId}-${rDate.getFullYear()}-${String(rDate.getMonth() + 1).padStart(2, '0')}-${String(rDate.getDate()).padStart(2, '0')}`;
-    if (mergedMap.has(dayKey)) {
-      const existing = mergedMap.get(dayKey);
-      if (existing.isInitial) return;
-      countOverwritten++;
-    } else { countImported++; }
-    mergedMap.set(dayKey, r);
-  });
-
-  const mergedList = Array.from(mergedMap.values()).sort((a, b) => new Date(b.date) - new Date(a.date));
-  return { mergedReadings: mergedList, importedCount: countImported, overwrittenCount: countOverwritten, errorsCount: errors.length, errors: errors.slice(0, 10) };
-}
-
-function parseDateString(rawDate) {
-  if (rawDate.includes('/')) {
-    const parts = rawDate.split(' ');
-    const dateParts = parts[0].split('/');
-    let hour = 12, minute = 0, second = 0;
-    if (parts[1]) { const timeParts = parts[1].split(':'); hour = parseInt(timeParts[0]) || 0; minute = parseInt(timeParts[1]) || 0; second = parseInt(timeParts[2]) || 0; }
-    return new Date(parseInt(dateParts[2]), parseInt(dateParts[1]) - 1, parseInt(dateParts[0]), hour, minute, second);
-  } else {
-    const d = new Date(rawDate);
-    return isNaN(d.getTime()) ? null : d;
-  }
-}
+  </script>
+</div>
+</body>
+</html>
