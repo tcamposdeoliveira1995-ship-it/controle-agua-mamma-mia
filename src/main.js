@@ -142,6 +142,7 @@ const DOM = {
   adminDocYukaAvcb: document.getElementById('admin-doc-yuka-avcb'),
   adminDocCdVigilancia: document.getElementById('admin-doc-cd-vigilancia'),
   adminDocCdAvcb: document.getElementById('admin-doc-cd-avcb'),
+  adminDocCdVre: document.getElementById('admin-doc-cd-vre'),
   toastContainer: document.getElementById('toast-container-v2')
 };
 
@@ -278,14 +279,22 @@ function renderDocumentosVencimentoBar() {
     { label: 'TC - AVCB', valor: doc.tcAvcb },
     { label: 'YUKA - Vigilância', valor: doc.yukaVigilancia },
     { label: 'YUKA - AVCB', valor: doc.yukaAvcb },
-    { label: 'CD - Vigilância', valor: doc.cdVigilancia },
-    { label: 'CD - AVCB', valor: doc.cdAvcb }
+    // CD é isento de alvará da vigilância sanitária — fixo no código, não depende do que está salvo.
+    { label: 'CD - Vigilância', valor: doc.cdVigilancia, isento: true },
+    { label: 'CD - AVCB', valor: doc.cdAvcb },
+    { label: 'CD - VRE (CLI)', valor: doc.cdVre }
   ];
 
   const hoje = new Date();
   hoje.setHours(0, 0, 0, 0);
 
   const chipsDocumentos = itens.map(item => {
+    if (item.isento) {
+      return `<div class="doc-vencimento-chip doc-vencimento-isento">
+        <span class="doc-vencimento-label">${item.label}</span>
+        <span class="doc-vencimento-status">✅ Isento de alvará</span>
+      </div>`;
+    }
     if (!item.valor) {
       return `<div class="doc-vencimento-chip doc-vencimento-alerta">
         <span class="doc-vencimento-label">${item.label}</span>
@@ -1082,6 +1091,7 @@ function renderConfiguracoesTab() {
   if (DOM.adminDocYukaAvcb) DOM.adminDocYukaAvcb.value = doc.yukaAvcb || '';
   if (DOM.adminDocCdVigilancia) DOM.adminDocCdVigilancia.value = doc.cdVigilancia || '';
   if (DOM.adminDocCdAvcb) DOM.adminDocCdAvcb.value = doc.cdAvcb || '';
+  if (DOM.adminDocCdVre) DOM.adminDocCdVre.value = doc.cdVre || '';
 
   DOM.adminMetersList.innerHTML = '';
   Object.keys(settings.hydrometers).forEach(id => {
@@ -1340,8 +1350,12 @@ function submitAdminSettings() {
     tcAvcb: DOM.adminDocTcAvcb?.value || null,
     yukaVigilancia: DOM.adminDocYukaVigilancia?.value || null,
     yukaAvcb: DOM.adminDocYukaAvcb?.value || null,
-    cdVigilancia: DOM.adminDocCdVigilancia?.value || null,
-    cdAvcb: DOM.adminDocCdAvcb?.value || null
+    // CD é isento de alvará da vigilância sanitária: campo fica sempre bloqueado/sem data,
+    // a flag é fixada aqui (não vem de input) para não depender do que já está salvo no navegador.
+    cdVigilancia: null,
+    cdVigilanciaIsento: true,
+    cdAvcb: DOM.adminDocCdAvcb?.value || null,
+    cdVre: DOM.adminDocCdVre?.value || null
   };
 
   const aliasInputs = DOM.adminMetersList.querySelectorAll('.admin-meter-alias-input');
