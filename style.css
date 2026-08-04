@@ -173,6 +173,8 @@ header {
 .doc-vencimento-chip.doc-vencimento-atencao .doc-vencimento-status { color: var(--color-orange); }
 .doc-vencimento-chip.doc-vencimento-alerta { border-color: var(--color-red); background: rgba(192, 122, 108, 0.14); }
 .doc-vencimento-chip.doc-vencimento-alerta .doc-vencimento-status { color: var(--color-red); font-weight: 800; }
+.doc-vencimento-chip.doc-vencimento-isento { border-color: var(--color-blue); background: rgba(183, 155, 108, 0.10); }
+.doc-vencimento-chip.doc-vencimento-isento .doc-vencimento-status { color: var(--color-blue); }
 .tab-btn i { width: 16px; height: 16px; }
 
 .tab-panel { display: none; }
