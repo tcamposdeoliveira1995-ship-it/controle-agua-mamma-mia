@@ -221,13 +221,51 @@ export function getCycleStats(readings, cycleKey) {
   cycleReadings.forEach(r => {
     const id = r.meterId;
     if (metersData[id]) {
-      metersData[id].consumption += r.consumption;
+      // IMPORTANTE: o consumo do ciclo não é somado aqui.
+      // A primeira leitura registrada dentro do ciclo é o marco inicial (baseline).
+      // O consumo acumulado será calculado abaixo por: última leitura - baseline.
+      // Isso evita contar consumo anterior ao dia 07 e evita inflar o total quando
+      // uma leitura intermediária é digitada abaixo da anterior.
       metersData[id].readingsCount++;
       const rDate = new Date(r.date);
       if (!metersData[id].minDate || rDate < metersData[id].minDate) { metersData[id].minDate = rDate; metersData[id].firstIndex = r.index; }
       if (!metersData[id].maxDate || rDate > metersData[id].maxDate) { metersData[id].maxDate = rDate; metersData[id].lastIndex = r.index; }
       if (r.consumption > settings.leakThreshold) metersData[id].hasLeak = true;
     }
+  });
+
+  // Consumo líquido do ciclo por hidrômetro.
+  // Regra normal: última leitura do ciclo - primeira leitura do ciclo.
+  // Se houver troca/reset de relógio (isInitial), fecha o trecho anterior e inicia
+  // um novo baseline a partir da leitura marcada como reset.
+  Object.keys(metersData).forEach(id => {
+    const meterCycleReadings = cycleReadings
+      .filter(r => r.meterId === id)
+      .sort((a, b) => new Date(a.date) - new Date(b.date));
+
+    if (meterCycleReadings.length < 2) {
+      metersData[id].consumption = 0;
+      return;
+    }
+
+    let total = 0;
+    let baseline = meterCycleReadings[0].index;
+    let previousIndex = baseline;
+
+    for (let i = 1; i < meterCycleReadings.length; i++) {
+      const reading = meterCycleReadings[i];
+
+      if (reading.isInitial) {
+        // Fecha o relógio anterior sem permitir consumo negativo.
+        total += Math.max(0, previousIndex - baseline);
+        baseline = reading.index;
+      }
+
+      previousIndex = reading.index;
+    }
+
+    total += Math.max(0, previousIndex - baseline);
+    metersData[id].consumption = Number(total.toFixed(3));
   });
 
   let alertMetersCount = 0;
