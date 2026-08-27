@@ -1185,6 +1185,8 @@ function initEventListeners() {
 
   const osFilterStatus = document.getElementById('os-filter-status');
   if (osFilterStatus) osFilterStatus.addEventListener('change', () => { carregarOS(); });
+  const osFilterPrioridade = document.getElementById('os-filter-prioridade');
+  if (osFilterPrioridade) osFilterPrioridade.addEventListener('change', () => { carregarOS(); });
 
   const btnCloseDedetizacao = document.getElementById('btn-close-dedetizacao-modal');
   if (btnCloseDedetizacao) btnCloseDedetizacao.addEventListener('click', _fecharModalDedetizacao);
@@ -2640,49 +2642,77 @@ janela.document.close();
 }
 // ================= MÓDULO OS =================
 
+// Converte "dd/mm/aaaa" ou "dd/mm/aaaa hh:mm" em uma chave "aaaammddhhmm" que
+// ordena corretamente como texto (mais recente > mais antiga). Retorna '' se
+// não reconhecer o formato, para nunca quebrar a ordenação por causa de um
+// valor inesperado — nesse caso o registro cai para o fim da lista ordenada.
+function _osChaveOrdenacaoData(dataBruta) {
+  const m = (dataBruta || '').match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:\s+(\d{1,2}):(\d{2}))?/);
+  if (!m) return '';
+  const [, dia, mes, ano, hh = '00', mm = '00'] = m;
+  return `${ano}${mes.padStart(2, '0')}${dia.padStart(2, '0')}${hh.padStart(2, '0')}${mm.padStart(2, '0')}`;
+}
+
 async function carregarOS() {
   try {
     const response = await fetch(OS_CSV_URL);
     const csv = await response.text();
-    const linhas = csv.split('\n');
-    const cabecalho = linhas[0].split(',');
+    const linhas = parseCSVLinhas(csv);
+    if (linhas.length < 1) return;
+    const cabecalho = linhas[0].map(col => col.trim().replace(/"/g, '').toUpperCase());
 
-    const indiceStatus = cabecalho.findIndex(col => col.trim().replace(/"/g, '').toUpperCase() === 'STATUS');
-    const indicePrioridade = cabecalho.findIndex(col => col.trim().replace(/"/g, '').toUpperCase() === 'PRIORIDADE');
-    const indiceOS = cabecalho.findIndex(col => col.trim().replace(/"/g, '').toUpperCase() === 'OS');
-    const indiceUnidade = cabecalho.findIndex(col => col.trim().replace(/"/g, '').toUpperCase() === 'UNIDADE');
-    const indiceEquipamento = cabecalho.findIndex(col => col.trim().replace(/"/g, '').toUpperCase() === 'EQUIPAMENTO OU LOCAL AFETADO');
-    const indicePDF = cabecalho.findIndex(col => col.trim().replace(/"/g, '').toUpperCase() === 'PDF_OS');
+    const indiceStatus = cabecalho.findIndex(col => col === 'STATUS');
+    const indicePrioridade = cabecalho.findIndex(col => col === 'PRIORIDADE');
+    const indiceOS = cabecalho.findIndex(col => col === 'OS');
+    const indiceUnidade = cabecalho.findIndex(col => col === 'UNIDADE');
+    const indiceEquipamento = cabecalho.findIndex(col => col === 'EQUIPAMENTO OU LOCAL AFETADO');
+    const indicePDF = cabecalho.findIndex(col => col === 'PDF_OS');
+    // Coluna de data é opcional: se não existir na planilha, a tabela mantém a
+    // ordem original em vez de tentar ordenar por algo que não existe.
+    const indiceData = cabecalho.findIndex(col => col.includes('DATA') || col.includes('CARIMBO') || col.includes('TIMESTAMP'));
 
     const tableBody = document.getElementById('os-table-body');
     const filtroStatus = document.getElementById('os-filter-status')?.value || 'TODOS';
-    if (tableBody) tableBody.innerHTML = '';
+    const filtroPrioridade = document.getElementById('os-filter-prioridade')?.value || 'TODOS';
 
-    let abertas = 0, aguardando = 0, concluidas = 0, criticas = 0, altas = 0, baixas = 0;
+    let abertas = 0, aguardando = 0, concluidas = 0, criticas = 0, altas = 0, medias = 0, baixas = 0;
+    const registros = [];
 
     for (let i = 1; i < linhas.length; i++) {
-      const colunas = linhas[i].split(',');
+      const colunas = linhas[i];
+      if (!colunas || colunas.every(c => c.trim() === '')) continue;
       const status = (colunas[indiceStatus] || '').trim().replace(/"/g, '').toUpperCase();
       const prioridade = (colunas[indicePrioridade] || '').trim().replace(/"/g, '').toUpperCase();
       const os = (colunas[indiceOS] || '').replace(/"/g, '');
       const unidade = (colunas[indiceUnidade] || '').replace(/"/g, '');
       const equipamento = (colunas[indiceEquipamento] || '').replace(/"/g, '');
       const pdf = (colunas[indicePDF] || '').replace(/"/g, '');
+      const dataBruta = indiceData >= 0 ? (colunas[indiceData] || '').replace(/"/g, '').trim() : '';
 
       if (status === 'ABERTO') {
         abertas++;
         if (prioridade === 'CRÍTICA' || prioridade === 'CRITICA') criticas++;
-        if (prioridade === 'ALTA') altas++;
-        if (prioridade === 'BAIXA') baixas++;
+        else if (prioridade === 'ALTA') altas++;
+        else if (prioridade === 'MÉDIA' || prioridade === 'MEDIA') medias++;
+        else if (prioridade === 'BAIXA') baixas++;
       }
       if (status === 'AGUARDANDO PEÇA') aguardando++;
       if (status === 'CONCLUÍDO' || status === 'CONCLUIDO') concluidas++;
 
-      if (filtroStatus !== 'TODOS' && status !== filtroStatus) continue;
+      registros.push({ os, status, prioridade, unidade, equipamento, pdf, chaveData: _osChaveOrdenacaoData(dataBruta) });
+    }
 
-      if (tableBody) {
-        tableBody.innerHTML += `<tr><td>${os}</td><td>${status}</td><td>${prioridade}</td><td>${unidade}</td><td>${equipamento}</td><td>${pdf ? `<a href="${pdf}" target="_blank">📄 Abrir</a>` : '-'}</td></tr>`;
-      }
+    // Mais recentes primeiro quando há coluna de data reconhecida; senão, mantém a ordem da planilha.
+    if (indiceData >= 0) registros.sort((a, b) => b.chaveData.localeCompare(a.chaveData));
+
+    if (tableBody) {
+      const visiveis = registros.filter(r =>
+        (filtroStatus === 'TODOS' || r.status === filtroStatus) &&
+        (filtroPrioridade === 'TODOS' || r.prioridade === filtroPrioridade)
+      );
+      tableBody.innerHTML = visiveis.length === 0
+        ? `<tr><td colspan="6" style="text-align:center;color:var(--text-muted);">Nenhuma OS encontrada.</td></tr>`
+        : visiveis.map(r => `<tr><td>${r.os}</td><td>${r.status}</td><td>${r.prioridade}</td><td>${r.unidade}</td><td>${r.equipamento}</td><td>${r.pdf ? `<a href="${r.pdf}" target="_blank">📄 Abrir</a>` : '-'}</td></tr>`).join('');
     }
 
     const openCard = document.getElementById('os-open-count'); if (openCard) openCard.textContent = abertas;
@@ -2690,6 +2720,7 @@ async function carregarOS() {
     const closedCard = document.getElementById('os-closed-count'); if (closedCard) closedCard.textContent = concluidas;
     const criticalCard = document.getElementById('os-critical-count'); if (criticalCard) criticalCard.textContent = criticas;
     const highCard = document.getElementById('os-high-count'); if (highCard) highCard.textContent = altas;
+    const mediumCard = document.getElementById('os-medium-count'); if (mediumCard) mediumCard.textContent = medias;
     const lowCard = document.getElementById('os-low-count'); if (lowCard) lowCard.textContent = baixas;
   } catch (error) { console.error('Erro ao carregar OS:', error); }
 }
