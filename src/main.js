@@ -1393,15 +1393,23 @@ function carregarRequisicoes() {
         conteudo.innerHTML = `<div class="panel-header"><h2>🧹 Limpeza e EPI</h2></div><p>Carregando requisições...</p>`;
         const response = await fetch(LIMPEZA_CSV_URL);
         const csv = await response.text();
-        const linhas = csv.split('\n');
-        let yuka = 0, tc = 0, cd = 0;
+        const linhas = parseCSVLinhas(csv);
+        if (linhas.length < 2) { conteudo.innerHTML = `<div class="panel-header"><h2>🧹 Limpeza e EPI</h2></div><p>Nenhuma requisição encontrada.</p>`; return; }
+
+        const cabecalho = linhas[0].map(c => c.trim());
+        const campos = _reqDetectarCampos(cabecalho);
+
+        const registros = [];
         for (let i = 1; i < linhas.length; i++) {
-          const linha = linhas[i].toUpperCase();
-          if (linha.includes(',YUKA,')) yuka++;
-          if (linha.includes(',TC,')) tc++;
-          if (linha.includes(',CD,')) cd++;
+          const cols = linhas[i];
+          if (cols.every(c => !c || !c.trim())) continue;
+          const registro = {};
+          cabecalho.forEach((nomeCol, idx) => { registro[nomeCol] = (cols[idx] || '').trim(); });
+          registros.push(registro);
         }
-        conteudo.innerHTML = `<div class="panel-header"><h2>🧹 Limpeza e EPI</h2></div><p><strong>Total:</strong> ${linhas.length - 1}</p><p>🏢 YUKA: <strong>${yuka}</strong></p><p>🏢 TC: <strong>${tc}</strong></p><p>🏢 CD: <strong>${cd}</strong></p>`;
+
+        renderTabelaRequisicoesLimpeza(campos, registros, conteudo);
+
       } catch (erro) { console.error(erro); conteudo.innerHTML = `<div class="panel-header"><h2>🧹 Limpeza e EPI</h2></div><p>Erro ao carregar requisições.</p>`; }
     };
   }
@@ -1435,22 +1443,38 @@ function carregarRequisicoes() {
   }
 }
 
-// Parser simples de CSV que respeita aspas e vírgulas dentro de campos
+// Parser de CSV que respeita aspas, vírgulas e quebras de linha dentro de campos (célula do
+// Google Sheets com texto em várias linhas vira um campo só entre aspas, como manda o padrão
+// CSV). Processa o texto inteiro caractere a caractere em vez de quebrar por linha primeiro —
+// se quebrasse por linha antes, uma célula multi-linha cortaria o CSV no meio e bagunçaria
+// todas as linhas seguintes.
 function parseCSVLinhas(csvText) {
-  const linhas = csvText.split(/\r?\n/).filter(l => l.length > 0);
-  return linhas.map(linha => {
-    const campos = [];
-    let atual = '';
-    let dentroAspas = false;
-    for (let i = 0; i < linha.length; i++) {
-      const char = linha[i];
-      if (char === '"') { dentroAspas = !dentroAspas; continue; }
-      if (char === ',' && !dentroAspas) { campos.push(atual); atual = ''; continue; }
-      atual += char;
+  const linhas = [];
+  let campos = [];
+  let atual = '';
+  let dentroAspas = false;
+  const texto = csvText.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+
+  for (let i = 0; i < texto.length; i++) {
+    const char = texto[i];
+    if (dentroAspas) {
+      if (char === '"') {
+        if (texto[i + 1] === '"') { atual += '"'; i++; } // aspas duplas escapadas ("" dentro do campo)
+        else { dentroAspas = false; }
+      } else {
+        atual += char;
+      }
+      continue;
     }
-    campos.push(atual);
-    return campos;
-  });
+    if (char === '"') { dentroAspas = true; }
+    else if (char === ',') { campos.push(atual); atual = ''; }
+    else if (char === '\n') { campos.push(atual); atual = ''; linhas.push(campos); campos = []; }
+    else { atual += char; }
+  }
+  // Última linha, caso o texto não termine com quebra de linha
+  if (atual !== '' || campos.length > 0) { campos.push(atual); linhas.push(campos); }
+
+  return linhas.filter(l => !(l.length === 1 && l[0] === ''));
 }
 
 // Converte um Timestamp do Google Sheets/Forms (geralmente mm/dd/yyyy hh:mm:ss
@@ -1600,6 +1624,181 @@ function gerarPDFRequisicaoMP(registros, colunasProduto, labelEmpresa) {
           <h1 style="margin:0;font-size:20px;font-weight:800;color:#4b433c;">Mamma Mia Control</h1>
           <p style="margin:4px 0 0;font-size:13px;color:#8a8570;">🥩 Requisição de MP e Recheios</p>
           <p style="margin:2px 0 0;font-size:12px;color:#b79b6c;font-weight:600;">Empresa: ${labelEmpresa}</p>
+        </div>
+        <div style="text-align:right;font-size:11px;color:#a09284;">
+          <div>Emitido em:</div>
+          <div style="font-weight:600;color:#4b433c;">${agora}</div>
+        </div>
+      </div>
+
+      <div style="background:#f9f5f0;border:1px solid #e8ddd0;border-radius:8px;padding:12px;text-align:center;margin-bottom:20px;display:inline-block;min-width:140px;">
+        <div style="font-size:10px;color:#8a8570;font-weight:600;text-transform:uppercase;">Total de Requisições</div>
+        <div style="font-size:24px;font-weight:800;color:#4b433c;">${registros.length}</div>
+      </div>
+
+      <h2 style="font-size:13px;font-weight:700;color:#4b433c;margin-bottom:10px;border-left:3px solid #b79b6c;padding-left:8px;">
+        Detalhes por Requisição
+      </h2>
+      ${blocosRequisicao}
+
+      <div style="margin-top:24px;padding-top:12px;border-top:1px solid #e8ddd0;font-size:10px;color:#a09284;text-align:center;">
+        Mamma Mia Control — Gestão Inteligente de Operações • © 2026 Mamma Mia Salgados
+      </div>
+    </div>`;
+
+  const iframe = document.createElement('iframe');
+  iframe.style.cssText = 'position:fixed;top:-9999px;left:-9999px;width:900px;height:600px;border:none;';
+  document.body.appendChild(iframe);
+  iframe.contentDocument.open();
+  iframe.contentDocument.write(html);
+  iframe.contentDocument.close();
+  setTimeout(() => {
+    iframe.contentWindow.print();
+    setTimeout(() => document.body.removeChild(iframe), 1000);
+  }, 400);
+}
+
+// Detecta os campos de metadados (Timestamp, Responsável, Unidade, Setor, Status, ID) de um
+// formulário de requisição pelo nome da coluna, em vez de depender de nomes fixos — assim o
+// código se adapta caso a planilha mude o texto exato de algum cabeçalho. Todas as colunas que
+// não forem identificadas como metadado são tratadas como itens requisitados.
+function _reqDetectarCampos(cabecalho) {
+  const norm = c => c.trim().toUpperCase();
+  const encontrar = (...termos) => cabecalho.find(c => termos.some(t => norm(c).includes(t))) || '';
+  const timestamp = encontrar('CARIMBO', 'TIMESTAMP');
+  const responsavel = encontrar('RESPONS', 'REQUISITANTE', 'NOME');
+  const unidade = encontrar('UNIDADE', 'EMPRESA');
+  const setor = encontrar('SETOR');
+  const status = cabecalho.find(c => norm(c) === 'STATUS') || encontrar('STATUS');
+  // Comparação exata (não substring) para não confundir com colunas de item que também
+  // contenham a palavra "requisição", como "Outra requisição (EPIs, utensílios, insumos, etc)".
+  const idRequisicao = cabecalho.find(c => norm(c) === 'REQUISICOES' || norm(c) === 'REQUISIÇÕES') || '';
+  const metadados = [timestamp, responsavel, unidade, setor, status, idRequisicao].filter(Boolean);
+  const colunasItens = cabecalho.filter(c => !metadados.includes(c));
+  return { timestamp, responsavel, unidade, setor, status, idRequisicao, colunasItens };
+}
+
+function renderTabelaRequisicoesLimpeza(campos, registros, conteudo) {
+  const { timestamp, responsavel, unidade, setor, status, colunasItens } = campos;
+  const unidades = new Set();
+  registros.forEach(r => { const u = (r[unidade] || '').toUpperCase(); if (u) unidades.add(u); });
+  const unidadesOrdenadas = ['TODOS', ...Array.from(unidades).sort()];
+
+  function getItensDoRegistro(registro) {
+    const itens = [];
+    colunasItens.forEach(coluna => {
+      const valor = registro[coluna];
+      if (valor && valor !== '0') itens.push(`${coluna}: ${valor}`);
+    });
+    return itens;
+  }
+
+  function filtrarRegistros(filtro) {
+    if (filtro === 'TODOS') return registros;
+    return registros.filter(r => (r[unidade] || '').toUpperCase() === filtro);
+  }
+
+  function getLinhasTabela(filtro) {
+    const filtrados = filtrarRegistros(filtro);
+    return filtrados.map(r => {
+      const itens = getItensDoRegistro(r);
+      const itensTexto = itens.length > 0 ? itens.join(' • ') : '<span style="color:var(--text-muted);">Nenhum item</span>';
+      return `<tr>
+        <td style="font-size:0.8rem;">${formatarTimestampBR(r[timestamp])}</td>
+        <td>${r[responsavel] || '-'}</td>
+        <td>${r[unidade] || '-'}</td>
+        <td>${r[setor] || '-'}</td>
+        <td>${r[status] || '-'}</td>
+        <td style="font-size:0.78rem; max-width:320px;">${itensTexto}</td>
+      </tr>`;
+    }).join('');
+  }
+
+  conteudo.innerHTML = `
+    <div class="panel-header">
+      <h2>🧹 Limpeza e EPI</h2>
+      <button id="btn-pdf-req-limpeza" class="btn btn-primary" style="font-size:0.82rem;">
+        <i data-lucide="file-text"></i> Gerar PDF
+      </button>
+    </div>
+
+    <div style="display:flex; align-items:center; gap:1rem; margin-bottom:1rem; flex-wrap:wrap;">
+      <div class="filter-group">
+        <label class="form-label" style="margin-bottom:0;">🏢 Unidade:</label>
+        <select id="filtro-unidade-limpeza" class="filter-select">
+          ${unidadesOrdenadas.map(u => `<option value="${u}">${u === 'TODOS' ? 'Todas as unidades' : u}</option>`).join('')}
+        </select>
+      </div>
+      <span id="limpeza-contagem" style="font-size:0.85rem; color:var(--text-muted);">${registros.length} registro(s)</span>
+    </div>
+
+    <div class="dashboard-grid" style="margin-bottom:1rem;">
+      ${Array.from(unidades).sort().map(u => `
+        <div class="kpi-card"><div class="kpi-label">🏢 ${u}</div><div class="kpi-value">${filtrarRegistros(u).length}</div></div>`).join('')}
+      <div class="kpi-card"><div class="kpi-label">📋 Total</div><div class="kpi-value">${registros.length}</div></div>
+    </div>
+
+    <div class="table-responsive">
+      <table class="modern-table">
+        <thead><tr><th>Data/Hora</th><th>Responsável</th><th>Unidade</th><th>Setor</th><th>Status</th><th>Itens</th></tr></thead>
+        <tbody id="limpeza-tabela-body">${getLinhasTabela('TODOS')}</tbody>
+      </table>
+    </div>`;
+
+  if (typeof lucide !== 'undefined') lucide.createIcons();
+
+  const selectUnidade = document.getElementById('filtro-unidade-limpeza');
+  const tabelaBody = document.getElementById('limpeza-tabela-body');
+  const contagem = document.getElementById('limpeza-contagem');
+
+  selectUnidade?.addEventListener('change', () => {
+    const filtro = selectUnidade.value;
+    tabelaBody.innerHTML = getLinhasTabela(filtro);
+    contagem.textContent = `${filtrarRegistros(filtro).length} registro(s)`;
+  });
+
+  document.getElementById('btn-pdf-req-limpeza')?.addEventListener('click', () => {
+    const filtro = selectUnidade?.value || 'TODOS';
+    const registrosFiltrados = filtrarRegistros(filtro);
+    const labelUnidade = filtro === 'TODOS' ? 'Todas as unidades' : filtro;
+    gerarPDFRequisicaoLimpeza(registrosFiltrados, campos, labelUnidade);
+  });
+}
+
+function gerarPDFRequisicaoLimpeza(registros, campos, labelUnidade) {
+  const { timestamp, responsavel, unidade, setor, status, colunasItens } = campos;
+  const agora = new Date().toLocaleString('pt-BR');
+
+  function getItensDoRegistro(registro) {
+    const itens = [];
+    colunasItens.forEach(coluna => {
+      const valor = registro[coluna];
+      if (valor && valor !== '0') itens.push(`${coluna}: ${valor}`);
+    });
+    return itens;
+  }
+
+  const blocosRequisicao = registros.map((r, idx) => {
+    const itens = getItensDoRegistro(r);
+    return `
+      <div style="background:#f9f5f0;border:1px solid #e8ddd0;border-radius:8px;padding:12px;margin-bottom:10px;">
+        <div style="font-weight:700;font-size:12px;margin-bottom:6px;color:#4b433c;">
+          #${idx + 1} — ${r[responsavel] || '-'} | ${r[unidade] || '-'} | ${r[setor] || '-'} | ${formatarTimestampBR(r[timestamp])}
+        </div>
+        <div style="font-size:11px;color:#7b6f63;margin-bottom:4px;">Status: ${r[status] || '-'}</div>
+        ${itens.length > 0
+          ? `<div style="font-size:11px;color:#5a4e45;line-height:1.8;">${itens.join(' &nbsp;•&nbsp; ')}</div>`
+          : `<div style="font-size:11px;color:#a09284;font-style:italic;">Nenhum item informado.</div>`}
+      </div>`;
+  }).join('');
+
+  const html = `
+    <div style="font-family:Arial,sans-serif;max-width:820px;margin:0 auto;padding:28px;background:#fff;color:#4b433c;">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid #b79b6c;padding-bottom:14px;margin-bottom:20px;">
+        <div>
+          <h1 style="margin:0;font-size:20px;font-weight:800;color:#4b433c;">Mamma Mia Control</h1>
+          <p style="margin:4px 0 0;font-size:13px;color:#8a8570;">🧹 Requisição de Limpeza e EPI</p>
+          <p style="margin:2px 0 0;font-size:12px;color:#b79b6c;font-weight:600;">Unidade: ${labelUnidade}</p>
         </div>
         <div style="text-align:right;font-size:11px;color:#a09284;">
           <div>Emitido em:</div>
