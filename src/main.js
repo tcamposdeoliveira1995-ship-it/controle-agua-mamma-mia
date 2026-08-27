@@ -1630,7 +1630,8 @@ function updateAppSelectors() { console.log('updateAppSelectors executado'); }
 
 // ================= MÓDULO PERDAS =================
 
-// Converte o Timestamp bruto do Google Forms (mm/dd/yyyy hh:mm:ss) em objeto Date.
+// Converte o Timestamp bruto da planilha de Registro de Perdas (dd/mm/yyyy hh:mm:ss,
+// locale pt-BR — confirmado na própria planilha) em objeto Date.
 // Retorna null se não conseguir interpretar o valor.
 function _perdasParseTimestamp(valorOriginal) {
   if (!valorOriginal || !valorOriginal.trim()) return null;
@@ -1638,7 +1639,7 @@ function _perdasParseTimestamp(valorOriginal) {
   const partes = texto.split(' ');
   const matchData = partes[0].match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
   if (!matchData) return null;
-  const [, mesStr, diaStr, anoStr] = matchData;
+  const [, diaStr, mesStr, anoStr] = matchData;
   const [hh = '0', mm = '0', ss = '0'] = (partes[1] || '').split(':');
   const data = new Date(
     parseInt(anoStr, 10), parseInt(mesStr, 10) - 1, parseInt(diaStr, 10),
