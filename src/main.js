@@ -1666,6 +1666,84 @@ function _perdasFormatarDataHora(data) {
   return `${p(data.getDate())}/${p(data.getMonth() + 1)}/${data.getFullYear()} ${p(data.getHours())}:${p(data.getMinutes())}`;
 }
 
+// Normaliza texto livre da planilha (trim + maiúsculas) para que a mesma pessoa/produto/
+// motivo digitado com capitalização diferente ("alex" vs "ALEX") não vire entradas
+// separadas nos rankings e na tabela.
+function _perdasNormalizar(texto, fallback) {
+  const limpo = (texto || '').trim().toUpperCase();
+  return limpo || fallback;
+}
+
+const PERDAS_PERIODO_LABEL = { TODOS: 'Tudo', MES_ATUAL: 'Este mês', MES_PASSADO: 'Mês passado' };
+
+function _perdasGerarPDF(registros, kpis, periodoLabel) {
+  const agora = new Date().toLocaleString('pt-BR');
+  const linhas = registros.map(r => `
+    <tr>
+      <td style="font-size:10px;white-space:nowrap;">${r.data ? _perdasFormatarDataHora(r.data) : '-'}</td>
+      <td style="font-size:10px;">${r.responsavel}</td>
+      <td style="font-size:10px;">${r.setor}</td>
+      <td style="font-size:10px;">${r.produto}</td>
+      <td style="font-size:10px;text-align:right;">${r.quantidade}</td>
+      <td style="font-size:10px;">${r.motivo}</td>
+    </tr>`).join('');
+
+  const html = `
+    <div style="font-family:Arial,sans-serif;max-width:820px;margin:0 auto;padding:28px;background:#fff;color:#4b433c;">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid #b79b6c;padding-bottom:14px;margin-bottom:20px;">
+        <div>
+          <h1 style="margin:0;font-size:20px;font-weight:800;color:#4b433c;">Mamma Mia Control</h1>
+          <p style="margin:4px 0 0;font-size:13px;color:#8a8570;">📉 Gestão de Perdas YUKA</p>
+          <p style="margin:2px 0 0;font-size:12px;color:#b79b6c;font-weight:600;">Período: ${periodoLabel}</p>
+        </div>
+        <div style="text-align:right;font-size:11px;color:#a09284;">
+          <div>Emitido em:</div>
+          <div style="font-weight:600;color:#4b433c;">${agora}</div>
+        </div>
+      </div>
+
+      <div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:20px;">
+        ${kpis.map(k => `
+          <div style="background:#f9f5f0;border:1px solid #e8ddd0;border-radius:8px;padding:10px 14px;min-width:130px;">
+            <div style="font-size:9px;color:#8a8570;font-weight:600;text-transform:uppercase;">${k.label}</div>
+            <div style="font-size:18px;font-weight:800;color:#4b433c;">${k.valor}</div>
+          </div>`).join('')}
+      </div>
+
+      <h2 style="font-size:13px;font-weight:700;color:#4b433c;margin-bottom:10px;border-left:3px solid #b79b6c;padding-left:8px;">
+        Histórico (${registros.length} registro(s))
+      </h2>
+      <table style="width:100%;border-collapse:collapse;">
+        <thead>
+          <tr style="background:#f3ede3;">
+            <th style="font-size:10px;text-align:left;padding:6px;">Data/Hora</th>
+            <th style="font-size:10px;text-align:left;padding:6px;">Responsável</th>
+            <th style="font-size:10px;text-align:left;padding:6px;">Setor</th>
+            <th style="font-size:10px;text-align:left;padding:6px;">Produto</th>
+            <th style="font-size:10px;text-align:right;padding:6px;">Qtd.</th>
+            <th style="font-size:10px;text-align:left;padding:6px;">Motivo</th>
+          </tr>
+        </thead>
+        <tbody>${linhas}</tbody>
+      </table>
+
+      <div style="margin-top:24px;padding-top:12px;border-top:1px solid #e8ddd0;font-size:10px;color:#a09284;text-align:center;">
+        Mamma Mia Control — Gestão Inteligente de Operações • © 2026 Mamma Mia Salgados
+      </div>
+    </div>`;
+
+  const iframe = document.createElement('iframe');
+  iframe.style.cssText = 'position:fixed;top:-9999px;left:-9999px;width:900px;height:600px;border:none;';
+  document.body.appendChild(iframe);
+  iframe.contentDocument.open();
+  iframe.contentDocument.write(html);
+  iframe.contentDocument.close();
+  setTimeout(() => {
+    iframe.contentWindow.print();
+    setTimeout(() => document.body.removeChild(iframe), 1000);
+  }, 400);
+}
+
 async function carregarPerdas() {
   try {
     const response = await fetch(PERDAS_CSV_URL);
@@ -1692,15 +1770,17 @@ async function carregarPerdas() {
 
     const registros = dados.map(colunas => ({
       data: _perdasParseTimestamp(colunas[idxTimestamp]),
-      responsavel: (colunas[idxResp] || '').trim() || '-',
-      setor: (colunas[4] || 'OUTRO').trim() || 'OUTRO',
-      produto: (colunas[5] || 'SEM PRODUTO').trim() || 'SEM PRODUTO',
+      responsavel: _perdasNormalizar(colunas[idxResp], '-'),
+      setor: _perdasNormalizar(colunas[4], 'OUTRO'),
+      produto: _perdasNormalizar(colunas[5], 'SEM PRODUTO'),
       quantidade: parseFloat((colunas[6] || '').replace(',', '.')) || 0,
-      motivo: (colunas[7] || 'OUTRO').trim() || 'OUTRO',
+      motivo: _perdasNormalizar(colunas[7], 'OUTRO'),
       detalhe: (colunas[idxDetalhe] || '').trim(),
     }));
 
     let periodoAtual = 'TODOS';
+    let linhasVisiveis = 25;
+    const PAGINA_TAMANHO = 25;
 
     function renderizar() {
       const registrosPeriodo = _perdasFiltrarPorPeriodo(registros, periodoAtual);
@@ -1754,29 +1834,60 @@ async function carregarPerdas() {
         </div>`;
       }
 
+      // Limite configurável (Configurações > Alertas > Perdas) aplicado ao período selecionado.
+      const limite = getAppSettings().alertPerdasLimite || 0;
+      const percentualLimite = limite > 0 ? Math.round((registrosPeriodo.length / limite) * 100) : 0;
+      const corLimite = percentualLimite >= 100 ? 'var(--color-red)' : percentualLimite >= 70 ? 'var(--color-orange)' : 'var(--color-green)';
+
       // Tabela histórica: mais recentes primeiro; a busca de texto filtra por
       // produto, responsável, setor e motivo dentro do período já selecionado.
-      function linhasTabela(termo) {
-        const termoNorm = (termo || '').trim().toUpperCase();
-        const filtrados = (termoNorm
+      function registrosFiltradosTabela() {
+        const termoNorm = (document.getElementById('busca-perdas')?.value || '').trim().toUpperCase();
+        return (termoNorm
           ? registrosPeriodo.filter(r => `${r.produto} ${r.responsavel} ${r.setor} ${r.motivo}`.toUpperCase().includes(termoNorm))
           : registrosPeriodo
         ).slice().sort((a, b) => (b.data?.getTime() || 0) - (a.data?.getTime() || 0));
-        if (filtrados.length === 0) return `<tr><td colspan="7" style="text-align:center;color:var(--text-muted);">Nenhum registro encontrado.</td></tr>`;
-        return filtrados.map(r => `
-          <tr>
-            <td style="font-size:0.8rem;white-space:nowrap;">${r.data ? _perdasFormatarDataHora(r.data) : '-'}</td>
-            <td>${r.responsavel}</td>
-            <td>${r.setor}</td>
-            <td>${r.produto}</td>
-            <td style="text-align:right;">${r.quantidade}</td>
-            <td>${r.motivo}</td>
-            <td style="font-size:0.8rem;color:var(--text-secondary);max-width:260px;">${r.detalhe || '-'}</td>
-          </tr>`).join('');
+      }
+
+      function atualizarTabela(resetPaginacao) {
+        if (resetPaginacao) linhasVisiveis = PAGINA_TAMANHO;
+        const filtrados = registrosFiltradosTabela();
+        const visiveis = filtrados.slice(0, linhasVisiveis);
+        const tbody = document.getElementById('perdas-tabela-body');
+        const rodape = document.getElementById('perdas-tabela-rodape');
+        if (tbody) {
+          tbody.innerHTML = visiveis.length === 0
+            ? `<tr><td colspan="7" style="text-align:center;color:var(--text-muted);">Nenhum registro encontrado.</td></tr>`
+            : visiveis.map(r => `
+              <tr>
+                <td style="font-size:0.8rem;white-space:nowrap;">${r.data ? _perdasFormatarDataHora(r.data) : '-'}</td>
+                <td>${r.responsavel}</td>
+                <td>${r.setor}</td>
+                <td>${r.produto}</td>
+                <td style="text-align:right;">${r.quantidade}</td>
+                <td>${r.motivo}</td>
+                <td style="font-size:0.8rem;color:var(--text-secondary);max-width:260px;">${r.detalhe || '-'}</td>
+              </tr>`).join('');
+        }
+        if (rodape) {
+          const restantes = filtrados.length - visiveis.length;
+          rodape.innerHTML = `
+            <span style="font-size:0.8rem;color:var(--text-muted);">${visiveis.length} de ${filtrados.length} registro(s)</span>
+            ${restantes > 0 ? `<button id="btn-carregar-mais-perdas" class="btn btn-secondary" style="font-size:0.82rem;">Carregar mais (${restantes} restante${restantes > 1 ? 's' : ''})</button>` : ''}`;
+          document.getElementById('btn-carregar-mais-perdas')?.addEventListener('click', () => {
+            linhasVisiveis += PAGINA_TAMANHO;
+            atualizarTabela(false);
+          });
+        }
       }
 
       conteudo.innerHTML = `
-        <div class="panel-header"><h2>📉 Gestão de Perdas YUKA</h2></div>
+        <div class="panel-header">
+          <h2>📉 Gestão de Perdas YUKA</h2>
+          <button id="btn-pdf-perdas" class="btn btn-primary" style="font-size:0.82rem;">
+            <i data-lucide="file-text"></i> Gerar PDF
+          </button>
+        </div>
 
         <div class="filter-group" style="margin-bottom:1rem;">
           <label class="form-label" style="margin-bottom:0;">📅 Período:</label>
@@ -1794,12 +1905,27 @@ async function carregarPerdas() {
           <div class="kpi-card"><div class="kpi-label">🥟 PRODUTO TOP</div><div class="kpi-value">${produtoMaisPerdido}</div></div>
           <div class="kpi-card"><div class="kpi-label">🏭 SETOR COM MAIS PERDAS</div><div class="kpi-value">${setor}</div></div>
         </div>
-        ${ultimoRegistroHtml}
-        <div class="panel-card"><h3>🚨 Perdas por Motivo</h3><canvas id="graficoMotivos"></canvas></div>
-        <div class="panel-card"><h3>🏆 Ranking de Produtos Perdidos</h3><canvas id="graficoProdutos"></canvas></div>
-        <div class="panel-card"><h3>👤 Perdas por Responsável</h3><canvas id="graficoResponsaveis"></canvas></div>
 
-        <div class="panel-card" style="margin-top:20px;">
+        ${limite > 0 ? `
+        <div class="panel-card" style="margin-bottom:20px;">
+          <div class="progress-label-row">
+            <span>🎯 Limite de Perdas (${PERDAS_PERIODO_LABEL[periodoAtual]})</span>
+            <span style="color:var(--text-muted);">${registrosPeriodo.length} / ${limite} registros (${percentualLimite}%)</span>
+          </div>
+          <div class="progress-track">
+            <div class="progress-bar" style="width:${Math.min(100, percentualLimite)}%;background:${corLimite};"></div>
+          </div>
+        </div>` : ''}
+
+        ${ultimoRegistroHtml}
+
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:16px;margin-bottom:20px;">
+          <div class="panel-card"><h3>🚨 Perdas por Motivo</h3><div class="chart-wrapper"><canvas id="graficoMotivos"></canvas></div></div>
+          <div class="panel-card"><h3>🏆 Ranking de Produtos Perdidos</h3><div class="chart-wrapper"><canvas id="graficoProdutos"></canvas></div></div>
+          <div class="panel-card"><h3>👤 Perdas por Responsável</h3><div class="chart-wrapper"><canvas id="graficoResponsaveis"></canvas></div></div>
+        </div>
+
+        <div class="panel-card">
           <h3>📋 Histórico de Perdas</h3>
           <div style="margin:12px 0;">
             <input type="text" id="busca-perdas" class="form-control" placeholder="Buscar por produto, responsável, setor ou motivo..." style="max-width:420px;">
@@ -1807,25 +1933,37 @@ async function carregarPerdas() {
           <div class="table-responsive">
             <table class="modern-table">
               <thead><tr><th>Data/Hora</th><th>Responsável</th><th>Setor</th><th>Produto</th><th style="text-align:right;">Qtd.</th><th>Motivo</th><th>Detalhamento</th></tr></thead>
-              <tbody id="perdas-tabela-body">${linhasTabela('')}</tbody>
+              <tbody id="perdas-tabela-body"></tbody>
             </table>
           </div>
+          <div id="perdas-tabela-rodape" style="display:flex;align-items:center;justify-content:space-between;gap:1rem;margin-top:12px;flex-wrap:wrap;"></div>
         </div>`;
 
+      if (typeof lucide !== 'undefined') lucide.createIcons();
+
       const ctxMotivos = document.getElementById('graficoMotivos');
-      if (ctxMotivos) new Chart(ctxMotivos, { type: 'bar', data: { labels: labelsMotivos, datasets: [{ label: 'Perdas', data: valoresMotivos }] }, options: { indexAxis: 'y', responsive: true } });
+      if (ctxMotivos) new Chart(ctxMotivos, { type: 'bar', data: { labels: labelsMotivos, datasets: [{ label: 'Perdas', data: valoresMotivos }] }, options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false } });
       const ctxProdutos = document.getElementById('graficoProdutos');
-      if (ctxProdutos) new Chart(ctxProdutos, { type: 'bar', data: { labels: labelsProdutos, datasets: [{ label: 'Perdas', data: valoresProdutos }] }, options: { indexAxis: 'y', responsive: true } });
+      if (ctxProdutos) new Chart(ctxProdutos, { type: 'bar', data: { labels: labelsProdutos, datasets: [{ label: 'Perdas', data: valoresProdutos }] }, options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false } });
       const ctxResponsaveis = document.getElementById('graficoResponsaveis');
-      if (ctxResponsaveis) new Chart(ctxResponsaveis, { type: 'bar', data: { labels: labelsResponsaveis, datasets: [{ label: 'Perdas', data: valoresResponsaveis }] }, options: { indexAxis: 'y', responsive: true } });
+      if (ctxResponsaveis) new Chart(ctxResponsaveis, { type: 'bar', data: { labels: labelsResponsaveis, datasets: [{ label: 'Perdas', data: valoresResponsaveis }] }, options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false } });
+
+      atualizarTabela(true);
 
       document.getElementById('filtro-periodo-perdas')?.addEventListener('change', e => {
         periodoAtual = e.target.value;
         renderizar();
       });
-      document.getElementById('busca-perdas')?.addEventListener('input', e => {
-        const tbody = document.getElementById('perdas-tabela-body');
-        if (tbody) tbody.innerHTML = linhasTabela(e.target.value);
+      document.getElementById('busca-perdas')?.addEventListener('input', () => atualizarTabela(true));
+      document.getElementById('btn-pdf-perdas')?.addEventListener('click', () => {
+        const kpis = [
+          { label: 'Registros', valor: registrosPeriodo.length },
+          { label: 'Total Perdido', valor: totalQuantidade.toLocaleString('pt-BR') },
+          { label: 'Maior Motivo', valor: maiorMotivo },
+          { label: 'Produto Top', valor: produtoMaisPerdido },
+          { label: 'Setor com mais perdas', valor: setor },
+        ];
+        _perdasGerarPDF(registrosFiltradosTabela(), kpis, PERDAS_PERIODO_LABEL[periodoAtual]);
       });
     }
 
