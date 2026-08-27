@@ -967,9 +967,7 @@ function renderIndividualMeterCards(stats) {
         </div>
         <span class="${statusClass}">${statusText}</span>
       </div>
-      <div class="meter-title-block">
-        <h3>${id}</h3>
-      </div>
+      <div class="meter-id-label" title="Nº de série: ${id}">${id}</div>
       <div class="faltam-indicator-tag ${faltamClass}">${textFaltam}</div>
       <div class="progress-container">
         <div class="progress-label-row">
@@ -1175,6 +1173,14 @@ function initEventListeners() {
   if (reqFormToggle && reqFormMenu) {
     reqFormToggle.addEventListener('click', (e) => { e.stopPropagation(); reqFormMenu.style.display = reqFormMenu.style.display === 'none' ? 'block' : 'none'; });
     document.addEventListener('click', (e) => { if (!reqFormMenu.contains(e.target) && e.target !== reqFormToggle) reqFormMenu.style.display = 'none'; });
+  }
+
+  const exportToggle = document.getElementById('btn-export-toggle');
+  const exportMenu = document.getElementById('export-actions-menu');
+  if (exportToggle && exportMenu) {
+    exportToggle.addEventListener('click', (e) => { e.stopPropagation(); exportMenu.style.display = exportMenu.style.display === 'none' ? 'block' : 'none'; });
+    exportMenu.addEventListener('click', (e) => { if (e.target.closest('button')) exportMenu.style.display = 'none'; });
+    document.addEventListener('click', (e) => { if (!exportMenu.contains(e.target) && e.target !== exportToggle) exportMenu.style.display = 'none'; });
   }
 
   const osFilterStatus = document.getElementById('os-filter-status');
