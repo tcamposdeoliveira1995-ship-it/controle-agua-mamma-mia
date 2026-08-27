@@ -1648,6 +1648,24 @@ function _perdasParseTimestamp(valorOriginal) {
   return isNaN(data.getTime()) ? null : data;
 }
 
+// Chave "yyyy-mm" usada para agrupar registros de Perdas por mês.
+function _perdasChaveMes(data) { return `${data.getFullYear()}-${String(data.getMonth() + 1).padStart(2, '0')}`; }
+
+// Filtra registros de Perdas pelo período selecionado no painel.
+function _perdasFiltrarPorPeriodo(registros, periodo) {
+  if (periodo === 'TODOS') return registros;
+  const agora = new Date();
+  const chaveAtual = _perdasChaveMes(agora);
+  const mesPassado = new Date(agora.getFullYear(), agora.getMonth() - 1, 1);
+  const chaveAlvo = periodo === 'MES_PASSADO' ? _perdasChaveMes(mesPassado) : chaveAtual;
+  return registros.filter(r => r.data && _perdasChaveMes(r.data) === chaveAlvo);
+}
+
+function _perdasFormatarDataHora(data) {
+  const p = n => String(n).padStart(2, '0');
+  return `${p(data.getDate())}/${p(data.getMonth() + 1)}/${data.getFullYear()} ${p(data.getHours())}:${p(data.getMinutes())}`;
+}
+
 async function carregarPerdas() {
   try {
     const response = await fetch(PERDAS_CSV_URL);
@@ -1660,85 +1678,158 @@ async function carregarPerdas() {
       return;
     }
 
-    // Cabeçalho: localiza colunas de Timestamp e Responsável pelo nome; demais colunas
-    // seguem o layout fixo já utilizado pela planilha de Registro de Perdas.
+    // Cabeçalho: localiza colunas de Timestamp, Responsável e Detalhamento pelo nome;
+    // demais colunas seguem o layout fixo já utilizado pela planilha de Registro de Perdas.
     const cabecalho = linhas[0].map(c => c.trim().toUpperCase());
     const idxTimestampCab = cabecalho.findIndex(c => c.includes('CARIMBO') || c.includes('TIMESTAMP'));
     const idxRespCab = cabecalho.findIndex(c => c.includes('RESPONS') || c.includes('NOME'));
+    const idxDetalheCab = cabecalho.findIndex(c => c.includes('DETALHAMENTO') || c.includes('DETALHE'));
     const idxTimestamp = idxTimestampCab >= 0 ? idxTimestampCab : 0;
     const idxResp = idxRespCab >= 0 ? idxRespCab : 1;
+    const idxDetalhe = idxDetalheCab >= 0 ? idxDetalheCab : 8;
 
     const dados = linhas.slice(1).filter(colunas => colunas.some(c => c.trim() !== ''));
-    let totalPerdas = dados.length;
 
-    const motivos = {}; const produtos = {}; const setores = {};
-    let totalQuantidade = 0;
-    const registros = dados.map(colunas => {
-      const motivo = (colunas[7] || 'OUTRO').trim() || 'OUTRO';
-      const produto = (colunas[5] || 'SEM PRODUTO').trim() || 'SEM PRODUTO';
-      const setorLinha = (colunas[4] || 'OUTRO').trim() || 'OUTRO';
-      const quantidade = parseFloat((colunas[6] || '').replace(',', '.')) || 0;
-      motivos[motivo] = (motivos[motivo] || 0) + quantidade;
-      produtos[produto] = (produtos[produto] || 0) + quantidade;
-      setores[setorLinha] = (setores[setorLinha] || 0) + quantidade;
-      totalQuantidade += quantidade;
-      return {
-        data: _perdasParseTimestamp(colunas[idxTimestamp]),
-        responsavel: (colunas[idxResp] || '').trim() || '-',
-        produto,
-        quantidade,
-      };
-    });
-    const rankingMotivos = Object.entries(motivos).sort((a, b) => b[1] - a[1]);
-    const rankingProdutos = Object.entries(produtos).sort((a, b) => b[1] - a[1]);
-    const rankingSetores = Object.entries(setores).sort((a, b) => b[1] - a[1]);
-    const maiorMotivo = rankingMotivos[0]?.[0] || '-';
-    const produtoMaisPerdido = rankingProdutos[0]?.[0] || '-';
-    const setor = rankingSetores[0]?.[0] || '-';
-    const labelsMotivos = rankingMotivos.slice(0, 10).map(item => item[0]);
-    const valoresMotivos = rankingMotivos.slice(0, 10).map(item => item[1]);
-    const labelsProdutos = rankingProdutos.slice(0, 10).map(item => item[0]);
-    const valoresProdutos = rankingProdutos.slice(0, 10).map(item => item[1]);
+    const registros = dados.map(colunas => ({
+      data: _perdasParseTimestamp(colunas[idxTimestamp]),
+      responsavel: (colunas[idxResp] || '').trim() || '-',
+      setor: (colunas[4] || 'OUTRO').trim() || 'OUTRO',
+      produto: (colunas[5] || 'SEM PRODUTO').trim() || 'SEM PRODUTO',
+      quantidade: parseFloat((colunas[6] || '').replace(',', '.')) || 0,
+      motivo: (colunas[7] || 'OUTRO').trim() || 'OUTRO',
+      detalhe: (colunas[idxDetalhe] || '').trim(),
+    }));
 
-    // Último registro: agrupa todas as perdas lançadas no dia mais recente encontrado
-    // na planilha (cobre tanto um único apontamento quanto vários produtos no mesmo dia).
-    let ultimoRegistroHtml = '';
-    const comData = registros.filter(r => r.data);
-    if (comData.length > 0) {
-      const dataMaisRecente = comData.reduce((max, r) => (r.data > max ? r.data : max), comData[0].data);
-      const chaveDia = d => `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
-      const itensDoDia = comData.filter(r => chaveDia(r.data) === chaveDia(dataMaisRecente));
-      const dataFormatada = dataMaisRecente.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
-      const responsaveis = [...new Set(itensDoDia.map(r => r.responsavel).filter(r => r && r !== '-'))];
-      const respTexto = responsaveis.join(', ') || '-';
-      const itensHtml = itensDoDia.map(r => `<div class="ranking-item"><span>${r.produto}</span><span>${r.quantidade}</span></div>`).join('');
-      ultimoRegistroHtml = `
-      <div class="panel-card" style="margin-bottom:20px;">
-        <h3>🕒 Último Registro</h3>
-        <p style="margin:8px 0 12px;color:var(--text-secondary);">
-          <strong style="color:var(--text-primary);">${dataFormatada}</strong> — Resp.: <strong style="color:var(--text-primary);">${respTexto}</strong>
-        </p>
-        <div class="ranking-list">${itensHtml}</div>
-      </div>`;
+    let periodoAtual = 'TODOS';
+
+    function renderizar() {
+      const registrosPeriodo = _perdasFiltrarPorPeriodo(registros, periodoAtual);
+
+      const motivos = {}; const produtos = {}; const setores = {}; const responsaveis = {};
+      let totalQuantidade = 0;
+      registrosPeriodo.forEach(r => {
+        motivos[r.motivo] = (motivos[r.motivo] || 0) + r.quantidade;
+        produtos[r.produto] = (produtos[r.produto] || 0) + r.quantidade;
+        setores[r.setor] = (setores[r.setor] || 0) + r.quantidade;
+        responsaveis[r.responsavel] = (responsaveis[r.responsavel] || 0) + r.quantidade;
+        totalQuantidade += r.quantidade;
+      });
+      const rankingMotivos = Object.entries(motivos).sort((a, b) => b[1] - a[1]);
+      const rankingProdutos = Object.entries(produtos).sort((a, b) => b[1] - a[1]);
+      const rankingSetores = Object.entries(setores).sort((a, b) => b[1] - a[1]);
+      const rankingResponsaveis = Object.entries(responsaveis).sort((a, b) => b[1] - a[1]);
+      const maiorMotivo = rankingMotivos[0]?.[0] || '-';
+      const produtoMaisPerdido = rankingProdutos[0]?.[0] || '-';
+      const setor = rankingSetores[0]?.[0] || '-';
+      const labelsMotivos = rankingMotivos.slice(0, 10).map(item => item[0]);
+      const valoresMotivos = rankingMotivos.slice(0, 10).map(item => item[1]);
+      const labelsProdutos = rankingProdutos.slice(0, 10).map(item => item[0]);
+      const valoresProdutos = rankingProdutos.slice(0, 10).map(item => item[1]);
+      const labelsResponsaveis = rankingResponsaveis.slice(0, 10).map(item => item[0]);
+      const valoresResponsaveis = rankingResponsaveis.slice(0, 10).map(item => item[1]);
+
+      // Último registro: agrupa todas as perdas lançadas no dia mais recente dentro do
+      // período selecionado (cobre tanto um único apontamento quanto vários produtos no mesmo dia).
+      let ultimoRegistroHtml = '';
+      const comData = registrosPeriodo.filter(r => r.data);
+      if (comData.length > 0) {
+        const dataMaisRecente = comData.reduce((max, r) => (r.data > max ? r.data : max), comData[0].data);
+        const chaveDia = d => `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+        const itensDoDia = comData.filter(r => chaveDia(r.data) === chaveDia(dataMaisRecente));
+        const dataFormatada = dataMaisRecente.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+        const responsaveisDia = [...new Set(itensDoDia.map(r => r.responsavel).filter(r => r && r !== '-'))];
+        const respTexto = responsaveisDia.join(', ') || '-';
+        const itensHtml = itensDoDia.map(r => `
+          <div class="ranking-item" style="align-items:flex-start;">
+            <span>${r.produto}${r.detalhe ? `<br><span style="font-size:0.75rem;color:var(--text-muted);">${r.detalhe}</span>` : ''}</span>
+            <span>${r.quantidade}</span>
+          </div>`).join('');
+        ultimoRegistroHtml = `
+        <div class="panel-card" style="margin-bottom:20px;">
+          <h3>🕒 Último Registro</h3>
+          <p style="margin:8px 0 12px;color:var(--text-secondary);">
+            <strong style="color:var(--text-primary);">${dataFormatada}</strong> — Resp.: <strong style="color:var(--text-primary);">${respTexto}</strong>
+          </p>
+          <div class="ranking-list">${itensHtml}</div>
+        </div>`;
+      }
+
+      // Tabela histórica: mais recentes primeiro; a busca de texto filtra por
+      // produto, responsável, setor e motivo dentro do período já selecionado.
+      function linhasTabela(termo) {
+        const termoNorm = (termo || '').trim().toUpperCase();
+        const filtrados = (termoNorm
+          ? registrosPeriodo.filter(r => `${r.produto} ${r.responsavel} ${r.setor} ${r.motivo}`.toUpperCase().includes(termoNorm))
+          : registrosPeriodo
+        ).slice().sort((a, b) => (b.data?.getTime() || 0) - (a.data?.getTime() || 0));
+        if (filtrados.length === 0) return `<tr><td colspan="7" style="text-align:center;color:var(--text-muted);">Nenhum registro encontrado.</td></tr>`;
+        return filtrados.map(r => `
+          <tr>
+            <td style="font-size:0.8rem;white-space:nowrap;">${r.data ? _perdasFormatarDataHora(r.data) : '-'}</td>
+            <td>${r.responsavel}</td>
+            <td>${r.setor}</td>
+            <td>${r.produto}</td>
+            <td style="text-align:right;">${r.quantidade}</td>
+            <td>${r.motivo}</td>
+            <td style="font-size:0.8rem;color:var(--text-secondary);max-width:260px;">${r.detalhe || '-'}</td>
+          </tr>`).join('');
+      }
+
+      conteudo.innerHTML = `
+        <div class="panel-header"><h2>📉 Gestão de Perdas YUKA</h2></div>
+
+        <div class="filter-group" style="margin-bottom:1rem;">
+          <label class="form-label" style="margin-bottom:0;">📅 Período:</label>
+          <select id="filtro-periodo-perdas" class="filter-select">
+            <option value="TODOS" ${periodoAtual === 'TODOS' ? 'selected' : ''}>Tudo</option>
+            <option value="MES_ATUAL" ${periodoAtual === 'MES_ATUAL' ? 'selected' : ''}>Este mês</option>
+            <option value="MES_PASSADO" ${periodoAtual === 'MES_PASSADO' ? 'selected' : ''}>Mês passado</option>
+          </select>
+        </div>
+
+        <div class="dashboard-grid">
+          <div class="kpi-card"><div class="kpi-label">📦 REGISTROS</div><div class="kpi-value">${registrosPeriodo.length}</div></div>
+          <div class="kpi-card"><div class="kpi-label">🧮 TOTAL PERDIDO</div><div class="kpi-value">${totalQuantidade.toLocaleString('pt-BR')}</div><div class="kpi-subtext">kg / unidades</div></div>
+          <div class="kpi-card"><div class="kpi-label">⚠️ MAIOR MOTIVO</div><div class="kpi-value">${maiorMotivo}</div></div>
+          <div class="kpi-card"><div class="kpi-label">🥟 PRODUTO TOP</div><div class="kpi-value">${produtoMaisPerdido}</div></div>
+          <div class="kpi-card"><div class="kpi-label">🏭 SETOR COM MAIS PERDAS</div><div class="kpi-value">${setor}</div></div>
+        </div>
+        ${ultimoRegistroHtml}
+        <div class="panel-card"><h3>🚨 Perdas por Motivo</h3><canvas id="graficoMotivos"></canvas></div>
+        <div class="panel-card"><h3>🏆 Ranking de Produtos Perdidos</h3><canvas id="graficoProdutos"></canvas></div>
+        <div class="panel-card"><h3>👤 Perdas por Responsável</h3><canvas id="graficoResponsaveis"></canvas></div>
+
+        <div class="panel-card" style="margin-top:20px;">
+          <h3>📋 Histórico de Perdas</h3>
+          <div style="margin:12px 0;">
+            <input type="text" id="busca-perdas" class="form-control" placeholder="Buscar por produto, responsável, setor ou motivo..." style="max-width:420px;">
+          </div>
+          <div class="table-responsive">
+            <table class="modern-table">
+              <thead><tr><th>Data/Hora</th><th>Responsável</th><th>Setor</th><th>Produto</th><th style="text-align:right;">Qtd.</th><th>Motivo</th><th>Detalhamento</th></tr></thead>
+              <tbody id="perdas-tabela-body">${linhasTabela('')}</tbody>
+            </table>
+          </div>
+        </div>`;
+
+      const ctxMotivos = document.getElementById('graficoMotivos');
+      if (ctxMotivos) new Chart(ctxMotivos, { type: 'bar', data: { labels: labelsMotivos, datasets: [{ label: 'Perdas', data: valoresMotivos }] }, options: { indexAxis: 'y', responsive: true } });
+      const ctxProdutos = document.getElementById('graficoProdutos');
+      if (ctxProdutos) new Chart(ctxProdutos, { type: 'bar', data: { labels: labelsProdutos, datasets: [{ label: 'Perdas', data: valoresProdutos }] }, options: { indexAxis: 'y', responsive: true } });
+      const ctxResponsaveis = document.getElementById('graficoResponsaveis');
+      if (ctxResponsaveis) new Chart(ctxResponsaveis, { type: 'bar', data: { labels: labelsResponsaveis, datasets: [{ label: 'Perdas', data: valoresResponsaveis }] }, options: { indexAxis: 'y', responsive: true } });
+
+      document.getElementById('filtro-periodo-perdas')?.addEventListener('change', e => {
+        periodoAtual = e.target.value;
+        renderizar();
+      });
+      document.getElementById('busca-perdas')?.addEventListener('input', e => {
+        const tbody = document.getElementById('perdas-tabela-body');
+        if (tbody) tbody.innerHTML = linhasTabela(e.target.value);
+      });
     }
 
-    conteudo.innerHTML = `
-      <div class="panel-header"><h2>📉 Gestão de Perdas YUKA</h2></div>
-      <div class="dashboard-grid">
-        <div class="kpi-card"><div class="kpi-label">📦 REGISTROS</div><div class="kpi-value">${totalPerdas}</div></div>
-        <div class="kpi-card"><div class="kpi-label">🧮 TOTAL PERDIDO</div><div class="kpi-value">${totalQuantidade.toLocaleString('pt-BR')}</div><div class="kpi-subtext">kg / unidades</div></div>
-        <div class="kpi-card"><div class="kpi-label">⚠️ MAIOR MOTIVO</div><div class="kpi-value">${maiorMotivo}</div></div>
-        <div class="kpi-card"><div class="kpi-label">🥟 PRODUTO TOP</div><div class="kpi-value">${produtoMaisPerdido}</div></div>
-        <div class="kpi-card"><div class="kpi-label">🏭 SETOR COM MAIS PERDAS</div><div class="kpi-value">${setor}</div></div>
-      </div>
-      ${ultimoRegistroHtml}
-      <div class="panel-card"><h3>🚨 Perdas por Motivo</h3><canvas id="graficoMotivos"></canvas></div>
-      <div class="panel-card"><h3>🏆 Ranking de Produtos Perdidos</h3><canvas id="graficoProdutos"></canvas></div>`;
-
-    const ctxMotivos = document.getElementById('graficoMotivos');
-    if (ctxMotivos) new Chart(ctxMotivos, { type: 'bar', data: { labels: labelsMotivos, datasets: [{ label: 'Perdas', data: valoresMotivos }] }, options: { indexAxis: 'y', responsive: true } });
-    const ctxProdutos = document.getElementById('graficoProdutos');
-    if (ctxProdutos) new Chart(ctxProdutos, { type: 'bar', data: { labels: labelsProdutos, datasets: [{ label: 'Perdas', data: valoresProdutos }] }, options: { indexAxis: 'y', responsive: true } });
+    renderizar();
   } catch (erro) { console.error(erro); }
 }
 let canalAtual = null;
