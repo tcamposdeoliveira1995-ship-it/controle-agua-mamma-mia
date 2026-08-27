@@ -1671,15 +1671,17 @@ async function carregarPerdas() {
     const dados = linhas.slice(1).filter(colunas => colunas.some(c => c.trim() !== ''));
     let totalPerdas = dados.length;
 
-    const primeiraLinha = dados[0] || [];
-    const setor = (primeiraLinha[4] || '-').trim() || '-';
-    const motivos = {}; const produtos = {};
+    const motivos = {}; const produtos = {}; const setores = {};
+    let totalQuantidade = 0;
     const registros = dados.map(colunas => {
       const motivo = (colunas[7] || 'OUTRO').trim() || 'OUTRO';
       const produto = (colunas[5] || 'SEM PRODUTO').trim() || 'SEM PRODUTO';
+      const setorLinha = (colunas[4] || 'OUTRO').trim() || 'OUTRO';
       const quantidade = parseFloat((colunas[6] || '').replace(',', '.')) || 0;
       motivos[motivo] = (motivos[motivo] || 0) + quantidade;
       produtos[produto] = (produtos[produto] || 0) + quantidade;
+      setores[setorLinha] = (setores[setorLinha] || 0) + quantidade;
+      totalQuantidade += quantidade;
       return {
         data: _perdasParseTimestamp(colunas[idxTimestamp]),
         responsavel: (colunas[idxResp] || '').trim() || '-',
@@ -1689,8 +1691,10 @@ async function carregarPerdas() {
     });
     const rankingMotivos = Object.entries(motivos).sort((a, b) => b[1] - a[1]);
     const rankingProdutos = Object.entries(produtos).sort((a, b) => b[1] - a[1]);
+    const rankingSetores = Object.entries(setores).sort((a, b) => b[1] - a[1]);
     const maiorMotivo = rankingMotivos[0]?.[0] || '-';
     const produtoMaisPerdido = rankingProdutos[0]?.[0] || '-';
+    const setor = rankingSetores[0]?.[0] || '-';
     const labelsMotivos = rankingMotivos.slice(0, 10).map(item => item[0]);
     const valoresMotivos = rankingMotivos.slice(0, 10).map(item => item[1]);
     const labelsProdutos = rankingProdutos.slice(0, 10).map(item => item[0]);
@@ -1722,9 +1726,10 @@ async function carregarPerdas() {
       <div class="panel-header"><h2>📉 Gestão de Perdas YUKA</h2></div>
       <div class="dashboard-grid">
         <div class="kpi-card"><div class="kpi-label">📦 REGISTROS</div><div class="kpi-value">${totalPerdas}</div></div>
+        <div class="kpi-card"><div class="kpi-label">🧮 TOTAL PERDIDO</div><div class="kpi-value">${totalQuantidade.toLocaleString('pt-BR')}</div><div class="kpi-subtext">kg / unidades</div></div>
         <div class="kpi-card"><div class="kpi-label">⚠️ MAIOR MOTIVO</div><div class="kpi-value">${maiorMotivo}</div></div>
         <div class="kpi-card"><div class="kpi-label">🥟 PRODUTO TOP</div><div class="kpi-value">${produtoMaisPerdido}</div></div>
-        <div class="kpi-card"><div class="kpi-label">🏭 SETOR</div><div class="kpi-value">${setor}</div></div>
+        <div class="kpi-card"><div class="kpi-label">🏭 SETOR COM MAIS PERDAS</div><div class="kpi-value">${setor}</div></div>
       </div>
       ${ultimoRegistroHtml}
       <div class="panel-card"><h3>🚨 Perdas por Motivo</h3><canvas id="graficoMotivos"></canvas></div>
