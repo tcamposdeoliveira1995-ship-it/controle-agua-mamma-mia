@@ -1630,26 +1630,63 @@ function updateAppSelectors() { console.log('updateAppSelectors executado'); }
 
 // ================= MÓDULO PERDAS =================
 
+// Converte o Timestamp bruto da planilha de Registro de Perdas (dd/mm/yyyy hh:mm:ss,
+// locale pt-BR — confirmado na própria planilha) em objeto Date.
+// Retorna null se não conseguir interpretar o valor.
+function _perdasParseTimestamp(valorOriginal) {
+  if (!valorOriginal || !valorOriginal.trim()) return null;
+  const texto = valorOriginal.trim();
+  const partes = texto.split(' ');
+  const matchData = partes[0].match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (!matchData) return null;
+  const [, diaStr, mesStr, anoStr] = matchData;
+  const [hh = '0', mm = '0', ss = '0'] = (partes[1] || '').split(':');
+  const data = new Date(
+    parseInt(anoStr, 10), parseInt(mesStr, 10) - 1, parseInt(diaStr, 10),
+    parseInt(hh, 10) || 0, parseInt(mm, 10) || 0, parseInt(ss, 10) || 0
+  );
+  return isNaN(data.getTime()) ? null : data;
+}
+
 async function carregarPerdas() {
   try {
     const response = await fetch(PERDAS_CSV_URL);
     const csv = await response.text();
-    const linhas = csv.split('\n');
-    let totalPerdas = linhas.length - 1;
+    const linhas = parseCSVLinhas(csv);
     const conteudo = document.getElementById('perdas-conteudo');
     if (!conteudo) return;
+    if (linhas.length < 2) {
+      conteudo.innerHTML = `<div class="panel-header"><h2>📉 Gestão de Perdas YUKA</h2></div><p>Nenhum registro de perda encontrado.</p>`;
+      return;
+    }
 
-    const primeiraLinha = linhas[1].split(',');
-    const setor = primeiraLinha[4] || '-';
+    // Cabeçalho: localiza colunas de Timestamp e Responsável pelo nome; demais colunas
+    // seguem o layout fixo já utilizado pela planilha de Registro de Perdas.
+    const cabecalho = linhas[0].map(c => c.trim().toUpperCase());
+    const idxTimestampCab = cabecalho.findIndex(c => c.includes('CARIMBO') || c.includes('TIMESTAMP'));
+    const idxRespCab = cabecalho.findIndex(c => c.includes('RESPONS') || c.includes('NOME'));
+    const idxTimestamp = idxTimestampCab >= 0 ? idxTimestampCab : 0;
+    const idxResp = idxRespCab >= 0 ? idxRespCab : 1;
+
+    const dados = linhas.slice(1).filter(colunas => colunas.some(c => c.trim() !== ''));
+    let totalPerdas = dados.length;
+
+    const primeiraLinha = dados[0] || [];
+    const setor = (primeiraLinha[4] || '-').trim() || '-';
     const motivos = {}; const produtos = {};
-    for (let i = 1; i < linhas.length; i++) {
-      const colunas = linhas[i].split(',');
-      const motivo = (colunas[7] || 'OUTRO').trim();
-      const produto = (colunas[5] || 'SEM PRODUTO').trim();
-      const quantidade = parseFloat(colunas[6]) || 0;
+    const registros = dados.map(colunas => {
+      const motivo = (colunas[7] || 'OUTRO').trim() || 'OUTRO';
+      const produto = (colunas[5] || 'SEM PRODUTO').trim() || 'SEM PRODUTO';
+      const quantidade = parseFloat((colunas[6] || '').replace(',', '.')) || 0;
       motivos[motivo] = (motivos[motivo] || 0) + quantidade;
       produtos[produto] = (produtos[produto] || 0) + quantidade;
-    }
+      return {
+        data: _perdasParseTimestamp(colunas[idxTimestamp]),
+        responsavel: (colunas[idxResp] || '').trim() || '-',
+        produto,
+        quantidade,
+      };
+    });
     const rankingMotivos = Object.entries(motivos).sort((a, b) => b[1] - a[1]);
     const rankingProdutos = Object.entries(produtos).sort((a, b) => b[1] - a[1]);
     const maiorMotivo = rankingMotivos[0]?.[0] || '-';
@@ -1659,6 +1696,28 @@ async function carregarPerdas() {
     const labelsProdutos = rankingProdutos.slice(0, 10).map(item => item[0]);
     const valoresProdutos = rankingProdutos.slice(0, 10).map(item => item[1]);
 
+    // Último registro: agrupa todas as perdas lançadas no dia mais recente encontrado
+    // na planilha (cobre tanto um único apontamento quanto vários produtos no mesmo dia).
+    let ultimoRegistroHtml = '';
+    const comData = registros.filter(r => r.data);
+    if (comData.length > 0) {
+      const dataMaisRecente = comData.reduce((max, r) => (r.data > max ? r.data : max), comData[0].data);
+      const chaveDia = d => `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+      const itensDoDia = comData.filter(r => chaveDia(r.data) === chaveDia(dataMaisRecente));
+      const dataFormatada = dataMaisRecente.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+      const responsaveis = [...new Set(itensDoDia.map(r => r.responsavel).filter(r => r && r !== '-'))];
+      const respTexto = responsaveis.join(', ') || '-';
+      const itensHtml = itensDoDia.map(r => `<div class="ranking-item"><span>${r.produto}</span><span>${r.quantidade}</span></div>`).join('');
+      ultimoRegistroHtml = `
+      <div class="panel-card" style="margin-bottom:20px;">
+        <h3>🕒 Último Registro</h3>
+        <p style="margin:8px 0 12px;color:var(--text-secondary);">
+          <strong style="color:var(--text-primary);">${dataFormatada}</strong> — Resp.: <strong style="color:var(--text-primary);">${respTexto}</strong>
+        </p>
+        <div class="ranking-list">${itensHtml}</div>
+      </div>`;
+    }
+
     conteudo.innerHTML = `
       <div class="panel-header"><h2>📉 Gestão de Perdas YUKA</h2></div>
       <div class="dashboard-grid">
@@ -1667,6 +1726,7 @@ async function carregarPerdas() {
         <div class="kpi-card"><div class="kpi-label">🥟 PRODUTO TOP</div><div class="kpi-value">${produtoMaisPerdido}</div></div>
         <div class="kpi-card"><div class="kpi-label">🏭 SETOR</div><div class="kpi-value">${setor}</div></div>
       </div>
+      ${ultimoRegistroHtml}
       <div class="panel-card"><h3>🚨 Perdas por Motivo</h3><canvas id="graficoMotivos"></canvas></div>
       <div class="panel-card"><h3>🏆 Ranking de Produtos Perdidos</h3><canvas id="graficoProdutos"></canvas></div>`;
 
