@@ -307,7 +307,7 @@
         var base64Dados = base64Completo.split(',')[1];
 
         google.script.run
-          .withSuccessHandler(function () { renderizarSucesso(); })
+          .withSuccessHandler(function (resultado) { renderizarSucesso(resultado); })
           .withFailureHandler(function (erro) {
             botao.disabled = false;
             botao.textContent = 'Confirmar baixa ✅';
@@ -323,14 +323,18 @@
       leitorFoto.readAsDataURL(arquivoFoto);
     }
 
-    function renderizarSucesso() {
+    function renderizarSucesso(resultado) {
+      var linkPdf = resultado && resultado.pdfUrl
+        ? '<p style="margin-top:0.8rem;"><a href="' + escaparHtml(resultado.pdfUrl) + '" target="_blank" style="color:var(--green);font-weight:700;text-decoration:none;">📄 Ver PDF da OS</a></p>'
+        : '';
       document.getElementById('app').innerHTML =
         '<div class="sucesso">' +
           '<div class="icone">✅</div>' +
           '<h2>OS ' + escaparHtml(osSelecionada.os) + ' fechada</h2>' +
+          linkPdf +
           '<p>Voltando para a lista...</p>' +
         '</div>';
-      setTimeout(iniciar, 1400);
+      setTimeout(iniciar, 2200);
     }
 
     iniciar();
