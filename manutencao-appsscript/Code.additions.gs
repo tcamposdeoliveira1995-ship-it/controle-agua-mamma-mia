@@ -1,21 +1,34 @@
 /**
  * FECHAMENTO DE OS PELA MANUTENÇÃO — adições ao Code.gs já existente
  * ---------------------------------------------------------------------
- * Como instalar:
- * 1) Na planilha de OS, adicione ao cabeçalho (linha 1) estas 3 colunas
+ * ATUALIZAÇÃO (v2): adiciona a foto do problema resolvido, obrigatória
+ * pra fechar a OS, salva na mesma pasta do Drive usada pelos PDFs.
+ *
+ * Se você AINDA NÃO colou a v1 deste arquivo: siga os passos 1 a 8 abaixo
+ * inteiros, na ordem — já estão com a versão v2.
+ *
+ * Se você JÁ COLOU a v1 (já tem listarOSAbertas, listarTecnicos, fecharOS,
+ * enviarTelegramOSFechada e doGet no seu Code.gs funcionando): só muda 2
+ * coisas — leia o aviso "SÓ QUEM JÁ TEM A V1" antes de cada função abaixo.
+ *
+ * ─────────────────────────────────────────────────────────────────────
+ * Como instalar (do zero):
+ * 1) Na planilha de OS, adicione ao cabeçalho (linha 1) estas 4 colunas
  *    novas, com esse nome exato (em qualquer posição):
  *      "O que foi feito"
  *      "Data de conclusão"
  *      "Assinado por"
+ *      "Foto da conclusão"
  * 2) Confirme que existe uma aba chamada "Manutenção" com os nomes dos
  *    técnicos na coluna A (uma linha de cabeçalho como "Nome" é opcional
  *    — o código ignora automaticamente).
  * 3) Abra o Apps Script já vinculado à planilha (Extensões > Apps Script).
  * 4) A função obterMapaColunas() já existe no seu Code.gs — SUBSTITUA ela
- *    inteira pela versão abaixo (é a mesma, só com 3 chaves novas no
+ *    inteira pela versão abaixo (é a mesma, só com 4 chaves novas no
  *    final). Não duplique a função.
  * 5) Cole o restante deste arquivo (listarOSAbertas, listarTecnicos,
- *    fecharOS, enviarTelegramOSFechada) no final do seu Code.gs.
+ *    fecharOS, salvarFotoConclusao, enviarTelegramOSFechada) no final do
+ *    seu Code.gs.
  * 6) Se o seu Code.gs já tem uma função doGet, ajuste-a para retornar
  *    HtmlService.createHtmlOutputFromFile('Index') como no exemplo do
  *    final deste arquivo. Se não tiver nenhuma, cole a função doGet daqui.
@@ -25,9 +38,25 @@
  *      Executar como: Eu
  *      Quem pode acessar: Qualquer pessoa
  *    Copie o link gerado e compartilhe com a equipe de manutenção.
+ *
+ * ─────────────────────────────────────────────────────────────────────
+ * SÓ QUEM JÁ TEM A V1 — o que muda:
+ * a) Adicione a coluna nova "Foto da conclusão" no cabeçalho da planilha
+ *    (as outras 3 colunas você já tem).
+ * b) Ache a obterMapaColunas() que você já colou e adicione só esta linha
+ *    dentro do objeto, junto das outras "novas colunas":
+ *      fotoConclusao: getColumnIndexByHeader(sheet, "Foto da conclusão"),
+ * c) Ache o fecharOS() que você já colou e SUBSTITUA ele inteiro pela
+ *    versão abaixo (agora recebe a foto e exige ela pra fechar).
+ * d) Adicione a função nova salvarFotoConclusao() (ela ainda não existe
+ *    no que você colou).
+ * e) SUBSTITUA o Index.html inteiro pelo novo (tem o campo de foto).
+ * f) Volte em Implantar > Gerenciar implantações > ✏️ (editar) > Nova
+ *    versão > Implantar — pra publicar essa atualização no link que a
+ *    equipe já usa (não precisa gerar um link novo).
  */
 
-// ── Substitui a obterMapaColunas() existente — mesmas chaves de antes, +3 novas ──
+// ── Substitui a obterMapaColunas() existente — mesmas chaves de antes, +4 novas ──
 function obterMapaColunas(sheet) {
   return {
     timestamp: getColumnIndexByHeader(sheet, "Timestamp"),
@@ -52,12 +81,15 @@ function obterMapaColunas(sheet) {
     oQueFoiFeito: getColumnIndexByHeader(sheet, "O que foi feito"),
     dataConclusao: getColumnIndexByHeader(sheet, "Data de conclusão"),
     assinadoPor: getColumnIndexByHeader(sheet, "Assinado por"),
+    fotoConclusao: getColumnIndexByHeader(sheet, "Foto da conclusão"),
   };
 }
 
 var STATUS_CONCLUIDO = "Concluído";
 var NOME_ABA_TECNICOS = "Manutenção";
 var ORDEM_PRIORIDADE = { "Crítica": 0, "Alta": 1, "Média": 2, "Baixa": 3 };
+// Mesma pasta do Drive já usada por gerarPDFOS() para os PDFs de OS.
+var PASTA_ANEXOS_OS = "1nX2iKlFvWMG-7jvCSpwgf8ZOwiK1qRit";
 
 /**
  * Lista as OS ainda não concluídas, para a tela de fechamento (chamada
@@ -122,13 +154,28 @@ function listarTecnicos() {
 }
 
 /**
+ * Salva a foto do problema resolvido na mesma pasta do Drive usada pelos
+ * PDFs de OS (gerarPDFOS) e retorna a URL do arquivo criado.
+ * fotoBase64 vem sem o prefixo "data:...;base64," — isso é removido no
+ * cliente antes de chamar fecharOS.
+ */
+function salvarFotoConclusao(osId, fotoBase64, mimeType) {
+  var pasta = DriveApp.getFolderById(PASTA_ANEXOS_OS);
+  var bytes = Utilities.base64Decode(fotoBase64);
+  var blob = Utilities.newBlob(bytes, mimeType || "image/jpeg", osId + "-conclusao.jpg");
+  var arquivo = pasta.createFile(blob);
+  return arquivo.getUrl();
+}
+
+/**
  * Dá baixa numa OS: grava Status = Concluído, o que foi feito, data/hora
  * de conclusão (hora do servidor, não do celular do técnico — mais
- * confiável) e quem assinou. Também tenta mover o card no Trello e avisar
- * no Telegram — se qualquer uma das duas falhar, a baixa já gravada na
- * planilha NÃO é desfeita; a falha só fica registrada no Log.
+ * confiável), quem assinou e a foto do problema resolvido (obrigatória).
+ * Também tenta mover o card no Trello e avisar no Telegram — se qualquer
+ * uma das duas falhar, a baixa já gravada na planilha NÃO é desfeita; a
+ * falha só fica registrada no Log.
  */
-function fecharOS(osId, oQueFoiFeito, assinadoPor) {
+function fecharOS(osId, oQueFoiFeito, assinadoPor, fotoBase64, fotoTipo) {
   osId = (osId || "").toString().trim();
   oQueFoiFeito = (oQueFoiFeito || "").toString().trim();
   assinadoPor = (assinadoPor || "").toString().trim();
@@ -136,6 +183,7 @@ function fecharOS(osId, oQueFoiFeito, assinadoPor) {
   if (!osId) throw new Error("Selecione uma OS.");
   if (!oQueFoiFeito) throw new Error("Descreva o que foi feito antes de confirmar.");
   if (!assinadoPor) throw new Error("Selecione quem está assinando a baixa.");
+  if (!fotoBase64) throw new Error("Tire uma foto do problema resolvido antes de confirmar.");
 
   var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheets()[0];
   var cols = obterMapaColunas(sheet);
@@ -155,11 +203,17 @@ function fecharOS(osId, oQueFoiFeito, assinadoPor) {
     throw new Error("Essa OS já foi fechada por outra pessoa.");
   }
 
+  // Salva a foto ANTES de gravar qualquer coisa na planilha: se o upload
+  // falhar, a OS continua aberta e o técnico pode tentar de novo, em vez
+  // de ficar com uma baixa "pela metade" sem foto.
+  var fotoUrl = salvarFotoConclusao(osId, fotoBase64, fotoTipo);
+
   var agora = new Date();
   sheet.getRange(linhaEncontrada, cols.status).setValue(STATUS_CONCLUIDO);
   sheet.getRange(linhaEncontrada, cols.oQueFoiFeito).setValue(oQueFoiFeito);
   sheet.getRange(linhaEncontrada, cols.dataConclusao).setValue(agora);
   sheet.getRange(linhaEncontrada, cols.assinadoPor).setValue(assinadoPor);
+  sheet.getRange(linhaEncontrada, cols.fotoConclusao).setValue(fotoUrl);
 
   // Trello: reaproveita moverCard(), já existente no Code.gs. Uma falha
   // aqui não desfaz a baixa (ela já foi gravada na planilha acima).
@@ -177,6 +231,7 @@ function fecharOS(osId, oQueFoiFeito, assinadoPor) {
       oQueFoiFeito: oQueFoiFeito,
       assinadoPor: assinadoPor,
       dataConclusao: agora,
+      fotoUrl: fotoUrl,
     });
   } catch (erroTelegram) {
     Logger.log("Falha ao avisar no Telegram sobre a baixa da OS " + osId + ": " + erroTelegram);
@@ -194,7 +249,8 @@ function enviarTelegramOSFechada(dados) {
     "🆔 " + dados.os + "\n" +
     "👤 Assinado por: " + dados.assinadoPor + "\n" +
     "🕒 " + formatarDataBR(dados.dataConclusao) + "\n" +
-    "📝 O que foi feito: " + dados.oQueFoiFeito;
+    "📝 O que foi feito: " + dados.oQueFoiFeito + "\n" +
+    "📸 Foto: " + dados.fotoUrl;
 
   var url = "https://api.telegram.org/bot" + TOKEN + "/sendMessage";
   UrlFetchApp.fetch(url, {
