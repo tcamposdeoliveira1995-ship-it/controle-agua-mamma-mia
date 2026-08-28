@@ -116,6 +116,32 @@
     .sucesso .icone { font-size: 3rem; margin-bottom: 0.5rem; }
     .sucesso h2 { margin: 0 0 0.3rem; font-size: 1.15rem; }
     .sucesso p { color: var(--text-muted); font-size: 0.9rem; }
+
+    input[type="file"] { display: none; }
+    .btn-foto {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
+      width: 100%;
+      padding: 0.9rem;
+      border-radius: 10px;
+      border: 2px dashed var(--border);
+      background: #fff;
+      color: var(--text-muted);
+      font-size: 0.95rem;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .btn-foto.tem-foto { border-style: solid; border-color: var(--green); color: var(--green); }
+    .preview-foto {
+      width: 100%;
+      border-radius: 10px;
+      margin-top: 0.6rem;
+      max-height: 260px;
+      object-fit: cover;
+      display: none;
+    }
   </style>
 </head>
 <body>
@@ -219,6 +245,10 @@
             '<option value="">Selecione seu nome...</option>' +
             opcoesTecnicos +
           '</select>' +
+          '<label>Foto do problema resolvido</label>' +
+          '<label class="btn-foto" id="btn-foto" for="campo-foto">📷 Tirar foto</label>' +
+          '<input type="file" id="campo-foto" accept="image/*" capture="environment">' +
+          '<img class="preview-foto" id="preview-foto" alt="Prévia da foto">' +
           '<div id="area-erro"></div>' +
           '<button class="btn btn-primario" id="btn-confirmar">Confirmar baixa ✅</button>' +
           '<button class="btn btn-secundario" id="btn-cancelar">Cancelar</button>' +
@@ -227,11 +257,29 @@
       document.getElementById('btn-voltar').addEventListener('click', iniciar);
       document.getElementById('btn-cancelar').addEventListener('click', iniciar);
       document.getElementById('btn-confirmar').addEventListener('click', confirmarBaixa);
+      document.getElementById('campo-foto').addEventListener('change', mostrarPreviewFoto);
+    }
+
+    function mostrarPreviewFoto() {
+      var input = document.getElementById('campo-foto');
+      var preview = document.getElementById('preview-foto');
+      var btnFoto = document.getElementById('btn-foto');
+      if (!input.files || input.files.length === 0) return;
+
+      var leitor = new FileReader();
+      leitor.onload = function () {
+        preview.src = leitor.result;
+        preview.style.display = 'block';
+        btnFoto.textContent = '📷 Trocar foto';
+        btnFoto.classList.add('tem-foto');
+      };
+      leitor.readAsDataURL(input.files[0]);
     }
 
     function confirmarBaixa() {
       var oQueFoiFeito = document.getElementById('campo-feito').value.trim();
       var assinadoPor = document.getElementById('campo-assinado').value;
+      var arquivoFoto = document.getElementById('campo-foto').files[0];
       var areaErro = document.getElementById('area-erro');
       var botao = document.getElementById('btn-confirmar');
 
@@ -245,18 +293,34 @@
         areaErro.innerHTML = '<div class="alerta">Selecione quem está assinando a baixa.</div>';
         return;
       }
+      if (!arquivoFoto) {
+        areaErro.innerHTML = '<div class="alerta">Tire uma foto do problema resolvido antes de confirmar.</div>';
+        return;
+      }
 
       botao.disabled = true;
       botao.textContent = 'Enviando...';
 
-      google.script.run
-        .withSuccessHandler(function () { renderizarSucesso(); })
-        .withFailureHandler(function (erro) {
-          botao.disabled = false;
-          botao.textContent = 'Confirmar baixa ✅';
-          areaErro.innerHTML = '<div class="alerta">' + escaparHtml(erro.message || String(erro)) + '</div>';
-        })
-        .fecharOS(osSelecionada.os, oQueFoiFeito, assinadoPor);
+      var leitorFoto = new FileReader();
+      leitorFoto.onload = function () {
+        var base64Completo = leitorFoto.result; // "data:image/jpeg;base64,AAAA..."
+        var base64Dados = base64Completo.split(',')[1];
+
+        google.script.run
+          .withSuccessHandler(function () { renderizarSucesso(); })
+          .withFailureHandler(function (erro) {
+            botao.disabled = false;
+            botao.textContent = 'Confirmar baixa ✅';
+            areaErro.innerHTML = '<div class="alerta">' + escaparHtml(erro.message || String(erro)) + '</div>';
+          })
+          .fecharOS(osSelecionada.os, oQueFoiFeito, assinadoPor, base64Dados, arquivoFoto.type);
+      };
+      leitorFoto.onerror = function () {
+        botao.disabled = false;
+        botao.textContent = 'Confirmar baixa ✅';
+        areaErro.innerHTML = '<div class="alerta">Não foi possível ler a foto. Tente novamente.</div>';
+      };
+      leitorFoto.readAsDataURL(arquivoFoto);
     }
 
     function renderizarSucesso() {
