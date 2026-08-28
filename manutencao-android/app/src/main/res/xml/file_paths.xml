@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Usado pelo FileProvider pra dar a câmera do sistema um lugar seguro
+     de gravar a foto tirada, antes dela ser enviada pra página. -->
+<paths>
+    <external-files-path name="fotos" path="Pictures/" />
+</paths>

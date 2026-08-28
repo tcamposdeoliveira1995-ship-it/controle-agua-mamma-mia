@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Provisórias, no mesmo espírito da logo (fundo escuro, detalhe
+         dourado) — troque à vontade depois de colocar o ícone final. -->
+    <color name="ic_launcher_background">#1A1A1A</color>
+    <color name="brand_gold">#C9A24B</color>
+</resources>

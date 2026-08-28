@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Ícone provisório: uma prancheta com check, no mesmo tom dourado da
+     logo. Troque depois pela logo de verdade em Android Studio > botão
+     direito em "res" > New > Image Asset > aponte pro arquivo da logo. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <path
+        android:fillColor="#C9A24B"
+        android:pathData="M34,28 h40 a6,6 0 0 1 6,6 v52 a6,6 0 0 1 -6,6 h-40 a6,6 0 0 1 -6,-6 v-52 a6,6 0 0 1 6,-6 Z" />
+
+    <path
+        android:fillColor="#1A1A1A"
+        android:pathData="M40,34 h28 v46 h-28 Z" />
+
+    <path
+        android:fillColor="#C9A24B"
+        android:pathData="M46,22 h16 a4,4 0 0 1 4,4 v6 h-24 v-6 a4,4 0 0 1 4,-4 Z" />
+
+    <path
+        android:strokeColor="#C9A24B"
+        android:strokeWidth="4.5"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="M43,57 L50,64 L67,45" />
+
+</vector>

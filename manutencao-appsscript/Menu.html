@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    :root {
+      --bg: #f7f3ee;
+      --card-bg: #ffffff;
+      --border: #e8ddd0;
+      --text: #4b433c;
+      --text-muted: #8a8570;
+      --green: #8f9b72;
+      --gold: #b79b6c;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      -webkit-tap-highlight-color: transparent;
+    }
+    header {
+      background: var(--text);
+      color: #fff;
+      padding: 1rem 1.1rem;
+    }
+    header h1 { font-size: 1.05rem; margin: 0; font-weight: 700; }
+    header p { margin: 0.15rem 0 0; font-size: 0.78rem; color: #d8d2c6; }
+    main { padding: 1.2rem; max-width: 480px; margin: 0 auto; }
+
+    .opcao {
+      display: block;
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 1.3rem 1.2rem;
+      margin-bottom: 1rem;
+      text-decoration: none;
+      color: var(--text);
+      transition: transform 0.1s ease;
+    }
+    .opcao:active { transform: scale(0.98); }
+    .opcao-icone { font-size: 1.8rem; margin-bottom: 0.4rem; }
+    .opcao-titulo { font-size: 1.05rem; font-weight: 700; margin-bottom: 0.25rem; }
+    .opcao-desc { font-size: 0.85rem; color: var(--text-muted); line-height: 1.4; }
+    .opcao-abrir { border-left: 4px solid var(--gold); }
+    .opcao-fechar { border-left: 4px solid var(--green); }
+
+    .dica {
+      margin-top: 1.4rem;
+      font-size: 0.78rem;
+      color: var(--text-muted);
+      text-align: center;
+      line-height: 1.5;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>🛠️ Manutenção Mamma Mia</h1>
+    <p>O que você precisa fazer?</p>
+  </header>
+
+  <main>
+    <a class="opcao opcao-abrir" href="https://script.google.com/macros/s/AKfycbxN_cFnGJpZgwVaCAegqB0HwrBsw_wKQd56wXyeq3RK5LZbumHrFaudxu9VjQMPBuOauQ/exec?tela=abrir">
+      <div class="opcao-icone">📋</div>
+      <div class="opcao-titulo">Abrir uma OS</div>
+      <div class="opcao-desc">Reportar um problema novo pra manutenção resolver.</div>
+    </a>
+
+    <a class="opcao opcao-fechar" href="https://script.google.com/macros/s/AKfycbxN_cFnGJpZgwVaCAegqB0HwrBsw_wKQd56wXyeq3RK5LZbumHrFaudxu9VjQMPBuOauQ/exec?tela=fechar">
+      <div class="opcao-icone">🔧</div>
+      <div class="opcao-titulo">Fechar uma OS</div>
+      <div class="opcao-desc">Dar baixa numa OS que você já resolveu, com foto e assinatura.</div>
+    </a>
+
+    <p class="dica">Dica: salve essa página na tela inicial do celular pra abrir rápido da próxima vez.</p>
+  </main>
+</body>
+</html>

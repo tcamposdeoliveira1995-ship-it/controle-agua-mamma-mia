@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    :root {
+      --bg: #f7f3ee;
+      --card-bg: #ffffff;
+      --border: #e8ddd0;
+      --text: #4b433c;
+      --text-muted: #8a8570;
+      --gold: #b79b6c;
+      --green: #8f9b72;
+      --orange: #d6aa5f;
+      --red: #c07a6c;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      -webkit-tap-highlight-color: transparent;
+    }
+    header {
+      background: var(--text);
+      color: #fff;
+      padding: 1rem 1.1rem;
+      position: sticky;
+      top: 0;
+      z-index: 5;
+    }
+    header h1 { font-size: 1.05rem; margin: 0; font-weight: 700; }
+    header p { margin: 0.15rem 0 0; font-size: 0.78rem; color: #d8d2c6; }
+    .link-menu { display: inline-block; margin-bottom: 0.5rem; font-size: 0.78rem; color: #d8d2c6; text-decoration: none; }
+    main { padding: 1rem; max-width: 480px; margin: 0 auto; padding-bottom: 3rem; }
+
+    .form-secao { background: var(--card-bg); border: 1px solid var(--border); border-radius: 12px; padding: 1.2rem; }
+    .form-secao label { display: block; font-size: 0.8rem; font-weight: 600; color: var(--text-muted); margin: 0.9rem 0 0.35rem; }
+    .form-secao label:first-child { margin-top: 0; }
+    .obrigatorio { color: var(--red); }
+    textarea, select, input[type="text"], input[type="datetime-local"] {
+      width: 100%;
+      font-size: 1rem;
+      padding: 0.7rem 0.8rem;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      font-family: inherit;
+      background: #fff;
+      color: var(--text);
+    }
+    textarea { min-height: 80px; resize: vertical; }
+
+    .opcoes-radio { display: flex; flex-direction: column; gap: 0.5rem; }
+    .opcao-radio {
+      display: flex;
+      align-items: center;
+      gap: 0.55rem;
+      padding: 0.65rem 0.8rem;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      font-size: 0.95rem;
+    }
+    .opcao-radio input { margin: 0; }
+    .campo-outro { margin-top: 0.5rem; display: none; }
+    .campo-outro.visivel { display: block; }
+
+    .btn {
+      display: block;
+      width: 100%;
+      padding: 0.9rem;
+      border-radius: 10px;
+      border: none;
+      font-size: 1rem;
+      font-weight: 700;
+      cursor: pointer;
+      text-align: center;
+    }
+    .btn-primario { background: var(--green); color: #fff; margin-top: 1.2rem; }
+    .btn-primario:disabled { opacity: 0.6; }
+
+    .alerta {
+      background: #fbe9e7;
+      border: 1px solid var(--red);
+      color: #8c3f33;
+      border-radius: 8px;
+      padding: 0.7rem 0.9rem;
+      font-size: 0.85rem;
+      margin-bottom: 1rem;
+    }
+
+    .sucesso { text-align: center; padding: 3rem 1rem; }
+    .sucesso .icone { font-size: 3rem; margin-bottom: 0.5rem; }
+    .sucesso h2 { margin: 0 0 0.3rem; font-size: 1.15rem; }
+    .sucesso p { color: var(--text-muted); font-size: 0.9rem; }
+
+    input[type="file"] { display: none; }
+    .btn-foto {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
+      width: 100%;
+      padding: 0.9rem;
+      border-radius: 10px;
+      border: 2px dashed var(--border);
+      background: #fff;
+      color: var(--text-muted);
+      font-size: 0.95rem;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .btn-foto.tem-foto { border-style: solid; border-color: var(--green); color: var(--green); }
+    .preview-foto {
+      width: 100%;
+      border-radius: 10px;
+      margin-top: 0.6rem;
+      max-height: 260px;
+      object-fit: cover;
+      display: none;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <a class="link-menu" href="https://script.google.com/macros/s/AKfycbxN_cFnGJpZgwVaCAegqB0HwrBsw_wKQd56wXyeq3RK5LZbumHrFaudxu9VjQMPBuOauQ/exec">‹ Menu</a>
+    <h1>📋 Abrir Ordem de Serviço</h1>
+    <p>Manutenção Mamma Mia</p>
+  </header>
+
+  <main id="app"></main>
+
+  <script>
+    var OPCOES_SETOR = ["Produção", "Cozinha", "Limpeza", "Manutenção", "Outro"];
+    var OPCOES_TIPO_OCORRENCIA = ["Equipamento", "Estrutura", "Elétrica", "Hidráulica", "Outro"];
+    var OPCOES_PAROU = ["Sim", "Não", "Parcialmente"];
+    var OPCOES_IMPACTO = ["Nenhum impacto", "Impacto parcial na produção", "Parada total da produção"];
+    var OPCOES_GRAVIDADE = ["Baixa", "Média", "Alta", "Crítica"];
+
+    function escaparHtml(texto) {
+      var div = document.createElement('div');
+      div.textContent = texto == null ? '' : String(texto);
+      return div.innerHTML;
+    }
+
+    function opcoesSelect(lista, comPlaceholder) {
+      var html = comPlaceholder ? '<option value="">Selecione...</option>' : '';
+      lista.forEach(function (op) {
+        html += '<option value="' + escaparHtml(op) + '">' + escaparHtml(op) + '</option>';
+      });
+      return html;
+    }
+
+    function dataHoraAgoraLocal() {
+      var agora = new Date();
+      agora.setMinutes(agora.getMinutes() - agora.getTimezoneOffset());
+      return agora.toISOString().slice(0, 16);
+    }
+
+    function renderizarFormulario() {
+      var app = document.getElementById('app');
+      app.innerHTML =
+        '<div class="form-secao">' +
+          '<label for="campo-solicitante">Nome do solicitante <span class="obrigatorio">*</span></label>' +
+          '<input type="text" id="campo-solicitante" placeholder="Seu nome">' +
+
+          '<label for="campo-unidade">Unidade <span class="obrigatorio">*</span></label>' +
+          '<select id="campo-unidade">' + opcoesSelect(["TC", "YUKA", "DS"], true) + '</select>' +
+
+          '<label for="campo-setor">Setor <span class="obrigatorio">*</span></label>' +
+          '<select id="campo-setor">' + opcoesSelect(OPCOES_SETOR, true) + '</select>' +
+          '<input type="text" class="campo-outro" id="campo-setor-outro" placeholder="Qual setor?">' +
+
+          '<label for="campo-data">Data e hora da ocorrência <span class="obrigatorio">*</span></label>' +
+          '<input type="datetime-local" id="campo-data" value="' + dataHoraAgoraLocal() + '">' +
+
+          '<label for="campo-tipo">Tipo de ocorrência <span class="obrigatorio">*</span></label>' +
+          '<select id="campo-tipo">' + opcoesSelect(OPCOES_TIPO_OCORRENCIA, true) + '</select>' +
+          '<input type="text" class="campo-outro" id="campo-tipo-outro" placeholder="Qual tipo?">' +
+
+          '<label for="campo-equipamento">Equipamento ou local afetado <span class="obrigatorio">*</span></label>' +
+          '<input type="text" id="campo-equipamento" placeholder="Ex: Laminadora, teto do refeitório...">' +
+
+          '<label>Código/Tag do equipamento <span class="obrigatorio">*</span></label>' +
+          '<div class="opcoes-radio">' +
+            '<label class="opcao-radio"><input type="radio" name="campo-tag" value="Não possui" checked> Não possui</label>' +
+            '<label class="opcao-radio"><input type="radio" name="campo-tag" value="Outro"> Outro (informar código)</label>' +
+          '</div>' +
+          '<input type="text" class="campo-outro" id="campo-tag-outro" placeholder="Código/tag">' +
+
+          '<label for="campo-descricao">O que está acontecendo? <span class="obrigatorio">*</span></label>' +
+          '<textarea id="campo-descricao" placeholder="Descreva o problema..."></textarea>' +
+
+          '<label for="campo-parou">O equipamento parou totalmente? <span class="obrigatorio">*</span></label>' +
+          '<select id="campo-parou">' + opcoesSelect(OPCOES_PAROU, true) + '</select>' +
+
+          '<label for="campo-impacto">Impacto na produção <span class="obrigatorio">*</span></label>' +
+          '<select id="campo-impacto">' + opcoesSelect(OPCOES_IMPACTO, true) + '</select>' +
+
+          '<label for="campo-gravidade">Gravidade <span class="obrigatorio">*</span></label>' +
+          '<select id="campo-gravidade">' + opcoesSelect(OPCOES_GRAVIDADE, true) + '</select>' +
+
+          '<label for="campo-observacoes">Observações adicionais</label>' +
+          '<textarea id="campo-observacoes" placeholder="Opcional"></textarea>' +
+
+          '<label>Foto do problema</label>' +
+          '<label class="btn-foto" id="btn-foto" for="campo-foto">📷 Tirar foto ou escolher da galeria (opcional)</label>' +
+          '<input type="file" id="campo-foto" accept="image/*">' +
+          '<img class="preview-foto" id="preview-foto" alt="Prévia da foto">' +
+
+          '<div id="area-erro"></div>' +
+          '<button class="btn btn-primario" id="btn-enviar">Abrir OS 📋</button>' +
+        '</div>';
+
+      document.getElementById('campo-setor').addEventListener('change', function () {
+        mostrarOuEsconderOutro('campo-setor', 'campo-setor-outro');
+      });
+      document.getElementById('campo-tipo').addEventListener('change', function () {
+        mostrarOuEsconderOutro('campo-tipo', 'campo-tipo-outro');
+      });
+      Array.prototype.forEach.call(document.getElementsByName('campo-tag'), function (radio) {
+        radio.addEventListener('change', function () {
+          var outro = document.getElementById('campo-tag-outro');
+          outro.classList.toggle('visivel', radio.value === 'Outro' && radio.checked);
+        });
+      });
+      document.getElementById('campo-foto').addEventListener('change', mostrarPreviewFoto);
+      document.getElementById('btn-enviar').addEventListener('click', enviarOS);
+    }
+
+    function mostrarOuEsconderOutro(idSelect, idCampoOutro) {
+      var select = document.getElementById(idSelect);
+      document.getElementById(idCampoOutro).classList.toggle('visivel', select.value === 'Outro');
+    }
+
+    function mostrarPreviewFoto() {
+      var input = document.getElementById('campo-foto');
+      var preview = document.getElementById('preview-foto');
+      var btnFoto = document.getElementById('btn-foto');
+      if (!input.files || input.files.length === 0) return;
+
+      var leitor = new FileReader();
+      leitor.onload = function () {
+        preview.src = leitor.result;
+        preview.style.display = 'block';
+        btnFoto.textContent = '📷 Trocar foto';
+        btnFoto.classList.add('tem-foto');
+      };
+      leitor.readAsDataURL(input.files[0]);
+    }
+
+    function valorComOutro(idSelectOuTexto, idCampoOutro) {
+      var principal = document.getElementById(idSelectOuTexto).value;
+      if (principal !== 'Outro') return principal;
+      return document.getElementById(idCampoOutro).value.trim();
+    }
+
+    function valorTag() {
+      var selecionado = document.querySelector('input[name="campo-tag"]:checked');
+      if (!selecionado || selecionado.value !== 'Outro') return 'Não possui';
+      return document.getElementById('campo-tag-outro').value.trim();
+    }
+
+    function enviarOS() {
+      var areaErro = document.getElementById('area-erro');
+      var botao = document.getElementById('btn-enviar');
+      areaErro.innerHTML = '';
+
+      var dados = {
+        solicitante: document.getElementById('campo-solicitante').value.trim(),
+        unidade: document.getElementById('campo-unidade').value,
+        setor: valorComOutro('campo-setor', 'campo-setor-outro'),
+        dataOcorrencia: document.getElementById('campo-data').value,
+        tipoOcorrencia: valorComOutro('campo-tipo', 'campo-tipo-outro'),
+        equipamentoLocal: document.getElementById('campo-equipamento').value.trim(),
+        codigoTag: valorTag(),
+        descricao: document.getElementById('campo-descricao').value.trim(),
+        parou: document.getElementById('campo-parou').value,
+        impacto: document.getElementById('campo-impacto').value,
+        gravidade: document.getElementById('campo-gravidade').value,
+        observacoes: document.getElementById('campo-observacoes').value.trim(),
+      };
+
+      var CAMPOS_OBRIGATORIOS = [
+        ['solicitante', 'Nome do solicitante'],
+        ['unidade', 'Unidade'],
+        ['setor', 'Setor'],
+        ['dataOcorrencia', 'Data e hora da ocorrência'],
+        ['tipoOcorrencia', 'Tipo de ocorrência'],
+        ['equipamentoLocal', 'Equipamento ou local afetado'],
+        ['codigoTag', 'Código/Tag do equipamento'],
+        ['descricao', 'O que está acontecendo?'],
+        ['parou', 'O equipamento parou totalmente?'],
+        ['impacto', 'Impacto na produção'],
+        ['gravidade', 'Gravidade'],
+      ];
+      for (var i = 0; i < CAMPOS_OBRIGATORIOS.length; i++) {
+        if (!dados[CAMPOS_OBRIGATORIOS[i][0]]) {
+          areaErro.innerHTML = '<div class="alerta">Preencha o campo "' + escaparHtml(CAMPOS_OBRIGATORIOS[i][1]) + '" antes de enviar.</div>';
+          return;
+        }
+      }
+
+      botao.disabled = true;
+      botao.textContent = 'Enviando...';
+
+      var arquivoFoto = document.getElementById('campo-foto').files[0];
+      if (!arquivoFoto) {
+        dados.fotoBase64 = '';
+        dados.fotoTipo = '';
+        chamarAbrirOS(dados);
+        return;
+      }
+
+      var leitorFoto = new FileReader();
+      leitorFoto.onload = function () {
+        var base64Completo = leitorFoto.result; // "data:image/jpeg;base64,AAAA..."
+        dados.fotoBase64 = base64Completo.split(',')[1];
+        dados.fotoTipo = arquivoFoto.type;
+        chamarAbrirOS(dados);
+      };
+      leitorFoto.onerror = function () {
+        botao.disabled = false;
+        botao.textContent = 'Abrir OS 📋';
+        areaErro.innerHTML = '<div class="alerta">Não foi possível ler a foto. Tente novamente.</div>';
+      };
+      leitorFoto.readAsDataURL(arquivoFoto);
+    }
+
+    function chamarAbrirOS(dados) {
+      google.script.run
+        .withSuccessHandler(renderizarSucesso)
+        .withFailureHandler(function (erro) {
+          var botao = document.getElementById('btn-enviar');
+          botao.disabled = false;
+          botao.textContent = 'Abrir OS 📋';
+          document.getElementById('area-erro').innerHTML =
+            '<div class="alerta">' + escaparHtml(erro.message || String(erro)) + '</div>';
+        })
+        .abrirOS(dados);
+    }
+
+    function renderizarSucesso(resultado) {
+      document.getElementById('app').innerHTML =
+        '<div class="sucesso">' +
+          '<div class="icone">✅</div>' +
+          '<h2>OS ' + escaparHtml(resultado.os) + ' aberta</h2>' +
+          '<p>A manutenção já foi avisada.</p>' +
+        '</div>';
+      setTimeout(renderizarFormulario, 2200);
+    }
+
+    renderizarFormulario();
+  </script>
+</body>
+</html>

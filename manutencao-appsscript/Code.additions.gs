@@ -587,3 +587,178 @@ function doGet(e) {
     .setTitle("Fechar OS — Manutenção Mamma Mia")
     .addMetaTag("viewport", "width=device-width, initial-scale=1");
 }
+/**
+ * ABERTURA DE OS PELA PÁGINA NOVA — adições ao Code.gs já existente
+ * ---------------------------------------------------------------------
+ * ATUALIZAÇÃO (v4): substitui o Google Forms nativo por uma tela no mesmo
+ * padrão visual da tela de fechamento de OS, servida pelo mesmo Web App.
+ *
+ * Como funciona: o `onFormSubmit` que vocês já têm NÃO usa nada do evento
+ * do Forms — ele só relê a última linha da planilha pra descobrir os
+ * dados. Por isso a função abrirOS() abaixo só precisa adicionar uma linha
+ * na planilha com os campos certos e chamar onFormSubmit() sem argumento
+ * nenhum — ele mesmo gera o número da OS, cria o card no Trello, gera o
+ * PDF e manda o Telegram, exatamente como já faz hoje pro Forms. Nenhuma
+ * dessas três etapas é duplicada aqui.
+ *
+ * Como instalar:
+ * 1) Abra o Apps Script já vinculado à planilha (Extensões > Apps Script).
+ * 2) A função obterMapaColunas() já existe no seu Code.gs — SUBSTITUA ela
+ *    inteira pela versão abaixo (é a mesma, só com 1 chave nova:
+ *    `unidade`). Não duplique a função.
+ * 3) A função doGet() já existe — SUBSTITUA ela inteira pela versão
+ *    abaixo (agora decide qual tela servir pela URL).
+ * 4) Cole o restante deste bloco (salvarFotoAbertura, abrirOS) no final
+ *    do seu Code.gs.
+ * 5) Crie um arquivo novo no projeto do Apps Script chamado "AbrirOS"
+ *    (tipo HTML) e cole o conteúdo de AbrirOS.html (arquivo ao lado
+ *    deste).
+ * 6) Implantar > Gerenciar implantações > ✏️ (editar) > Nova versão >
+ *    Implantar — publica a atualização no MESMO link que a equipe já usa
+ *    pra fechar OS (não precisa gerar um link novo). A tela de abrir OS
+ *    fica em: <esse mesmo link>?tela=abrir
+ */
+
+// ── Substitui a obterMapaColunas() existente — mesmas chaves de antes, +1 nova ──
+function obterMapaColunas(sheet) {
+  return {
+    timestamp: getColumnIndexByHeader(sheet, "Timestamp"),
+    os: getColumnIndexByHeader(sheet, "OS"),
+    status: getColumnIndexByHeader(sheet, "STATUS"),
+    prioridade: getColumnIndexByHeader(sheet, "PRIORIDADE"),
+    trello: getColumnIndexByHeader(sheet, "TRELLO_CARD_ID"),
+    pdfOs: getColumnIndexByHeader(sheet, "PDF_OS"),
+    solicitante: getColumnIndexByHeader(sheet, "Nome do solicitante"),
+    unidade: getColumnIndexByHeader(sheet, "UNIDADE"),
+    setor: getColumnIndexByHeader(sheet, "Setor"),
+    dataOcorrencia: getColumnIndexByHeader(sheet, "Data e hora da ocorrência"),
+    tipoOcorrencia: getColumnIndexByHeader(sheet, "Tipo de ocorrência"),
+    equipamentoLocal: getColumnIndexByHeader(sheet, "Equipamento ou local afetado"),
+    fotoProblema: getColumnIndexByHeader(sheet, "Foto do problema"),
+    codigoTag: getColumnIndexByHeader(sheet, "Código/Tag do equipamento"),
+    descricao: getColumnIndexByHeader(sheet, "O que está acontecendo?"),
+    parou: getColumnIndexByHeader(sheet, "O equipamento parou totalmente?"),
+    impacto: getColumnIndexByHeader(sheet, "Impacto na produção"),
+    gravidade: getColumnIndexByHeader(sheet, "Gravidade"),
+    observacoes: getColumnIndexByHeader(sheet, "Observações adicionais"),
+    // Novas colunas, usadas pelo fechamento de OS pela manutenção:
+    oQueFoiFeito: getColumnIndexByHeader(sheet, "O que foi feito"),
+    dataConclusao: getColumnIndexByHeader(sheet, "Data de conclusão"),
+    assinadoPor: getColumnIndexByHeader(sheet, "Assinado por"),
+    fotoConclusao: getColumnIndexByHeader(sheet, "Foto da conclusão"),
+    pdfFechamento: getColumnIndexByHeader(sheet, "PDF Fechamento"),
+  };
+}
+
+/**
+ * Salva a foto do problema (opcional) na mesma pasta do Drive usada pelos
+ * PDFs de OS e pelas fotos de conclusão. Devolve "" se não houver foto —
+ * diferente da foto de conclusão do fechamento, aqui ela não é obrigatória
+ * (mesmo comportamento do campo de upload no Google Forms atual).
+ * fotoBase64 vem sem o prefixo "data:...;base64," — isso é removido no
+ * cliente antes de chamar abrirOS.
+ */
+function salvarFotoAbertura(fotoBase64, mimeType) {
+  if (!fotoBase64) return "";
+
+  var pasta = DriveApp.getFolderById(PASTA_ANEXOS_OS);
+  var bytes = Utilities.base64Decode(fotoBase64);
+  var nomeArquivo = "abertura-" + Utilities.formatDate(new Date(), "America/Sao_Paulo", "yyyyMMdd-HHmmss") + ".jpg";
+  var blob = Utilities.newBlob(bytes, mimeType || "image/jpeg", nomeArquivo);
+  var arquivo = pasta.createFile(blob);
+  return arquivo.getUrl();
+}
+
+/**
+ * Abre uma OS nova a partir da página AbrirOS.html: valida os campos
+ * obrigatórios (mesma lista de obrigatórios do Google Forms atual), salva
+ * a foto (se houver), adiciona uma linha na planilha e chama o
+ * onFormSubmit() já existente — que gera o número da OS, cria o card no
+ * Trello, gera o PDF de abertura e avisa no Telegram, exatamente como já
+ * faz hoje pro Forms. Devolve o número da OS gerada pro cliente mostrar.
+ */
+function abrirOS(dados) {
+  dados = dados || {};
+
+  var CAMPOS_OBRIGATORIOS = [
+    ["solicitante", "Nome do solicitante"],
+    ["unidade", "Unidade"],
+    ["setor", "Setor"],
+    ["dataOcorrencia", "Data e hora da ocorrência"],
+    ["tipoOcorrencia", "Tipo de ocorrência"],
+    ["equipamentoLocal", "Equipamento ou local afetado"],
+    ["codigoTag", "Código/Tag do equipamento"],
+    ["descricao", "O que está acontecendo?"],
+    ["parou", "O equipamento parou totalmente?"],
+    ["impacto", "Impacto na produção"],
+    ["gravidade", "Gravidade"],
+  ];
+
+  for (var i = 0; i < CAMPOS_OBRIGATORIOS.length; i++) {
+    var chave = CAMPOS_OBRIGATORIOS[i][0];
+    var rotulo = CAMPOS_OBRIGATORIOS[i][1];
+    if (!(dados[chave] || "").toString().trim()) {
+      throw new Error('Preencha o campo "' + rotulo + '" antes de enviar.');
+    }
+  }
+
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheets()[0];
+  var cols = obterMapaColunas(sheet);
+
+  var fotoUrl = "";
+  try {
+    fotoUrl = salvarFotoAbertura(dados.fotoBase64, dados.fotoTipo);
+  } catch (erroFoto) {
+    throw new Error("Não foi possível enviar a foto. Tente novamente.");
+  }
+
+  var linha = new Array(sheet.getLastColumn()).fill("");
+  linha[cols.timestamp - 1] = new Date();
+  linha[cols.solicitante - 1] = dados.solicitante;
+  linha[cols.unidade - 1] = dados.unidade;
+  linha[cols.setor - 1] = dados.setor;
+  // O campo datetime-local do cliente manda uma string tipo "2026-08-28T14:30"
+  // (hora local do celular). Convertida aqui pra Date, igual as outras
+  // colunas de data/hora da planilha (Timestamp, Data de conclusão etc.).
+  linha[cols.dataOcorrencia - 1] = new Date(dados.dataOcorrencia);
+  linha[cols.tipoOcorrencia - 1] = dados.tipoOcorrencia;
+  linha[cols.equipamentoLocal - 1] = dados.equipamentoLocal;
+  linha[cols.codigoTag - 1] = dados.codigoTag;
+  linha[cols.descricao - 1] = dados.descricao;
+  linha[cols.parou - 1] = dados.parou;
+  linha[cols.impacto - 1] = dados.impacto;
+  linha[cols.gravidade - 1] = dados.gravidade;
+  linha[cols.observacoes - 1] = dados.observacoes || "";
+  linha[cols.fotoProblema - 1] = fotoUrl;
+  // OS, STATUS, PRIORIDADE, TRELLO_CARD_ID e PDF_OS ficam em branco — quem
+  // preenche é o onFormSubmit() chamado logo abaixo.
+
+  sheet.appendRow(linha);
+  var linhaNova = sheet.getLastRow();
+
+  onFormSubmit();
+
+  var osGerada = sheet.getRange(linhaNova, cols.os).getValue();
+  return { ok: true, os: osGerada };
+}
+
+/**
+ * Substitui o doGet() existente — decide qual tela servir pela URL:
+ * ".../exec" continua abrindo a tela de fechamento (link que a equipe já
+ * usa, sem mudar nada); ".../exec?tela=abrir" abre a tela de abertura.
+ */
+function doGet(e) {
+  var tela = e && e.parameter && e.parameter.tela;
+
+  if (tela === "abrir") {
+    return HtmlService
+      .createHtmlOutputFromFile("AbrirOS")
+      .setTitle("Abrir OS — Manutenção Mamma Mia")
+      .addMetaTag("viewport", "width=device-width, initial-scale=1");
+  }
+
+  return HtmlService
+    .createHtmlOutputFromFile("Index")
+    .setTitle("Fechar OS — Manutenção Mamma Mia")
+    .addMetaTag("viewport", "width=device-width, initial-scale=1");
+}
