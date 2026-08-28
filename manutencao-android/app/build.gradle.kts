@@ -41,4 +41,9 @@ dependencies {
     implementation("androidx.core:core-ktx:1.13.1")
     implementation("androidx.appcompat:appcompat:1.7.0")
     implementation("com.google.android.material:material:1.12.0")
+    // Traz a extensão Kotlin addCallback() usada em MainActivity pra
+    // tratar o botão voltar (sem ela, addCallback resolve pra um método
+    // Java que espera um objeto OnBackPressedCallback pronto, não uma
+    // lambda — foi exatamente o erro de build que apareceu).
+    implementation("androidx.activity:activity-ktx:1.9.0")
 }
