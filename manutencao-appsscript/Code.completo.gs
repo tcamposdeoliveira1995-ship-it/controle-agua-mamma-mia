@@ -1437,10 +1437,10 @@ function abrirOS(dados) {
 }
 
 /**
- * Serve a tela certa (arquivo Index.html ou AbrirOS.html) quando o Web App
- * é aberto pelo navegador: ".../exec" abre a tela de fechamento (link que
- * a equipe já usa, sem mudar nada); ".../exec?tela=abrir" abre a tela de
- * abertura de OS.
+ * Serve a tela certa quando o Web App é aberto pelo navegador:
+ * ".../exec" (sem parâmetro) → menu com os 2 botões (Menu.html);
+ * ".../exec?tela=abrir" → tela de abrir OS (AbrirOS.html);
+ * ".../exec?tela=fechar" → tela de fechar OS (Index.html).
  */
 function doGet(e) {
   var tela = e && e.parameter && e.parameter.tela;
@@ -1452,8 +1452,15 @@ function doGet(e) {
       .addMetaTag("viewport", "width=device-width, initial-scale=1");
   }
 
+  if (tela === "fechar") {
+    return HtmlService
+      .createHtmlOutputFromFile("Index")
+      .setTitle("Fechar OS — Manutenção Mamma Mia")
+      .addMetaTag("viewport", "width=device-width, initial-scale=1");
+  }
+
   return HtmlService
-    .createHtmlOutputFromFile("Index")
-    .setTitle("Fechar OS — Manutenção Mamma Mia")
+    .createHtmlOutputFromFile("Menu")
+    .setTitle("Manutenção Mamma Mia")
     .addMetaTag("viewport", "width=device-width, initial-scale=1");
 }
