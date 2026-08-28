@@ -200,13 +200,24 @@ function gerarPDFFechamentoOS(dados) {
   } catch (erroFoto) {
     Logger.log("Falha ao embutir foto do problema no PDF de fechamento da OS " + dados.os + ": " + erroFoto);
   }
-  var blocoFotoProblema = fotoProblemaSrc
-    ? '<div class="bloco"><div class="secao">FOTO DO PROBLEMA (ANTES)</div>' +
-      '<img src="' + fotoProblemaSrc + '" style="max-width:100%;border-radius:8px;border:1px solid #ccc;"/></div>'
-    : "";
-
   // Foto da conclusão (depois) — sempre presente, já em memória.
   var fotoConclusaoSrc = "data:" + dados.fotoConclusaoBlob.getContentType() + ";base64," + Utilities.base64Encode(dados.fotoConclusaoBlob.getBytes());
+
+  // Antes/depois lado a lado (quando há foto do problema original) com altura
+  // limitada, pra não deixar uma foto vertical do celular estourar a página e
+  // sobrar espaço em branco embaixo — tudo precisa caber numa página só.
+  var blocoFotos = fotoProblemaSrc
+    ? '<div class="bloco">' +
+        '<div class="secao">ANTES / DEPOIS</div>' +
+        '<div class="fotos-lado-a-lado">' +
+          '<div class="foto-item"><div class="foto-legenda">Antes</div><img src="' + fotoProblemaSrc + '"></div>' +
+          '<div class="foto-item"><div class="foto-legenda">Depois</div><img src="' + fotoConclusaoSrc + '"></div>' +
+        '</div>' +
+      '</div>'
+    : '<div class="bloco">' +
+        '<div class="secao">FOTO DO PROBLEMA RESOLVIDO</div>' +
+        '<img class="foto-unica" src="' + fotoConclusaoSrc + '">' +
+      '</div>';
 
   var html = `
 
@@ -218,63 +229,95 @@ function gerarPDFFechamentoOS(dados) {
 
       body{
         font-family: Arial, sans-serif;
-        padding: 30px;
+        padding: 22px;
         color:#222;
       }
 
       .topo{
         text-align:center;
-        margin-bottom:25px;
+        margin-bottom:14px;
       }
 
       .logo{
-        width:180px;
-        margin-bottom:15px;
+        width:130px;
+        margin-bottom:8px;
       }
 
       .titulo{
-        font-size:26px;
+        font-size:22px;
         font-weight:bold;
         color:#2e7d32;
       }
 
       .subtitulo{
-        font-size:18px;
+        font-size:16px;
         font-weight:bold;
-        margin-top:5px;
+        margin-top:4px;
       }
 
       .bloco{
         border:1px solid #dcdcdc;
         border-radius:10px;
-        padding:15px;
-        margin-bottom:20px;
+        padding:12px;
+        margin-bottom:12px;
+        page-break-inside: avoid;
       }
 
       .secao{
         color:#2e7d32;
-        font-size:16px;
+        font-size:14px;
         font-weight:bold;
-        margin-bottom:10px;
+        margin-bottom:8px;
       }
 
       .linha{
-        margin-bottom:8px;
+        font-size:13px;
+        margin-bottom:6px;
       }
 
       .descricao{
         border:1px solid #ccc;
         border-radius:8px;
-        padding:12px;
+        padding:10px;
         background:#fafafa;
-        margin-top:10px;
+        margin-top:8px;
+        font-size:13px;
+      }
+
+      .fotos-lado-a-lado{
+        display:flex;
+        gap:12px;
+      }
+
+      .foto-item{
+        flex:1;
+        min-width:0;
+      }
+
+      .foto-legenda{
+        font-size:11px;
+        font-weight:bold;
+        color:#666;
+        text-transform:uppercase;
+        letter-spacing:0.03em;
+        margin-bottom:4px;
+        text-align:center;
+      }
+
+      .foto-item img, .foto-unica{
+        width:100%;
+        max-height:210px;
+        object-fit:cover;
+        border-radius:8px;
+        border:1px solid #ccc;
+        display:block;
       }
 
       .assinatura-digital{
-        margin-top:24px;
-        padding-top:14px;
+        margin-top:14px;
+        padding-top:10px;
         border-top:1px dashed #ccc;
-        font-size:13px;
+        font-size:12px;
         color:#555;
         text-align:center;
       }
@@ -345,8 +388,6 @@ function gerarPDFFechamentoOS(dados) {
 
     </div>
 
-    ${blocoFotoProblema}
-
     <div class="bloco">
 
       <div class="secao">
@@ -364,15 +405,7 @@ function gerarPDFFechamentoOS(dados) {
 
     </div>
 
-    <div class="bloco">
-
-      <div class="secao">
-        FOTO DO PROBLEMA RESOLVIDO (DEPOIS)
-      </div>
-
-      <img src="${fotoConclusaoSrc}" style="max-width:100%;border-radius:8px;border:1px solid #ccc;"/>
-
-    </div>
+    ${blocoFotos}
 
     <div class="assinatura-digital">
       Baixa assinada digitalmente por <b>${dados.assinadoPor}</b> em ${formatarDataBR(dados.dataConclusao)},
