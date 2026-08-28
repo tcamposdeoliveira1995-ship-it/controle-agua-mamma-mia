@@ -306,8 +306,9 @@ function gerarPDFFechamentoOS(dados) {
 
       .foto-item img, .foto-unica{
         width:100%;
-        max-height:210px;
-        object-fit:cover;
+        max-height:260px;
+        object-fit:contain;
+        background:#f4f4f4;
         border-radius:8px;
         border:1px solid #ccc;
         display:block;
