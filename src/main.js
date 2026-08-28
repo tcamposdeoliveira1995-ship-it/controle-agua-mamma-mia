@@ -2863,7 +2863,9 @@ async function carregarOS() {
     const indiceStatus = cabecalho.findIndex(col => col === 'STATUS');
     const indicePrioridade = cabecalho.findIndex(col => col === 'PRIORIDADE');
     const indiceOS = cabecalho.findIndex(col => col === 'OS');
-    const indiceUnidade = cabecalho.findIndex(col => col === 'UNIDADE');
+    // Cabeçalho real da planilha é "Setor" (confirmado direto no Apps Script da
+    // OS), não "Unidade" — o código antigo procurava um nome que não existia.
+    const indiceSetor = cabecalho.findIndex(col => col === 'SETOR');
     const indiceEquipamento = cabecalho.findIndex(col => col === 'EQUIPAMENTO OU LOCAL AFETADO');
     const indicePDF = cabecalho.findIndex(col => col === 'PDF_OS');
     // Coluna de data é opcional: se não existir na planilha, a tabela mantém a
@@ -2874,7 +2876,7 @@ async function carregarOS() {
     const filtroStatus = document.getElementById('os-filter-status')?.value || 'TODOS';
     const filtroPrioridade = document.getElementById('os-filter-prioridade')?.value || 'TODOS';
 
-    let abertas = 0, aguardando = 0, concluidas = 0, criticas = 0, altas = 0, medias = 0, baixas = 0;
+    let abertas = 0, emAndamento = 0, aguardando = 0, concluidas = 0, criticas = 0, altas = 0, medias = 0, baixas = 0;
     const registros = [];
 
     for (let i = 1; i < linhas.length; i++) {
@@ -2883,7 +2885,7 @@ async function carregarOS() {
       const status = (colunas[indiceStatus] || '').trim().replace(/"/g, '').toUpperCase();
       const prioridade = (colunas[indicePrioridade] || '').trim().replace(/"/g, '').toUpperCase();
       const os = (colunas[indiceOS] || '').replace(/"/g, '');
-      const unidade = (colunas[indiceUnidade] || '').replace(/"/g, '');
+      const setor = (colunas[indiceSetor] || '').replace(/"/g, '');
       const equipamento = (colunas[indiceEquipamento] || '').replace(/"/g, '');
       const pdf = (colunas[indicePDF] || '').replace(/"/g, '');
       const dataBruta = indiceData >= 0 ? (colunas[indiceData] || '').replace(/"/g, '').trim() : '';
@@ -2895,10 +2897,14 @@ async function carregarOS() {
         else if (prioridade === 'MÉDIA' || prioridade === 'MEDIA') medias++;
         else if (prioridade === 'BAIXA') baixas++;
       }
+      // "Em Análise"/"Em Execução" são os status reais usados pelo Trello (ver
+      // moverCard no Apps Script) — não existe "Em Andamento" na planilha, é só
+      // o rótulo que o card do dashboard usa pra agrupar os dois.
+      if (status === 'EM ANÁLISE' || status === 'EM ANALISE' || status === 'EM EXECUÇÃO' || status === 'EM EXECUCAO') emAndamento++;
       if (status === 'AGUARDANDO PEÇA') aguardando++;
       if (status === 'CONCLUÍDO' || status === 'CONCLUIDO') concluidas++;
 
-      registros.push({ os, status, prioridade, unidade, equipamento, pdf, chaveData: _osChaveOrdenacaoData(dataBruta) });
+      registros.push({ os, status, prioridade, setor, equipamento, pdf, chaveData: _osChaveOrdenacaoData(dataBruta) });
     }
 
     // Mais recentes primeiro quando há coluna de data reconhecida; senão, mantém a ordem da planilha.
@@ -2911,10 +2917,11 @@ async function carregarOS() {
       );
       tableBody.innerHTML = visiveis.length === 0
         ? `<tr><td colspan="6" style="text-align:center;color:var(--text-muted);">Nenhuma OS encontrada.</td></tr>`
-        : visiveis.map(r => `<tr><td>${r.os}</td><td>${r.status}</td><td>${r.prioridade}</td><td>${r.unidade}</td><td>${r.equipamento}</td><td>${r.pdf ? `<a href="${r.pdf}" target="_blank">📄 Abrir</a>` : '-'}</td></tr>`).join('');
+        : visiveis.map(r => `<tr><td>${r.os}</td><td>${r.status}</td><td>${r.prioridade}</td><td>${r.setor}</td><td>${r.equipamento}</td><td>${r.pdf ? `<a href="${r.pdf}" target="_blank">📄 Abrir</a>` : '-'}</td></tr>`).join('');
     }
 
     const openCard = document.getElementById('os-open-count'); if (openCard) openCard.textContent = abertas;
+    const progressCard = document.getElementById('os-progress-count'); if (progressCard) progressCard.textContent = emAndamento;
     const waitingCard = document.getElementById('os-parts-count'); if (waitingCard) waitingCard.textContent = aguardando;
     const closedCard = document.getElementById('os-closed-count'); if (closedCard) closedCard.textContent = concluidas;
     const criticalCard = document.getElementById('os-critical-count'); if (criticalCard) criticalCard.textContent = criticas;
