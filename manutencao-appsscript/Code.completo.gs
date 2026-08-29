@@ -95,6 +95,34 @@ var ORDEM_PRIORIDADE = { "Crítica": 0, "Alta": 1, "Média": 2, "Baixa": 3 };
 // página nova).
 var PASTA_ANEXOS_OS = "1nX2iKlFvWMG-7jvCSpwgf8ZOwiK1qRit";
 
+/**
+ * Descobre o próximo número sequencial de OS olhando o MAIOR número já
+ * usado na coluna OS (extrai os dígitos finais de "OS-AAAAMMDD-NNN") e
+ * soma 1. Isso é à prova de linhas em branco, linhas órfãs de uma
+ * tentativa que falhou, ou qualquer outra coisa que desalinhe a posição
+ * da linha do número real de OS já criadas — diferente de contar
+ * "linha atual - 1", que quebra (e pode repetir um número já usado) se a
+ * planilha tiver qualquer linha fora do padrão.
+ */
+function proximoNumeroSequencialOS(sheet, cols) {
+  var ultimaLinha = sheet.getLastRow();
+  if (ultimaLinha < 2) return 1;
+
+  var valores = sheet.getRange(2, cols.os, ultimaLinha - 1, 1).getValues();
+  var maior = 0;
+
+  valores.forEach(function (linha) {
+    var valor = (linha[0] || "").toString();
+    var match = valor.match(/-(\d+)$/);
+    if (match) {
+      var numero = parseInt(match[1], 10);
+      if (numero > maior) maior = numero;
+    }
+  });
+
+  return maior + 1;
+}
+
 function onFormSubmit(e) {
 
   try {
@@ -116,7 +144,7 @@ function onFormSubmit(e) {
       "yyyyMMdd"
     );
 
-    var numero = lastRow - 1;
+    var numero = proximoNumeroSequencialOS(sheet, cols);
 
     var os =
       "OS-" +
