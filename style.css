@@ -107,16 +107,23 @@ header {
 }
 .cycle-dropdown:hover, .cycle-dropdown:focus { border-color: var(--color-blue); box-shadow: 0 0 10px rgba(59,130,246,0.15); }
 
+/* Menu lateral (vertical) no desktop — vira barra horizontal no celular,
+   ver media query no fim do arquivo. */
+.app-body { display: flex; gap: 1.5rem; align-items: flex-start; }
+#app-main-content { flex: 1; min-width: 0; }
+
 .navigation-tabs {
   display: flex;
-  gap: 0.5rem;
+  flex-direction: column;
+  gap: 0.3rem;
   background: rgba(248,245,240,0.98);
   border: 1px solid var(--card-border);
-  padding: 0.35rem;
+  padding: 0.6rem;
   border-radius: var(--border-radius-md);
-  margin-bottom: 2rem;
-  width: fit-content;
-  flex-wrap: wrap;
+  width: 230px;
+  flex: none;
+  position: sticky;
+  top: 1.5rem;
 }
 
 .tab-btn {
@@ -133,9 +140,19 @@ header {
   align-items: center;
   gap: 0.5rem;
   transition: var(--transition-smooth);
+  width: 100%;
+  text-align: left;
 }
 .tab-btn:hover { color: var(--text-primary); background: rgba(255,255,255,0.03); }
 .tab-btn.active { color: var(--text-primary); background: var(--color-blue); box-shadow: 0 4px 12px rgba(59,130,246,0.25); }
+
+@media (max-width: 768px) {
+  /* Tela estreita: volta pra barra horizontal com quebra de linha — um menu
+     lateral fixo tomaria espaço demais da tela num celular. */
+  .app-body { flex-direction: column; }
+  .navigation-tabs { flex-direction: row; flex-wrap: wrap; width: 100%; position: static; gap: 0.5rem; }
+  .tab-btn { width: auto; justify-content: center; }
+}
 
 .documentos-vencimento-bar {
   display: flex;
