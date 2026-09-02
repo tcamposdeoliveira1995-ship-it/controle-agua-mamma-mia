@@ -66,6 +66,7 @@
     <button class="tab-btn" data-tab="requisicoes"><i data-lucide="package"></i>Requisições</button>
     <button class="tab-btn" data-tab="central"><i data-lucide="radio"></i>Central</button>
     <button class="tab-btn" data-tab="operacao"><i data-lucide="clipboard-check"></i>Operação</button>
+    <button class="tab-btn" data-tab="refeicoes"><i data-lucide="utensils"></i>Refeições</button>
     <button class="tab-btn" data-tab="pipa"><i data-lucide="truck"></i>Pipa</button>
     <button class="tab-btn" data-tab="higienizacao"><i data-lucide="spray-can"></i>MOTORES EQ. REFRIGERADOS</button>
     <button class="tab-btn" data-tab="insumos"><i data-lucide="package-x"></i>Insumos Críticos</button>
@@ -304,6 +305,18 @@
           <div class="kpi-card requisicao-card"><div class="kpi-value">✅</div><a href="https://docs.google.com/forms/d/e/1FAIpQLSdPHVwU5_7iCX-j0jNOp_sb5Y6NtWVe3P3j_ZeC27BLCSbJ3g/viewform?usp=header" target="_blank" rel="noopener" class="kpi-label" style="text-decoration: none; color: var(--text-primary);">Controle de Boas Práticas (BPF)</a></div>
           <div class="kpi-card requisicao-card"><div class="kpi-value">📦</div><a href="https://docs.google.com/forms/d/e/1FAIpQLSfS0FGuovjr1I8Tk-UxGHwxaIusmHM8XVXM865Bw_gAogQJTQ/viewform?usp=header" target="_blank" rel="noopener" class="kpi-label" style="text-decoration: none; color: var(--text-primary);">Controle de Produção</a></div>
         </div>
+      </section>
+    </div>
+
+    <!-- ================= ABA: REFEIÇÕES ================= -->
+    <div id="tab-content-refeicoes" class="tab-panel">
+      <section class="panel-card">
+        <div class="panel-header"><h2>🍽️ Refeições</h2></div>
+        <div class="filter-group" style="margin-bottom:1rem;">
+          <label for="refeicoes-filtro-data" class="form-label" style="margin-bottom:0;">Data:</label>
+          <input type="date" id="refeicoes-filtro-data" style="background: rgba(255,255,255,0.95); border: 1px solid var(--card-border); color: var(--text-primary); padding: 0.45rem 0.75rem; border-radius: var(--border-radius-sm); font-family: var(--font-main); font-size: 0.85rem;">
+        </div>
+        <div id="refeicoes-conteudo"><p style="color:var(--text-muted);">Carregando...</p></div>
       </section>
     </div>
 
