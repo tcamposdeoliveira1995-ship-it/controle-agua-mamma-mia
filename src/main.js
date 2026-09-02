@@ -23,6 +23,7 @@ const PERDAS_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQ0QXaxv
 const OS_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSyKnl6d4trSwtVru3JQIcoqb_h2gTHKBqn-3zXM1JW7MTzm_Xj01UJh62eDPDNEOYjisMWrGrWfFJt/pub?gid=1728678619&single=true&output=csv';
 const INSUMOS_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTxAviEilfLLSjTjSznB3EyWWtrHVp6ClhabTSuzu5gQh2aoYbLeYKKoH6CcfRPkBpelcOG9bU2a0b3/pub?output=csv';
 const REFEICOES_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTrD-GbjBDnRbfpgiYcTd6W8wHcQMVE37hMs2l_a7xNvvFrZ0A1TydyWGRxI90AfTXa6Hbht2JvIbUK/pub?gid=1519326032&single=true&output=csv';
+const AUSENCIAS_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTrD-GbjBDnRbfpgiYcTd6W8wHcQMVE37hMs2l_a7xNvvFrZ0A1TydyWGRxI90AfTXa6Hbht2JvIbUK/pub?gid=632854171&single=true&output=csv';
 const INSUMOS_EXEC_URL = 'https://script.google.com/macros/s/AKfycbxtrM875Sb92YmXJRQUyTTW1fYgEIyDYwg_D6FJqlQHcsyiPvg8frozc2nug8WbTJzM/exec';
 const DEDETIZACAO_EXEC_URL = 'https://script.google.com/macros/s/AKfycbzboegVJXJT55v2iOPr51DvgHFRShIN-dLnZzhGdfpTh1pnohV92k9LiIn6M6jE9ekt/exec';
 
@@ -3415,36 +3416,74 @@ async function carregarRefeicoes() {
   conteudo.innerHTML = '<p style="color:var(--text-muted);">Carregando...</p>';
 
   try {
-    const response = await fetch(REFEICOES_CSV_URL, { cache: 'no-store' });
-    if (!response.ok) throw new Error('HTTP ' + response.status);
-    const csv = await response.text();
-    const linhas = parseCSVLinhas(csv);
+    const [respostaRefeicoes, respostaAusencias] = await Promise.all([
+      fetch(REFEICOES_CSV_URL, { cache: 'no-store' }),
+      fetch(AUSENCIAS_CSV_URL, { cache: 'no-store' }),
+    ]);
+    if (!respostaRefeicoes.ok) throw new Error('HTTP ' + respostaRefeicoes.status);
+    if (!respostaAusencias.ok) throw new Error('HTTP ' + respostaAusencias.status);
 
-    if (linhas.length < 2) {
-      conteudo.innerHTML = '<p style="color:var(--text-muted);">Nenhuma refeição registrada ainda.</p>';
-      return;
+    const linhasRefeicoes = parseCSVLinhas(await respostaRefeicoes.text());
+    const linhasAusencias = parseCSVLinhas(await respostaAusencias.text());
+
+    let registros = [];
+    if (linhasRefeicoes.length >= 2) {
+      const cabecalho = linhasRefeicoes[0].map(c => c.trim().toUpperCase());
+      const idxData = cabecalho.findIndex(c => c === 'DATA');
+      const idxRefeicao = cabecalho.findIndex(c => c.includes('REFEICAO') || c.includes('REFEIÇÃO'));
+
+      // Só entra na contagem quem tem "ALMOÇO" no nome da refeição — Café não
+      // é usado na prática, e assim o painel não conta nada que não deveria.
+      registros = linhasRefeicoes.slice(1)
+        .filter(cols => cols.some(c => c.trim() !== ''))
+        .map(cols => ({
+          data: (cols[idxData] || '').trim(),
+          refeicao: (cols[idxRefeicao] || '').trim(),
+        }))
+        .filter(r => {
+          const nome = r.refeicao.toUpperCase();
+          return nome.includes('ALMOÇO') || nome.includes('ALMOCO');
+        });
     }
 
-    const cabecalho = linhas[0].map(c => c.trim().toUpperCase());
-    const idxData = cabecalho.findIndex(c => c === 'DATA');
-    const idxRefeicao = cabecalho.findIndex(c => c.includes('REFEICAO') || c.includes('REFEIÇÃO'));
+    let ausencias = [];
+    if (linhasAusencias.length >= 2) {
+      const cabecalhoAus = linhasAusencias[0].map(c => c.trim().toUpperCase());
+      const idxNome = cabecalhoAus.findIndex(c => c === 'NOME');
+      const idxTipo = cabecalhoAus.findIndex(c => c === 'TIPO');
+      const idxInicio = cabecalhoAus.findIndex(c => c.includes('INICIO') || c.includes('INÍCIO'));
+      const idxFim = cabecalhoAus.findIndex(c => c.includes('FIM'));
 
-    // Só entra na contagem quem tem "ALMOÇO" no nome da refeição — Café não é
-    // usado na prática, e assim o painel não conta nada que não deveria.
-    const registros = linhas.slice(1)
-      .filter(cols => cols.some(c => c.trim() !== ''))
-      .map(cols => ({
-        data: (cols[idxData] || '').trim(),
-        refeicao: (cols[idxRefeicao] || '').trim(),
-      }))
-      .filter(r => {
-        const nome = r.refeicao.toUpperCase();
-        return nome.includes('ALMOÇO') || nome.includes('ALMOCO');
-      });
+      ausencias = linhasAusencias.slice(1)
+        .filter(cols => cols.some(c => c.trim() !== ''))
+        .map(cols => ({
+          nome: (cols[idxNome] || '').trim(),
+          tipo: (cols[idxTipo] || '').trim(),
+          dataInicio: (cols[idxInicio] || '').trim(),
+          dataFim: (cols[idxFim] || '').trim(),
+        }))
+        .filter(a => a.nome);
+
+      // Mais recente primeiro — mais útil pra conferir os últimos lançamentos.
+      ausencias.sort((a, b) => converterDataBRParaOrdenacao(b.dataInicio) - converterDataBRParaOrdenacao(a.dataInicio));
+    }
+
+    function converterDataBRParaOrdenacao(dataBR) {
+      const partes = (dataBR || '').split('/');
+      if (partes.length !== 3) return 0;
+      return new Date(Number(partes[2]), Number(partes[1]) - 1, Number(partes[0])).getTime();
+    }
 
     function dataInputParaBR(valorIso) {
       const [ano, mes, dia] = valorIso.split('-');
       return `${dia}/${mes}/${ano}`;
+    }
+
+    function linhaTabelaAusencia(a) {
+      const periodo = a.tipo === 'Férias' && a.dataFim && a.dataFim !== a.dataInicio
+        ? `${a.dataInicio} até ${a.dataFim}`
+        : a.dataInicio;
+      return `<tr><td>${a.nome}</td><td>${a.tipo}</td><td>${periodo}</td></tr>`;
     }
 
     function renderizar() {
@@ -3463,11 +3502,23 @@ async function carregarRefeicoes() {
         ? horarios.map(h => `<div class="kpi-card"><div class="kpi-label">🍽️ ${h}</div><div class="kpi-value">${porHorario[h]}</div></div>`).join('')
         : '';
 
+      const linhasAusenciasHtml = ausencias.length
+        ? ausencias.map(linhaTabelaAusencia).join('')
+        : '<tr><td colspan="3" style="color:var(--text-muted);">Nenhuma ausência lançada.</td></tr>';
+
       conteudo.innerHTML = `
         <div class="dashboard-grid" style="margin-bottom:1rem;">
           <div class="kpi-card"><div class="kpi-label">👥 TOTAL DO DIA</div><div class="kpi-value">${doDia.length}</div></div>
         </div>
         ${horarios.length ? `<div class="dashboard-grid">${cardsHorarios}</div>` : '<p style="color:var(--text-muted);">Nenhum almoço registrado nesse dia.</p>'}
+
+        <div class="panel-header" style="margin-top:1.8rem;"><h3>📋 Ausências (faltas e férias)</h3></div>
+        <div class="table-responsive">
+          <table class="modern-table">
+            <thead><tr><th>Nome</th><th>Tipo</th><th>Data</th></tr></thead>
+            <tbody>${linhasAusenciasHtml}</tbody>
+          </table>
+        </div>
       `;
     }
 
