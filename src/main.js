@@ -22,6 +22,7 @@ const MP_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTFEg4Bpk7ev
 const PERDAS_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQ0QXaxvuAAaF7XzQWayifLZIflDtS1psT3gNJTmkQ0BvPWbuKPttlJ6EAcE8Zv8IG_UlAbScrhD4Nb/pub?output=csv';
 const OS_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSyKnl6d4trSwtVru3JQIcoqb_h2gTHKBqn-3zXM1JW7MTzm_Xj01UJh62eDPDNEOYjisMWrGrWfFJt/pub?gid=1728678619&single=true&output=csv';
 const INSUMOS_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTxAviEilfLLSjTjSznB3EyWWtrHVp6ClhabTSuzu5gQh2aoYbLeYKKoH6CcfRPkBpelcOG9bU2a0b3/pub?output=csv';
+const REFEICOES_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTrD-GbjBDnRbfpgiYcTd6W8wHcQMVE37hMs2l_a7xNvvFrZ0A1TydyWGRxI90AfTXa6Hbht2JvIbUK/pub?gid=1519326032&single=true&output=csv';
 const INSUMOS_EXEC_URL = 'https://script.google.com/macros/s/AKfycbxtrM875Sb92YmXJRQUyTTW1fYgEIyDYwg_D6FJqlQHcsyiPvg8frozc2nug8WbTJzM/exec';
 const DEDETIZACAO_EXEC_URL = 'https://script.google.com/macros/s/AKfycbzboegVJXJT55v2iOPr51DvgHFRShIN-dLnZzhGdfpTh1pnohV92k9LiIn6M6jE9ekt/exec';
 
@@ -525,6 +526,8 @@ function refreshApp() {
   if (state.currentTab === 'insumos') { carregarInsumos(); if (typeof lucide !== 'undefined') lucide.createIcons(); return; }
 
   if (state.currentTab === 'auditoria') { setTimeout(() => { initAuditoria(); if (typeof lucide !== 'undefined') lucide.createIcons(); }, 50); return; }
+
+  if (state.currentTab === 'refeicoes') { carregarRefeicoes(); if (typeof lucide !== 'undefined') lucide.createIcons(); return; }
 
   // O ciclo "real" de hoje é sempre calculado pela data atual (regra: vira todo dia 7),
   // não apenas pelas leituras já lançadas. Isso evita o painel ficar "preso" no ciclo
@@ -3396,6 +3399,89 @@ function _renderizarHistoricoHigienizacao(registros, countEl, historicoBody) {
     </tr>`).join('');
 }
 
+
+// ================= MÓDULO REFEIÇÕES =================
+// Lê a aba REFEICOES do módulo Refeitório (repo separado refeitorio-mamma-mia,
+// planilha "CONTROLE DE REFEICOES"), publicada como CSV. Mostra, pra data
+// escolhida, o total de almoços registrados e a quebra por horário (Almoço 1,
+// 2, 3...) — lida dinamicamente dos próprios dados, sem fixar quantos
+// horários existem. Café não entra na contagem (não é usado na prática).
+
+async function carregarRefeicoes() {
+  const conteudo = document.getElementById('refeicoes-conteudo');
+  const inputData = document.getElementById('refeicoes-filtro-data');
+  if (!conteudo || !inputData) return;
+
+  conteudo.innerHTML = '<p style="color:var(--text-muted);">Carregando...</p>';
+
+  try {
+    const response = await fetch(REFEICOES_CSV_URL, { cache: 'no-store' });
+    if (!response.ok) throw new Error('HTTP ' + response.status);
+    const csv = await response.text();
+    const linhas = parseCSVLinhas(csv);
+
+    if (linhas.length < 2) {
+      conteudo.innerHTML = '<p style="color:var(--text-muted);">Nenhuma refeição registrada ainda.</p>';
+      return;
+    }
+
+    const cabecalho = linhas[0].map(c => c.trim().toUpperCase());
+    const idxData = cabecalho.findIndex(c => c === 'DATA');
+    const idxRefeicao = cabecalho.findIndex(c => c.includes('REFEICAO') || c.includes('REFEIÇÃO'));
+
+    // Só entra na contagem quem tem "ALMOÇO" no nome da refeição — Café não é
+    // usado na prática, e assim o painel não conta nada que não deveria.
+    const registros = linhas.slice(1)
+      .filter(cols => cols.some(c => c.trim() !== ''))
+      .map(cols => ({
+        data: (cols[idxData] || '').trim(),
+        refeicao: (cols[idxRefeicao] || '').trim(),
+      }))
+      .filter(r => {
+        const nome = r.refeicao.toUpperCase();
+        return nome.includes('ALMOÇO') || nome.includes('ALMOCO');
+      });
+
+    function dataInputParaBR(valorIso) {
+      const [ano, mes, dia] = valorIso.split('-');
+      return `${dia}/${mes}/${ano}`;
+    }
+
+    function renderizar() {
+      if (!inputData.value) {
+        const hoje = new Date();
+        inputData.value = `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, '0')}-${String(hoje.getDate()).padStart(2, '0')}`;
+      }
+      const dataSelecionadaBR = dataInputParaBR(inputData.value);
+      const doDia = registros.filter(r => r.data === dataSelecionadaBR);
+
+      const porHorario = {};
+      doDia.forEach(r => { porHorario[r.refeicao] = (porHorario[r.refeicao] || 0) + 1; });
+      const horarios = Object.keys(porHorario).sort();
+
+      const cardsHorarios = horarios.length
+        ? horarios.map(h => `<div class="kpi-card"><div class="kpi-label">🍽️ ${h}</div><div class="kpi-value">${porHorario[h]}</div></div>`).join('')
+        : '';
+
+      conteudo.innerHTML = `
+        <div class="dashboard-grid" style="margin-bottom:1rem;">
+          <div class="kpi-card"><div class="kpi-label">👥 TOTAL DO DIA</div><div class="kpi-value">${doDia.length}</div></div>
+        </div>
+        ${horarios.length ? `<div class="dashboard-grid">${cardsHorarios}</div>` : '<p style="color:var(--text-muted);">Nenhum almoço registrado nesse dia.</p>'}
+      `;
+    }
+
+    if (!inputData._refEvt) {
+      inputData._refEvt = true;
+      inputData.addEventListener('change', renderizar);
+    }
+
+    renderizar();
+  } catch (erro) {
+    console.error('[REFEICOES]', erro);
+    conteudo.innerHTML = '<p style="color:var(--text-muted);">Não foi possível carregar os dados de refeições.</p>';
+  }
+}
 
 // ================= MÓDULO INSUMOS CRÍTICOS =================
 
