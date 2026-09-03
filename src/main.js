@@ -24,6 +24,10 @@ const OS_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSyKnl6d4trS
 const INSUMOS_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTxAviEilfLLSjTjSznB3EyWWtrHVp6ClhabTSuzu5gQh2aoYbLeYKKoH6CcfRPkBpelcOG9bU2a0b3/pub?output=csv';
 const REFEICOES_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTrD-GbjBDnRbfpgiYcTd6W8wHcQMVE37hMs2l_a7xNvvFrZ0A1TydyWGRxI90AfTXa6Hbht2JvIbUK/pub?gid=1519326032&single=true&output=csv';
 const AUSENCIAS_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTrD-GbjBDnRbfpgiYcTd6W8wHcQMVE37hMs2l_a7xNvvFrZ0A1TydyWGRxI90AfTXa6Hbht2JvIbUK/pub?gid=632854171&single=true&output=csv';
+// TODO: troque SEU_GID_AQUI pelo gid real da aba PRODUCAO (planilha CONTROLE
+// DE REFEICOES) depois que ela existir e a planilha estiver publicada com
+// essa aba incluída — o gid aparece na URL do navegador ao abrir a aba.
+const PRODUCAO_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTrD-GbjBDnRbfpgiYcTd6W8wHcQMVE37hMs2l_a7xNvvFrZ0A1TydyWGRxI90AfTXa6Hbht2JvIbUK/pub?gid=SEU_GID_AQUI&single=true&output=csv';
 const INSUMOS_EXEC_URL = 'https://script.google.com/macros/s/AKfycbxtrM875Sb92YmXJRQUyTTW1fYgEIyDYwg_D6FJqlQHcsyiPvg8frozc2nug8WbTJzM/exec';
 const DEDETIZACAO_EXEC_URL = 'https://script.google.com/macros/s/AKfycbzboegVJXJT55v2iOPr51DvgHFRShIN-dLnZzhGdfpTh1pnohV92k9LiIn6M6jE9ekt/exec';
 
@@ -3426,6 +3430,17 @@ async function carregarRefeicoes() {
     const linhasRefeicoes = parseCSVLinhas(await respostaRefeicoes.text());
     const linhasAusencias = parseCSVLinhas(await respostaAusencias.text());
 
+    // Produção busca à parte, com seu próprio try/catch: o gid ainda não
+    // está configurado (ver TODO em PRODUCAO_CSV_URL), então uma falha aqui
+    // não pode derrubar Refeições/Ausências, que já funcionam.
+    let linhasProducao = [];
+    try {
+      const respostaProducao = await fetch(PRODUCAO_CSV_URL, { cache: 'no-store' });
+      if (respostaProducao.ok) linhasProducao = parseCSVLinhas(await respostaProducao.text());
+    } catch (erroProducao) {
+      console.warn('[REFEICOES] Produção não carregada (gid ainda não configurado?)', erroProducao);
+    }
+
     let registros = [];
     if (linhasRefeicoes.length >= 2) {
       const cabecalho = linhasRefeicoes[0].map(c => c.trim().toUpperCase());
@@ -3468,6 +3483,25 @@ async function carregarRefeicoes() {
       ausencias.sort((a, b) => converterDataBRParaOrdenacao(b.dataInicio) - converterDataBRParaOrdenacao(a.dataInicio));
     }
 
+    let producao = [];
+    if (linhasProducao.length >= 2) {
+      const cabecalhoProd = linhasProducao[0].map(c => c.trim().toUpperCase());
+      const idxDataProd = cabecalhoProd.findIndex(c => c === 'DATA');
+      const idxItem = cabecalhoProd.findIndex(c => c === 'ITEM');
+      const idxKgProduzido = cabecalhoProd.findIndex(c => c.includes('KG_PRODUZIDO') || c.includes('KGPRODUZIDO'));
+      const idxKgSobra = cabecalhoProd.findIndex(c => c.includes('KG_SOBRA') || c.includes('KGSOBRA'));
+
+      producao = linhasProducao.slice(1)
+        .filter(cols => cols.some(c => c.trim() !== ''))
+        .map(cols => ({
+          data: (cols[idxDataProd] || '').trim(),
+          item: (cols[idxItem] || '').trim(),
+          kgProduzido: Number((cols[idxKgProduzido] || '0').replace(',', '.')) || 0,
+          kgSobra: Number((cols[idxKgSobra] || '0').replace(',', '.')) || 0,
+        }))
+        .filter(p => p.item);
+    }
+
     function converterDataBRParaOrdenacao(dataBR) {
       const partes = (dataBR || '').split('/');
       if (partes.length !== 3) return 0;
@@ -3506,11 +3540,33 @@ async function carregarRefeicoes() {
         ? ausencias.map(linhaTabelaAusencia).join('')
         : '<tr><td colspan="3" style="color:var(--text-muted);">Nenhuma ausência lançada.</td></tr>';
 
+      // Soma produzido/sobra por categoria do dia selecionado — pode haver
+      // mais de um envio da cozinheira no mesmo dia pra mesma categoria.
+      const producaoDoDia = producao.filter(p => p.data === dataSelecionadaBR);
+      const porCategoria = {};
+      producaoDoDia.forEach(p => {
+        if (!porCategoria[p.item]) porCategoria[p.item] = { produzido: 0, sobra: 0 };
+        porCategoria[p.item].produzido += p.kgProduzido;
+        porCategoria[p.item].sobra += p.kgSobra;
+      });
+      const categorias = Object.keys(porCategoria).sort();
+      const linhasProducaoHtml = categorias.length
+        ? categorias.map(c => `<tr><td>${c}</td><td>${porCategoria[c].produzido.toFixed(1)} kg</td><td>${porCategoria[c].sobra.toFixed(1)} kg</td></tr>`).join('')
+        : '<tr><td colspan="3" style="color:var(--text-muted);">Nenhuma produção registrada nesse dia.</td></tr>';
+
       conteudo.innerHTML = `
         <div class="dashboard-grid" style="margin-bottom:1rem;">
           <div class="kpi-card"><div class="kpi-label">👥 TOTAL DO DIA</div><div class="kpi-value">${doDia.length}</div></div>
         </div>
         ${horarios.length ? `<div class="dashboard-grid">${cardsHorarios}</div>` : '<p style="color:var(--text-muted);">Nenhum almoço registrado nesse dia.</p>'}
+
+        <div class="panel-header" style="margin-top:1.8rem;"><h3>🍲 Produção do dia</h3></div>
+        <div class="table-responsive">
+          <table class="modern-table">
+            <thead><tr><th>Categoria</th><th>Produzido</th><th>Sobra</th></tr></thead>
+            <tbody>${linhasProducaoHtml}</tbody>
+          </table>
+        </div>
 
         <div class="panel-header" style="margin-top:1.8rem;"><h3>📋 Ausências (faltas e férias)</h3></div>
         <div class="table-responsive">
