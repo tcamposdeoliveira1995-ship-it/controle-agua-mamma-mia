@@ -3444,8 +3444,10 @@ async function carregarRefeicoes() {
       const idxData = cabecalho.findIndex(c => c === 'DATA');
       const idxRefeicao = cabecalho.findIndex(c => c.includes('REFEICAO') || c.includes('REFEIÇÃO'));
 
-      // Só entra na contagem quem tem "ALMOÇO" no nome da refeição — Café não
-      // é usado na prática, e assim o painel não conta nada que não deveria.
+      // Conta quem tem "ALMOÇO" no nome da refeição (registro antigo, feito
+      // pelo Totem) OU refeição em branco (registro novo, feito pela tela de
+      // Lista de Presença — não distingue Almoço 1/2/3/4, só "comeu nesse
+      // dia"). Café continua de fora, não é usado na prática.
       registros = linhasRefeicoes.slice(1)
         .filter(cols => cols.some(c => c.trim() !== ''))
         .map(cols => ({
@@ -3454,7 +3456,7 @@ async function carregarRefeicoes() {
         }))
         .filter(r => {
           const nome = r.refeicao.toUpperCase();
-          return nome.includes('ALMOÇO') || nome.includes('ALMOCO');
+          return nome === '' || nome.includes('ALMOÇO') || nome.includes('ALMOCO');
         });
     }
 
@@ -3576,7 +3578,9 @@ async function carregarRefeicoes() {
         <div class="dashboard-grid" style="margin-bottom:1rem;">
           <div class="kpi-card"><div class="kpi-label">👥 TOTAL DO DIA</div><div class="kpi-value">${doDia.length}</div></div>
         </div>
-        ${horarios.length ? `<div class="dashboard-grid">${cardsHorarios}</div>` : '<p style="color:var(--text-muted);">Nenhum almoço registrado nesse dia.</p>'}
+        ${horarios.length
+          ? `<div class="dashboard-grid">${cardsHorarios}</div>`
+          : (doDia.length === 0 ? '<p style="color:var(--text-muted);">Nenhum almoço registrado nesse dia.</p>' : '')}
 
         <div class="panel-header" style="margin-top:1.8rem;"><h3>🍲 Produção do dia</h3></div>
         <div class="table-responsive">
