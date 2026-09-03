@@ -3542,9 +3542,22 @@ async function carregarRefeicoes() {
         ? horarios.map(h => `<div class="kpi-card"><div class="kpi-label">🍽️ ${h}</div><div class="kpi-value">${porHorario[h]}</div></div>`).join('')
         : '';
 
-      const linhasAusenciasHtml = ausencias.length
-        ? ausencias.map(linhaTabelaAusencia).join('')
-        : '<tr><td colspan="3" style="color:var(--text-muted);">Nenhuma ausência lançada.</td></tr>';
+      // Só mostra quem está ausente no dia selecionado (período
+      // [dataInicio, dataFim] contendo a data escolhida) — antes mostrava
+      // a lista inteira de ausências já lançadas, sem relação com a data
+      // do filtro.
+      const timestampSelecionado = converterDataBRParaOrdenacao(dataSelecionadaBR);
+      const ausenciasNoDia = ausencias
+        .filter(a => {
+          const inicio = converterDataBRParaOrdenacao(a.dataInicio);
+          const fim = converterDataBRParaOrdenacao(a.dataFim || a.dataInicio);
+          return timestampSelecionado >= inicio && timestampSelecionado <= fim;
+        })
+        .sort((a, b) => a.nome.localeCompare(b.nome));
+
+      const linhasAusenciasHtml = ausenciasNoDia.length
+        ? ausenciasNoDia.map(linhaTabelaAusencia).join('')
+        : '<tr><td colspan="3" style="color:var(--text-muted);">Ninguém ausente nesse dia.</td></tr>';
 
       // Soma produzido/sobra/cru/perda por categoria do dia selecionado —
       // pode haver mais de um envio da cozinheira no mesmo dia pra mesma
