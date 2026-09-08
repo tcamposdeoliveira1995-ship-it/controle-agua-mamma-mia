@@ -3413,6 +3413,11 @@ function _renderizarHistoricoHigienizacao(registros, countEl, historicoBody) {
 // 2, 3...) — lida dinamicamente dos próprios dados, sem fixar quantos
 // horários existem. Café não entra na contagem (não é usado na prática).
 
+// Estado calculado pelo último renderizar() da aba — lido pelo botão de
+// PDF no momento do clique, pra não recalcular nem rebuscar nada na hora
+// de gerar (ver refeicoesGerarPDF mais abaixo).
+let ultimoEstadoRefeicoes = null;
+
 async function carregarRefeicoes() {
   const conteudo = document.getElementById('refeicoes-conteudo');
   const inputData = document.getElementById('refeicoes-filtro-data');
@@ -3447,6 +3452,7 @@ async function carregarRefeicoes() {
       const cabecalho = linhasRefeicoes[0].map(c => c.trim().toUpperCase());
       const idxData = cabecalho.findIndex(c => c === 'DATA');
       const idxRefeicao = cabecalho.findIndex(c => c.includes('REFEICAO') || c.includes('REFEIÇÃO'));
+      const idxNomeRefeicao = cabecalho.findIndex(c => c === 'NOME');
 
       // Conta quem tem "ALMOÇO" no nome da refeição (registro antigo, feito
       // pelo Totem) OU refeição em branco (registro novo, feito pela tela de
@@ -3457,6 +3463,7 @@ async function carregarRefeicoes() {
         .map(cols => ({
           data: (cols[idxData] || '').trim(),
           refeicao: (cols[idxRefeicao] || '').trim(),
+          nome: idxNomeRefeicao === -1 ? '' : (cols[idxNomeRefeicao] || '').trim(),
         }))
         .filter(r => {
           const nome = r.refeicao.toUpperCase();
@@ -3538,6 +3545,13 @@ async function carregarRefeicoes() {
       const dataSelecionadaBR = dataInputParaBR(inputData.value);
       const doDia = registros.filter(r => r.data === dataSelecionadaBR);
 
+      // Nomes de quem comeu no dia selecionado — um funcionário pode ter
+      // mais de um registro no mesmo dia (ex.: Totem antigo lançando
+      // Almoço 1 e 2 separados), então dedupe por nome. Sem coluna NOME
+      // na aba (idxNomeRefeicao === -1 lá em cima), fica lista vazia sem
+      // quebrar o resto da tela.
+      const presentesDoDia = [...new Set(doDia.map(r => r.nome).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+
       const porHorario = {};
       doDia.forEach(r => { porHorario[r.refeicao] = (porHorario[r.refeicao] || 0) + 1; });
       const horarios = Object.keys(porHorario).sort();
@@ -3591,6 +3605,10 @@ async function carregarRefeicoes() {
           }).join('')
         : '<tr><td colspan="6" style="color:var(--text-muted);">Nenhuma produção registrada nesse dia.</td></tr>';
 
+      const linhasPresencaHtml = presentesDoDia.length
+        ? presentesDoDia.map(nome => `<tr><td>${nome}</td></tr>`).join('')
+        : '<tr><td style="color:var(--text-muted);">Ninguém registrado nesse dia.</td></tr>';
+
       conteudo.innerHTML = `
         <div class="dashboard-grid" style="margin-bottom:1rem;">
           <div class="kpi-card"><div class="kpi-label">👥 TOTAL DO DIA</div><div class="kpi-value">${doDia.length}</div></div>
@@ -3599,11 +3617,11 @@ async function carregarRefeicoes() {
           ? `<div class="dashboard-grid">${cardsHorarios}</div>`
           : (doDia.length === 0 ? '<p style="color:var(--text-muted);">Nenhum almoço registrado nesse dia.</p>' : '')}
 
-        <div class="panel-header" style="margin-top:1.8rem;"><h3>🍲 Produção do dia</h3></div>
+        <div class="panel-header" style="margin-top:1.8rem;"><h3>👥 Lista de Presença</h3></div>
         <div class="table-responsive">
           <table class="modern-table">
-            <thead><tr><th>Categoria</th><th>Cru</th><th>Produzido</th><th>Sobra</th><th>Rendimento</th><th>Perda</th></tr></thead>
-            <tbody>${linhasProducaoHtml}</tbody>
+            <thead><tr><th>Nome</th></tr></thead>
+            <tbody>${linhasPresencaHtml}</tbody>
           </table>
         </div>
 
@@ -3614,7 +3632,26 @@ async function carregarRefeicoes() {
             <tbody>${linhasAusenciasHtml}</tbody>
           </table>
         </div>
+
+        <div class="panel-header" style="margin-top:1.8rem;"><h3>🍲 Produção e Sobra</h3></div>
+        <div class="table-responsive">
+          <table class="modern-table">
+            <thead><tr><th>Categoria</th><th>Cru</th><th>Produzido</th><th>Sobra</th><th>Rendimento</th><th>Perda</th></tr></thead>
+            <tbody>${linhasProducaoHtml}</tbody>
+          </table>
+        </div>
       `;
+
+      // Guardado pro botão de PDF ler no momento do clique — assim o PDF
+      // sempre bate exatamente com o que está na tela, sem recalcular nem
+      // rebuscar nada na hora de gerar.
+      ultimoEstadoRefeicoes = {
+        dataSelecionadaBR,
+        presentesDoDia,
+        ausenciasNoDia,
+        categorias,
+        porCategoria,
+      };
     }
 
     if (!inputData._refEvt) {
@@ -3622,11 +3659,114 @@ async function carregarRefeicoes() {
       inputData.addEventListener('change', renderizar);
     }
 
+    const btnPdf = document.getElementById('refeicoes-btn-pdf');
+    if (btnPdf && !btnPdf._refEvt) {
+      btnPdf._refEvt = true;
+      btnPdf.addEventListener('click', () => {
+        if (!ultimoEstadoRefeicoes) return; // tela ainda carregando, nada pra exportar ainda
+        refeicoesGerarPDF(ultimoEstadoRefeicoes);
+      });
+    }
+
     renderizar();
   } catch (erro) {
     console.error('[REFEICOES]', erro);
     conteudo.innerHTML = '<p style="color:var(--text-muted);">Não foi possível carregar os dados de refeições.</p>';
   }
+}
+
+// PDF de um dia da aba Refeições — mesmo padrão visual/técnico dos outros
+// PDFs do painel (_perdasGerarPDF, gerarPDFRequisicaoMP): monta HTML
+// estilizado, escreve num iframe escondido e chama print() (o usuário
+// salva como PDF pelo diálogo do navegador). Recebe só o estado já
+// calculado pela tela (ultimoEstadoRefeicoes) — não busca nada de novo.
+function refeicoesGerarPDF(estado) {
+  const { dataSelecionadaBR, presentesDoDia, ausenciasNoDia, categorias, porCategoria } = estado;
+  const agora = new Date().toLocaleString('pt-BR');
+
+  const linhasPresenca = presentesDoDia.length
+    ? presentesDoDia.map(nome => `<tr><td style="font-size:11px;padding:5px 6px;">${nome}</td></tr>`).join('')
+    : '<tr><td style="font-size:11px;padding:5px 6px;color:#a09284;">Ninguém registrado nesse dia.</td></tr>';
+
+  const linhasAusencias = ausenciasNoDia.length
+    ? ausenciasNoDia.map(a => {
+        const periodo = a.tipo === 'Férias' && a.dataFim && a.dataFim !== a.dataInicio
+          ? `${a.dataInicio} até ${a.dataFim}`
+          : a.dataInicio;
+        return `<tr><td style="font-size:11px;padding:5px 6px;">${a.nome}</td><td style="font-size:11px;padding:5px 6px;">${a.tipo}</td><td style="font-size:11px;padding:5px 6px;">${periodo}</td></tr>`;
+      }).join('')
+    : '<tr><td colspan="3" style="font-size:11px;padding:5px 6px;color:#a09284;">Ninguém ausente nesse dia.</td></tr>';
+
+  const linhasProducao = categorias.length
+    ? categorias.map(c => {
+        const d = porCategoria[c];
+        const cru = d.cru > 0 ? `${d.cru.toFixed(1)} kg` : '-';
+        const rendimento = d.cru > 0 ? `${((d.produzido / d.cru) * 100).toFixed(0)}%` : '-';
+        const perda = d.temPerda ? `${d.perda.toFixed(2)} kg` : '-';
+        return `<tr>
+          <td style="font-size:11px;padding:5px 6px;">${c}</td>
+          <td style="font-size:11px;padding:5px 6px;">${cru}</td>
+          <td style="font-size:11px;padding:5px 6px;">${d.produzido.toFixed(1)} kg</td>
+          <td style="font-size:11px;padding:5px 6px;">${d.sobra.toFixed(1)} kg</td>
+          <td style="font-size:11px;padding:5px 6px;">${rendimento}</td>
+          <td style="font-size:11px;padding:5px 6px;">${perda}</td>
+        </tr>`;
+      }).join('')
+    : '<tr><td colspan="6" style="font-size:11px;padding:5px 6px;color:#a09284;">Nenhuma produção registrada nesse dia.</td></tr>';
+
+  function secao(titulo, cabecalhos, linhasHtml) {
+    return `
+      <h2 style="font-size:13px;font-weight:700;color:#4b433c;margin:20px 0 10px;border-left:3px solid #b79b6c;padding-left:8px;">
+        ${titulo}
+      </h2>
+      <table style="width:100%;border-collapse:collapse;margin-bottom:6px;">
+        <thead>
+          <tr style="background:#f3ede3;">
+            ${cabecalhos.map(h => `<th style="font-size:10px;text-align:left;padding:6px;">${h}</th>`).join('')}
+          </tr>
+        </thead>
+        <tbody>${linhasHtml}</tbody>
+      </table>`;
+  }
+
+  const html = `
+    <div style="font-family:Arial,sans-serif;max-width:820px;margin:0 auto;padding:28px;background:#fff;color:#4b433c;">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid #b79b6c;padding-bottom:14px;margin-bottom:20px;">
+        <div>
+          <h1 style="margin:0;font-size:20px;font-weight:800;color:#4b433c;">Mamma Mia Control</h1>
+          <p style="margin:4px 0 0;font-size:13px;color:#8a8570;">🍽️ Refeições</p>
+          <p style="margin:2px 0 0;font-size:12px;color:#b79b6c;font-weight:600;">Data: ${dataSelecionadaBR}</p>
+        </div>
+        <div style="text-align:right;font-size:11px;color:#a09284;">
+          <div>Emitido em:</div>
+          <div style="font-weight:600;color:#4b433c;">${agora}</div>
+        </div>
+      </div>
+
+      <div style="background:#f9f5f0;border:1px solid #e8ddd0;border-radius:8px;padding:10px 14px;display:inline-block;min-width:130px;margin-bottom:6px;">
+        <div style="font-size:9px;color:#8a8570;font-weight:600;text-transform:uppercase;">Total de Presentes</div>
+        <div style="font-size:18px;font-weight:800;color:#4b433c;">${presentesDoDia.length}</div>
+      </div>
+
+      ${secao('Lista de Presença', ['Nome'], linhasPresenca)}
+      ${secao('Ausências (faltas e férias)', ['Nome', 'Tipo', 'Data'], linhasAusencias)}
+      ${secao('Produção e Sobra', ['Categoria', 'Cru', 'Produzido', 'Sobra', 'Rendimento', 'Perda'], linhasProducao)}
+
+      <div style="margin-top:24px;padding-top:12px;border-top:1px solid #e8ddd0;font-size:10px;color:#a09284;text-align:center;">
+        Mamma Mia Control — Gestão Inteligente de Operações • © 2026 Mamma Mia Salgados
+      </div>
+    </div>`;
+
+  const iframe = document.createElement('iframe');
+  iframe.style.cssText = 'position:fixed;top:-9999px;left:-9999px;width:900px;height:600px;border:none;';
+  document.body.appendChild(iframe);
+  iframe.contentDocument.open();
+  iframe.contentDocument.write(html);
+  iframe.contentDocument.close();
+  setTimeout(() => {
+    iframe.contentWindow.print();
+    setTimeout(() => document.body.removeChild(iframe), 1000);
+  }, 400);
 }
 
 // ================= MÓDULO INSUMOS CRÍTICOS =================
