@@ -3500,11 +3500,12 @@ async function carregarRefeicoes() {
       const idxItem = cabecalhoProd.findIndex(c => c === 'ITEM');
       const idxKgProduzido = cabecalhoProd.findIndex(c => c.includes('KG_PRODUZIDO') || c.includes('KGPRODUZIDO'));
       const idxKgSobra = cabecalhoProd.findIndex(c => c.includes('KG_SOBRA') || c.includes('KGSOBRA'));
-      // Colunas opcionais — só existem depois que o usuário adicionar KG_CRU/
-      // RENDIMENTO_REAL/PERDA_KG em PRODUCAO (ver spec da Fase 2). idx = -1
-      // até lá, e os valores ficam 0/null sem quebrar a tabela.
+      // Coluna opcional — só existe depois que o usuário adicionar KG_CRU em
+      // PRODUCAO (ver spec da Fase 2). idx = -1 até lá, e o valor fica 0 sem
+      // quebrar a tabela. (Não lê mais PERDA_KG: a cozinha reaproveita a
+      // sobra em vez de descartar, então "perda" não reflete o processo real
+      // — removido a pedido do usuário.)
       const idxKgCru = cabecalhoProd.findIndex(c => c.includes('KG_CRU') || c.includes('KGCRU'));
-      const idxPerdaKg = cabecalhoProd.findIndex(c => c.includes('PERDA_KG') || c.includes('PERDAKG'));
 
       producao = linhasProducao.slice(1)
         .filter(cols => cols.some(c => c.trim() !== ''))
@@ -3514,7 +3515,6 @@ async function carregarRefeicoes() {
           kgProduzido: Number((cols[idxKgProduzido] || '0').replace(',', '.')) || 0,
           kgSobra: Number((cols[idxKgSobra] || '0').replace(',', '.')) || 0,
           kgCru: idxKgCru === -1 ? 0 : Number((cols[idxKgCru] || '0').replace(',', '.')) || 0,
-          perdaKg: idxPerdaKg === -1 || !cols[idxPerdaKg] ? null : Number(cols[idxPerdaKg].replace(',', '.')),
         }))
         .filter(p => p.item);
     }
@@ -3577,22 +3577,17 @@ async function carregarRefeicoes() {
         ? ausenciasNoDia.map(linhaTabelaAusencia).join('')
         : '<tr><td colspan="3" style="color:var(--text-muted);">Ninguém ausente nesse dia.</td></tr>';
 
-      // Soma produzido/sobra/cru/perda por categoria do dia selecionado —
-      // pode haver mais de um envio da cozinheira no mesmo dia pra mesma
-      // categoria. Perda só soma quando pelo menos um envio trouxe o valor
-      // calculado (coluna PERDA_KG ainda não existe pra quem não atualizou
-      // a planilha — nesse caso fica "-", não 0, pra não parecer "sem perda").
+      // Soma produzido/sobra/cru por categoria do dia selecionado — pode
+      // haver mais de um envio da cozinheira no mesmo dia pra mesma
+      // categoria. Sem coluna de perda: a sobra é reaproveitada (enviada
+      // pra YUKA), não descartada, então não há "perda" a registrar aqui.
       const producaoDoDia = producao.filter(p => p.data === dataSelecionadaBR);
       const porCategoria = {};
       producaoDoDia.forEach(p => {
-        if (!porCategoria[p.item]) porCategoria[p.item] = { produzido: 0, sobra: 0, cru: 0, perda: 0, temPerda: false };
+        if (!porCategoria[p.item]) porCategoria[p.item] = { produzido: 0, sobra: 0, cru: 0 };
         porCategoria[p.item].produzido += p.kgProduzido;
         porCategoria[p.item].sobra += p.kgSobra;
         porCategoria[p.item].cru += p.kgCru;
-        if (p.perdaKg !== null) {
-          porCategoria[p.item].perda += p.perdaKg;
-          porCategoria[p.item].temPerda = true;
-        }
       });
       const categorias = Object.keys(porCategoria).sort();
       const linhasProducaoHtml = categorias.length
@@ -3600,10 +3595,9 @@ async function carregarRefeicoes() {
             const d = porCategoria[c];
             const cru = d.cru > 0 ? `${d.cru.toFixed(1)} kg` : '-';
             const rendimento = d.cru > 0 ? `${((d.produzido / d.cru) * 100).toFixed(0)}%` : '-';
-            const perda = d.temPerda ? `${d.perda.toFixed(2)} kg` : '-';
-            return `<tr><td>${c}</td><td>${cru}</td><td>${d.produzido.toFixed(1)} kg</td><td>${d.sobra.toFixed(1)} kg</td><td>${rendimento}</td><td>${perda}</td></tr>`;
+            return `<tr><td>${c}</td><td>${cru}</td><td>${d.produzido.toFixed(1)} kg</td><td>${d.sobra.toFixed(1)} kg</td><td>${rendimento}</td></tr>`;
           }).join('')
-        : '<tr><td colspan="6" style="color:var(--text-muted);">Nenhuma produção registrada nesse dia.</td></tr>';
+        : '<tr><td colspan="5" style="color:var(--text-muted);">Nenhuma produção registrada nesse dia.</td></tr>';
 
       const linhasPresencaHtml = presentesDoDia.length
         ? presentesDoDia.map(nome => `<tr><td>${nome}</td></tr>`).join('')
@@ -3636,7 +3630,7 @@ async function carregarRefeicoes() {
         <div class="panel-header" style="margin-top:1.8rem;"><h3>🍲 Produção e Sobra</h3></div>
         <div class="table-responsive">
           <table class="modern-table">
-            <thead><tr><th>Categoria</th><th>Cru</th><th>Produzido</th><th>Sobra</th><th>Rendimento</th><th>Perda</th></tr></thead>
+            <thead><tr><th>Categoria</th><th>Cru</th><th>Produzido</th><th>Sobra</th><th>Rendimento</th></tr></thead>
             <tbody>${linhasProducaoHtml}</tbody>
           </table>
         </div>
@@ -3702,17 +3696,15 @@ function refeicoesGerarPDF(estado) {
         const d = porCategoria[c];
         const cru = d.cru > 0 ? `${d.cru.toFixed(1)} kg` : '-';
         const rendimento = d.cru > 0 ? `${((d.produzido / d.cru) * 100).toFixed(0)}%` : '-';
-        const perda = d.temPerda ? `${d.perda.toFixed(2)} kg` : '-';
         return `<tr>
           <td style="font-size:11px;padding:5px 6px;">${c}</td>
           <td style="font-size:11px;padding:5px 6px;">${cru}</td>
           <td style="font-size:11px;padding:5px 6px;">${d.produzido.toFixed(1)} kg</td>
           <td style="font-size:11px;padding:5px 6px;">${d.sobra.toFixed(1)} kg</td>
           <td style="font-size:11px;padding:5px 6px;">${rendimento}</td>
-          <td style="font-size:11px;padding:5px 6px;">${perda}</td>
         </tr>`;
       }).join('')
-    : '<tr><td colspan="6" style="font-size:11px;padding:5px 6px;color:#a09284;">Nenhuma produção registrada nesse dia.</td></tr>';
+    : '<tr><td colspan="5" style="font-size:11px;padding:5px 6px;color:#a09284;">Nenhuma produção registrada nesse dia.</td></tr>';
 
   function secao(titulo, cabecalhos, linhasHtml) {
     return `
@@ -3750,7 +3742,7 @@ function refeicoesGerarPDF(estado) {
 
       ${secao('Lista de Presença', ['Nome'], linhasPresenca)}
       ${secao('Ausências (faltas e férias)', ['Nome', 'Tipo', 'Data'], linhasAusencias)}
-      ${secao('Produção e Sobra', ['Categoria', 'Cru', 'Produzido', 'Sobra', 'Rendimento', 'Perda'], linhasProducao)}
+      ${secao('Produção e Sobra', ['Categoria', 'Cru', 'Produzido', 'Sobra', 'Rendimento'], linhasProducao)}
 
       <div style="margin-top:24px;padding-top:12px;border-top:1px solid #e8ddd0;font-size:10px;color:#a09284;text-align:center;">
         Mamma Mia Control — Gestão Inteligente de Operações • © 2026 Mamma Mia Salgados
