@@ -86,6 +86,63 @@ header {
 .logo-real { max-height: 70px; width: auto; }
 .logo-subtitle { font-size: 0.8rem; color: var(--text-secondary); font-weight: 500; }
 
+/* AVISOS (post-its fixados no header, sempre visíveis) */
+.avisos-postits { display: flex; flex-wrap: wrap; gap: 0.6rem; align-items: flex-start; justify-content: flex-end; max-width: 55%; }
+.postit {
+  background: #fdf0bd;
+  border: 1px solid rgba(183, 155, 108, 0.35);
+  border-radius: 4px;
+  box-shadow: 0 3px 8px rgba(0,0,0,0.12);
+  padding: 0.55rem 0.65rem;
+  width: 150px;
+  font-size: 0.76rem;
+  line-height: 1.35;
+  color: #5c4f2a;
+  transform: rotate(-1.2deg);
+  transition: transform 0.15s ease;
+}
+.postit:nth-child(even) { transform: rotate(1.2deg); background: #fde4c4; }
+.postit:hover { transform: rotate(0deg); }
+.postit-texto { white-space: pre-wrap; word-break: break-word; margin-bottom: 0.4rem; }
+.postit-acoes { display: flex; gap: 0.5rem; justify-content: flex-end; }
+.postit-btn { background: none; border: none; cursor: pointer; padding: 0; color: #8a7a45; opacity: 0.7; }
+.postit-btn:hover { opacity: 1; }
+.postit-btn svg, .postit-btn i { width: 13px; height: 13px; }
+.postit textarea {
+  width: 100%;
+  font-family: inherit;
+  font-size: 0.76rem;
+  border: 1px solid rgba(183, 155, 108, 0.4);
+  border-radius: 4px;
+  padding: 0.35rem;
+  resize: vertical;
+  min-height: 3.2rem;
+  background: rgba(255,255,255,0.6);
+  color: #5c4f2a;
+}
+.postit-form-acoes { display: flex; gap: 0.4rem; margin-top: 0.4rem; }
+.postit-form-acoes button { flex: 1; font-size: 0.72rem; padding: 0.3rem; border-radius: 4px; border: none; cursor: pointer; font-weight: 600; }
+.postit-salvar { background: var(--color-green); color: #fff; }
+.postit-cancelar { background: rgba(0,0,0,0.08); color: #5c4f2a; }
+.postit-add {
+  width: 150px;
+  border: 2px dashed rgba(183, 155, 108, 0.4);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 1.4rem;
+  min-height: 2.6rem;
+}
+.postit-add:hover { border-color: var(--color-blue); color: var(--color-blue); }
+@media (max-width: 900px) {
+  header { flex-wrap: wrap; }
+  .avisos-postits { max-width: 100%; justify-content: flex-start; margin-top: 0.8rem; }
+}
+
 .cycle-selector-wrapper { display: flex; align-items: center; gap: 0.75rem; }
 .cycle-dropdown {
   background: rgba(255,255,255,0.95);

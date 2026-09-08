@@ -25,6 +25,11 @@ const INSUMOS_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTxAviE
 const REFEICOES_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTrD-GbjBDnRbfpgiYcTd6W8wHcQMVE37hMs2l_a7xNvvFrZ0A1TydyWGRxI90AfTXa6Hbht2JvIbUK/pub?gid=1519326032&single=true&output=csv';
 const AUSENCIAS_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTrD-GbjBDnRbfpgiYcTd6W8wHcQMVE37hMs2l_a7xNvvFrZ0A1TydyWGRxI90AfTXa6Hbht2JvIbUK/pub?gid=632854171&single=true&output=csv';
 const PRODUCAO_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTrD-GbjBDnRbfpgiYcTd6W8wHcQMVE37hMs2l_a7xNvvFrZ0A1TydyWGRxI90AfTXa6Hbht2JvIbUK/pub?gid=1492952412&single=true&output=csv';
+// TODO: troque pela URL /exec real depois de criar a planilha AVISOS
+// (colunas ID, TEXTO, CRIADO_EM, ATUALIZADO_EM) + Apps Script + deploy —
+// mesmo processo do Refeitório. Sem isso configurado, o mural de avisos
+// só não aparece, não quebra o resto do painel.
+const AVISOS_EXEC_URL = 'https://script.google.com/macros/s/SEU_ID_AQUI/exec';
 const INSUMOS_EXEC_URL = 'https://script.google.com/macros/s/AKfycbxtrM875Sb92YmXJRQUyTTW1fYgEIyDYwg_D6FJqlQHcsyiPvg8frozc2nug8WbTJzM/exec';
 const DEDETIZACAO_EXEC_URL = 'https://script.google.com/macros/s/AKfycbzboegVJXJT55v2iOPr51DvgHFRShIN-dLnZzhGdfpTh1pnohV92k9LiIn6M6jE9ekt/exec';
 
@@ -162,6 +167,7 @@ document.addEventListener('DOMContentLoaded', () => {
   renderArmadilhasBar();
   initEventListeners();
   carregarDedetizacaoRemoto();
+  carregarAvisos();
   if (typeof lucide !== 'undefined') lucide.createIcons();
 });
 
@@ -3750,6 +3756,158 @@ async function _salvarQuantidadeInsumo(item, novaQuantidade, btn) {
     btn.textContent = textoOriginal;
   }
 }
+
+
+// ================= AVISOS (post-its fixados no header) =================
+// Mesmo padrão do Insumos Críticos: fetch direto no Apps Script (não CSV
+// publicado, pra editar/ver refletido na hora, sem esperar o cache do
+// Google atualizar). Content-Type text/plain no POST evita preflight CORS
+// (Apps Script não trata OPTIONS).
+
+function escaparHtmlAviso(texto) {
+  const div = document.createElement('div');
+  div.textContent = texto == null ? '' : String(texto);
+  return div.innerHTML;
+}
+
+async function carregarAvisos() {
+  const container = document.getElementById('avisos-postits');
+  if (!container) return;
+  try {
+    const resposta = await fetch(AVISOS_EXEC_URL, { cache: 'no-store' });
+    if (!resposta.ok) throw new Error('HTTP ' + resposta.status);
+    const resultado = await resposta.json();
+    if (!resultado.ok) throw new Error(resultado.erro || 'Erro desconhecido');
+    state.avisos = resultado.avisos || [];
+    renderizarAvisos();
+  } catch (erro) {
+    // Silencioso de propósito: o mural de avisos é um extra no header,
+    // uma falha aqui (ex: URL ainda não configurada) não pode travar
+    // nem poluir o resto do painel com erro visível.
+    console.warn('[AVISOS] Não carregado (URL configurada?)', erro);
+  }
+}
+
+function renderizarAvisos() {
+  const container = document.getElementById('avisos-postits');
+  if (!container) return;
+  const avisos = state.avisos || [];
+
+  container.innerHTML = avisos.map(aviso => `
+    <div class="postit" data-id="${aviso.id}">
+      <div class="postit-texto">${escaparHtmlAviso(aviso.texto)}</div>
+      <div class="postit-acoes">
+        <button class="postit-btn" onclick="editarAvisoUI('${aviso.id}')" title="Editar"><i data-lucide="pencil"></i></button>
+        <button class="postit-btn" onclick="removerAvisoUI('${aviso.id}')" title="Remover"><i data-lucide="x"></i></button>
+      </div>
+    </div>
+  `).join('') + '<button class="postit-add" id="btn-novo-aviso" title="Novo aviso">+</button>';
+
+  const btnNovo = document.getElementById('btn-novo-aviso');
+  if (btnNovo) btnNovo.addEventListener('click', novoAvisoUI);
+
+  if (typeof lucide !== 'undefined') lucide.createIcons();
+}
+
+function novoAvisoUI() {
+  const botaoAdd = document.getElementById('btn-novo-aviso');
+  if (!botaoAdd) return;
+
+  const form = document.createElement('div');
+  form.className = 'postit';
+  form.innerHTML = `
+    <textarea placeholder="Escreva o aviso..."></textarea>
+    <div class="postit-form-acoes">
+      <button class="postit-salvar">Salvar</button>
+      <button class="postit-cancelar">Cancelar</button>
+    </div>
+  `;
+  botaoAdd.replaceWith(form);
+  const textarea = form.querySelector('textarea');
+  textarea.focus();
+
+  form.querySelector('.postit-cancelar').addEventListener('click', renderizarAvisos);
+  form.querySelector('.postit-salvar').addEventListener('click', (e) => salvarNovoAviso(textarea.value, e.target));
+}
+
+async function salvarNovoAviso(texto, btn) {
+  texto = (texto || '').trim();
+  if (!texto) { showToast('Digite o texto do aviso.', 'warning'); return; }
+  btn.disabled = true;
+  btn.textContent = 'Salvando...';
+  try {
+    const resposta = await fetch(AVISOS_EXEC_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({ acao: 'criar', texto }),
+    });
+    const resultado = await resposta.json();
+    if (!resultado.ok) throw new Error(resultado.erro || 'Erro desconhecido');
+    await carregarAvisos();
+  } catch (erro) {
+    showToast('Erro ao salvar aviso: ' + erro.message, 'error');
+    btn.disabled = false;
+    btn.textContent = 'Salvar';
+  }
+}
+
+function editarAvisoUI(id) {
+  const card = document.querySelector(`.postit[data-id="${id}"]`);
+  const aviso = (state.avisos || []).find(a => a.id === id);
+  if (!card || !aviso) return;
+
+  card.innerHTML = `
+    <textarea>${escaparHtmlAviso(aviso.texto)}</textarea>
+    <div class="postit-form-acoes">
+      <button class="postit-salvar">Salvar</button>
+      <button class="postit-cancelar">Cancelar</button>
+    </div>
+  `;
+  const textarea = card.querySelector('textarea');
+  textarea.focus();
+  card.querySelector('.postit-cancelar').addEventListener('click', renderizarAvisos);
+  card.querySelector('.postit-salvar').addEventListener('click', (e) => salvarEdicaoAviso(id, textarea.value, e.target));
+}
+
+async function salvarEdicaoAviso(id, texto, btn) {
+  texto = (texto || '').trim();
+  if (!texto) { showToast('Digite o texto do aviso.', 'warning'); return; }
+  btn.disabled = true;
+  btn.textContent = 'Salvando...';
+  try {
+    const resposta = await fetch(AVISOS_EXEC_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({ acao: 'editar', id, texto }),
+    });
+    const resultado = await resposta.json();
+    if (!resultado.ok) throw new Error(resultado.erro || 'Erro desconhecido');
+    await carregarAvisos();
+  } catch (erro) {
+    showToast('Erro ao salvar aviso: ' + erro.message, 'error');
+    btn.disabled = false;
+    btn.textContent = 'Salvar';
+  }
+}
+
+async function removerAvisoUI(id) {
+  if (!confirm('Remover esse aviso?')) return;
+  try {
+    const resposta = await fetch(AVISOS_EXEC_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({ acao: 'remover', id }),
+    });
+    const resultado = await resposta.json();
+    if (!resultado.ok) throw new Error(resultado.erro || 'Erro desconhecido');
+    await carregarAvisos();
+  } catch (erro) {
+    showToast('Erro ao remover aviso: ' + erro.message, 'error');
+  }
+}
+
+window.editarAvisoUI = editarAvisoUI;
+window.removerAvisoUI = removerAvisoUI;
 
 
 // ================= TOAST =================
