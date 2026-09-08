@@ -27,7 +27,14 @@ function getConfig() {
     telegramToken: props.getProperty("TELEGRAM_TOKEN"),
     chatId: props.getProperty("TELEGRAM_CHAT_ID"),
     planilhaId: "1tixTJ74aaEo-EuCfTFl-efWOT7p-TIgN0su8NzX8aKw",
-    nomeAba: "Respostas ao formulário 1"
+    nomeAba: "Respostas ao formulário 1",
+    // Meta de consumo do ciclo, em m³, POR RELÓGIO (não somada entre os
+    // 4) — configurável via Propriedades do Script (META_INDIVIDUAL_M3)
+    // sem precisar mexer em código; 20 é só o valor padrão de hoje.
+    metaIndividualM3: Number(props.getProperty("META_INDIVIDUAL_M3")) || 20,
+    // Dia do mês em que o ciclo de faturamento começa (ex: 7 = todo dia
+    // 7). Também configurável via Propriedade do Script.
+    diaInicioCiclo: Number(props.getProperty("DIA_INICIO_CICLO")) || 7
   };
 }
 
@@ -72,6 +79,78 @@ function marcarComoEnviado(relogio) {
   props.setProperty(chave, "true");
 }
 
+// ================= CICLO DE CONSUMO (alertas de 20/40/60/80%/meta) =================
+// O ciclo de faturamento não é mês corrente — começa no dia
+// c.diaInicioCiclo (hoje, dia 7) e vai até o dia anterior ao próximo
+// início. Ex: hoje é dia 15 → ciclo começou dia 7 deste mês. Hoje é dia
+// 3 → ciclo começou dia 7 do mês PASSADO (ainda não virou).
+function calcularInicioCiclo(dataReferencia, diaInicioCiclo) {
+  var ano = dataReferencia.getFullYear();
+  var mes = dataReferencia.getMonth();
+  var dia = dataReferencia.getDate();
+  if (dia >= diaInicioCiclo) {
+    return new Date(ano, mes, diaInicioCiclo);
+  }
+  return new Date(ano, mes - 1, diaInicioCiclo);
+}
+
+// Consumo acumulado do relógio DENTRO do ciclo atual = leitura de agora
+// menos a leitura "de referência" do início do ciclo. Essa referência é
+// a última leitura registrada ANTES do início do ciclo (o valor do
+// hidrômetro no fechamento do ciclo anterior); se o relógio não tem
+// nenhuma leitura anterior a isso (ciclo novo em folha, sem histórico),
+// usa a primeira leitura já dentro do ciclo — e o consumo começa em 0
+// nessa primeira leitura, já que não dá pra saber o consumo antes dela.
+function calcularConsumoCiclo(dados, colRelogio, colData, inicioCiclo, leituraAtual) {
+  var baseline = null;
+
+  for (var i = dados.length - 1; i >= 1; i--) {
+    var celData = dados[i][colData - 1];
+    var valor = dados[i][colRelogio - 1];
+    if (!celData || valor === "" || valor == null) continue;
+    if (new Date(celData) < inicioCiclo) {
+      baseline = converterNumero(valor);
+      break;
+    }
+  }
+
+  if (baseline === null) {
+    for (var j = 1; j < dados.length; j++) {
+      var celData2 = dados[j][colData - 1];
+      var valor2 = dados[j][colRelogio - 1];
+      if (!celData2 || valor2 === "" || valor2 == null) continue;
+      if (new Date(celData2) >= inicioCiclo) {
+        baseline = converterNumero(valor2);
+        break;
+      }
+    }
+  }
+
+  if (baseline === null) baseline = leituraAtual; // primeiríssima leitura desse relógio
+
+  return leituraAtual - baseline;
+}
+
+// Compara o % do ciclo contra o maior limiar já alertado (guardado por
+// relógio + data de início do ciclo, pra zerar sozinho quando o ciclo
+// virar) e devolve o NOVO limiar cruzado (20/40/60/80/100) — ou null se
+// nenhum limiar novo foi cruzado ainda. Evita alertar 20% de novo toda
+// vez que o consumo segue subindo depois de já ter passado dos 20%.
+function verificarLimiarCiclo(relogio, inicioCiclo, percentual) {
+  var props = PropertiesService.getScriptProperties();
+  var chave = "limiar_" + relogio + "_" + Utilities.formatDate(inicioCiclo, "GMT-3", "yyyy-MM-dd");
+  var limiares = [100, 80, 60, 40, 20];
+  var ultimoAlertado = Number(props.getProperty(chave)) || 0;
+
+  for (var i = 0; i < limiares.length; i++) {
+    if (percentual >= limiares[i] && limiares[i] > ultimoAlertado) {
+      props.setProperty(chave, String(limiares[i]));
+      return limiares[i];
+    }
+  }
+  return null;
+}
+
 // ================= REGISTRO DE LEITURA (webhook do Telegram) =================
 // A aba (Respostas ao formulário 1) tem 1 LINHA POR DIA, com 1 COLUNA
 // por relógio (cabeçalho = o próprio código do relógio, ex:
@@ -102,7 +181,9 @@ function processarRegistroTelegram(dadosTelegram) {
   var colData = colunaObrigatoria(mapa, c.nomeAba, "Carimbo de data/hora");
 
   var dados = sheet.getDataRange().getValues();
-  var hoje = Utilities.formatDate(new Date(), "GMT-3", "dd/MM/yyyy");
+  var agora = new Date();
+  var hoje = Utilities.formatDate(agora, "GMT-3", "dd/MM/yyyy");
+  var inicioCiclo = calcularInicioCiclo(agora, c.diaInicioCiclo);
 
   // Acha a linha de hoje uma vez só — se nenhuma leitura desta mensagem
   // precisar criar linha nova, essa variável nunca é usada pra isso.
@@ -167,6 +248,25 @@ function processarRegistroTelegram(dadosTelegram) {
     dados[linhaHoje - 1][colRelogio - 1] = leituraAtual; // reflete no snapshot em memória, pra "última leitura" das próximas linhas desta mesma mensagem já enxergar isto se repetido
 
     resultados.push("✅ " + relogio + " — " + ultimaLeitura + " → " + leituraAtual + " (consumo " + consumo + ")");
+
+    // 📊 alerta de 20/40/60/80%/meta atingida do ciclo (do dia diaInicioCiclo até o próximo)
+    var consumoCiclo = calcularConsumoCiclo(dados, colRelogio, colData, inicioCiclo, leituraAtual);
+    var percentualCiclo = (consumoCiclo / c.metaIndividualM3) * 100;
+    var limiarCruzado = verificarLimiarCiclo(relogio, inicioCiclo, percentualCiclo);
+    if (limiarCruzado) {
+      var dataInicioTexto = Utilities.formatDate(inicioCiclo, "GMT-3", "dd/MM");
+      if (limiarCruzado >= 100) {
+        resultados.push(
+          "🚨 " + relogio + " — META DO CICLO ATINGIDA: " + consumoCiclo.toFixed(1) +
+          "m³ de " + c.metaIndividualM3 + "m³ (ciclo desde " + dataInicioTexto + ")"
+        );
+      } else {
+        resultados.push(
+          "⚠️ " + relogio + " — " + limiarCruzado + "% da meta do ciclo (" +
+          consumoCiclo.toFixed(1) + "m³ de " + c.metaIndividualM3 + "m³, desde " + dataInicioTexto + ")"
+        );
+      }
+    }
   });
 
   enviarTelegram(resultados.join("\n"));
@@ -373,6 +473,20 @@ function doPost(e) {
   var dados = JSON.parse(e.postData.contents);
 
   if (dados.message) {
+    // O Telegram reenvia a MESMA atualização (mesmo update_id) se não
+    // receber confirmação rápido o suficiente — sem essa trava, cada
+    // reenvio processava a leitura de novo e mandava mensagem
+    // duplicada. Cache de 10 min é de sobra pra cobrir qualquer
+    // sequência de reenvio.
+    if (dados.update_id != null) {
+      var cache = CacheService.getScriptCache();
+      var chaveUpdate = "update_" + dados.update_id;
+      if (cache.get(chaveUpdate)) {
+        return ContentService.createTextOutput("ok");
+      }
+      cache.put(chaveUpdate, "1", 600);
+    }
+
     // Nunca deixa um erro aqui passar em silêncio de novo — se algo
     // quebrar (aba errada, planilha sem permissão, etc.), pelo menos
     // chega um aviso no Telegram em vez de nada.
