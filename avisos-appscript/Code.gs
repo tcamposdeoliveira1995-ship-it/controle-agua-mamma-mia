@@ -63,6 +63,13 @@ function converterNumero(valor) {
 }
 
 // ================= CONTROLE DE ALERTA =================
+// Garante no máximo UM aviso de "já registrado hoje" por relógio por
+// dia, não importa quantas vezes o doPost rodar de novo pra essa mesma
+// leitura (reenvio do Telegram, fila represada, o que for) — em vez de
+// tentar prever/bloquear cada motivo possível de reprocessamento, essa
+// trava garante direto o que importa: a pessoa nunca vê o mesmo aviso
+// duas vezes no mesmo dia. PropertiesService não expira sozinho, então
+// a chave "vira" página sozinha no dia seguinte (chave inclui a data).
 function jaEnviouHoje(relogio) {
   var props = PropertiesService.getScriptProperties();
   var hoje = Utilities.formatDate(new Date(), "GMT-3", "yyyy-MM-dd");
@@ -220,7 +227,13 @@ function processarRegistroTelegram(dadosTelegram) {
     if (linhaHoje !== -1) {
       var valorExistente = dados[linhaHoje - 1][colRelogio - 1];
       if (valorExistente !== "" && valorExistente != null) {
-        resultados.push("⚠️ " + relogio + " — já registrado hoje");
+        // Só avisa a PRIMEIRA vez que isso acontece nesse relógio nesse
+        // dia — reprocessamentos seguintes (reenvio do Telegram, etc.)
+        // ficam mudos, pra nunca repetir o mesmo aviso pra quem recebe.
+        if (!jaEnviouHoje(relogio)) {
+          resultados.push("⚠️ " + relogio + " — já registrado hoje");
+          marcarComoEnviado(relogio);
+        }
         return;
       }
     }
@@ -268,6 +281,10 @@ function processarRegistroTelegram(dadosTelegram) {
       }
     }
   });
+
+  // Todas as linhas foram "já registrado hoje" repetido (já avisado antes
+  // hoje) — fica mudo em vez de mandar uma mensagem vazia ou reavisar.
+  if (resultados.length === 0) return;
 
   enviarTelegram(resultados.join("\n"));
 }
@@ -534,17 +551,19 @@ function doPost(e) {
 
   if (dados.message) {
     // O Telegram reenvia a MESMA atualização (mesmo update_id) se não
-    // receber confirmação rápido o suficiente — sem essa trava, cada
-    // reenvio processava a leitura de novo e mandava mensagem
-    // duplicada. Cache de 10 min é de sobra pra cobrir qualquer
-    // sequência de reenvio.
+    // receber confirmação rápido o suficiente — às vezes num intervalo
+    // bem mais longo que alguns minutos. 21600s (6h, o máximo que
+    // CacheService aceita) é o teto pra pegar isso cedo, sem nem tocar
+    // na planilha; mesmo se esse reenvio escapar dessa janela, a trava
+    // de jaEnviouHoje() lá embaixo garante que a pessoa não vê o aviso
+    // duas vezes de qualquer forma.
     if (dados.update_id != null) {
       var cache = CacheService.getScriptCache();
       var chaveUpdate = "update_" + dados.update_id;
       if (cache.get(chaveUpdate)) {
         return ContentService.createTextOutput("ok");
       }
-      cache.put(chaveUpdate, "1", 600);
+      cache.put(chaveUpdate, "1", 21600);
     }
 
     // Nunca deixa um erro aqui passar em silêncio de novo — se algo
