@@ -473,8 +473,41 @@ function verificarWebhookAtual() {
   var url = "https://api.telegram.org/bot" + c.telegramToken + "/getWebhookInfo";
   var resposta = UrlFetchApp.fetch(url);
   Logger.log(resposta.getContentText());
-  var info = JSON.parse(resposta.getContentText());
-  enviarTelegram("🔍 Link que o Telegram está usando agora:\n" + info.result.url);
+  var info = JSON.parse(resposta.getContentText()).result;
+
+  var msg = "🔍 Link que o Telegram está usando agora:\n" + info.url +
+    "\n\n📬 Mensagens pendentes na fila: " + info.pending_update_count;
+  if (info.last_error_message) {
+    msg += "\n⚠️ Último erro registrado pelo Telegram: " + info.last_error_message;
+  }
+  enviarTelegram(msg);
+}
+
+/**
+ * 4) Roda esta se ficarem chegando respostas repetidas ("já registrado
+ * hoje" etc.) de tempos em tempos por muito tempo seguido — minutos ou
+ * até dezenas de minutos — SEM você ter mandado nada de novo. Isso
+ * acontece quando o Telegram acumula uma FILA de mensagens antigas que
+ * nunca foram confirmadas direito (de algum problema já corrigido) e
+ * fica reenviando essa fila aos poucos, de novo e de novo, até esvaziar
+ * — inclusive atrapalhando/atrasando a resposta às suas mensagens novas
+ * de verdade (como os alertas de % que não chegam). Rode
+ * verificarWebhookAtual() (função 3) antes: se "Mensagens pendentes na
+ * fila" vier maior que 0, é isso. Esta função descarta a fila acumulada
+ * e registra o webhook de novo do zero.
+ */
+function limparFilaTelegram() {
+  var c = getConfig();
+
+  var urlRemover = "https://api.telegram.org/bot" + c.telegramToken + "/deleteWebhook?drop_pending_updates=true";
+  var respRemover = UrlFetchApp.fetch(urlRemover);
+  Logger.log("deleteWebhook: " + respRemover.getContentText());
+
+  var urlRegistrar = "https://api.telegram.org/bot" + c.telegramToken + "/setWebhook?url=" + encodeURIComponent(URL_EXEC_PUBLICADA);
+  var respRegistrar = UrlFetchApp.fetch(urlRegistrar);
+  Logger.log("setWebhook: " + respRegistrar.getContentText());
+
+  enviarTelegram("🧹 Fila de mensagens pendentes do Telegram foi descartada e o webhook foi registrado de novo. As próximas leituras devem responder na hora, sem eco de mensagens antigas.");
 }
 
 // ================= ROTEAMENTO DO WEB APP =================
