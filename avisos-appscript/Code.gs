@@ -288,6 +288,43 @@ function removerAviso(id) {
   }
 }
 
+// ================= DIAGNÓSTICO DO TELEGRAM (rodar manualmente) =================
+// Duas funções pra rodar direto no editor (▶ Executar, escolhendo o
+// nome da função no menu ao lado do botão) — sem precisar mandar
+// mensagem nenhuma pro bot. Isolam os dois motivos mais prováveis do
+// bot não responder: token/chat ID errados, ou o Telegram nem sabendo
+// pra onde mandar as mensagens (webhook desatualizado).
+
+/**
+ * 1) Roda esta primeiro. Manda uma mensagem de teste direto (sem
+ * passar pelo Telegram nem pelo webhook). Chegou no seu Telegram? O
+ * TELEGRAM_TOKEN e TELEGRAM_CHAT_ID (Configurações do projeto >
+ * Propriedades do script) estão certos. Não chegou / deu erro na
+ * execução? É isso que precisa corrigir primeiro — confere se essas
+ * duas propriedades existem *nesse* projeto (elas não vêm sozinhas de
+ * um projeto antigo, são por projeto).
+ */
+function testarTelegram() {
+  enviarTelegram("🧪 Teste de conexão — se você recebeu isso, o token e o chat ID estão certos.");
+}
+
+/**
+ * 2) Roda esta depois que testarTelegram funcionar. Registra (ou
+ * corrige) o webhook do Telegram pra apontar pro link /exec ATUAL
+ * desse projeto — é isso que faz o Telegram saber que deve mandar as
+ * mensagens que você digita pro bot pra cá. Precisa rodar de novo toda
+ * vez que uma "Nova implantação" (não "Nova versão") gerar um link
+ * /exec diferente do anterior.
+ */
+function registrarWebhookTelegram() {
+  var c = getConfig();
+  var urlAtual = ScriptApp.getService().getUrl();
+  var url = "https://api.telegram.org/bot" + c.telegramToken + "/setWebhook?url=" + encodeURIComponent(urlAtual);
+  var resposta = UrlFetchApp.fetch(url);
+  Logger.log(resposta.getContentText());
+  enviarTelegram("🔗 Webhook registrado pra:\n" + urlAtual);
+}
+
 // ================= ROTEAMENTO DO WEB APP =================
 
 /** GET — só usado pelo painel, pra listar os avisos. */
