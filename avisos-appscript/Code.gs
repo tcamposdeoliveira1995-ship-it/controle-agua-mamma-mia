@@ -79,38 +79,33 @@ function marcarComoEnviado(relogio) {
 // funciona assim: acha (ou cria) a linha de hoje, e preenche a coluna
 // daquele relógio nela. Duas leituras de relógios diferentes no mesmo
 // dia caem na mesma linha, cada uma na sua coluna.
+// Aceita uma ou várias linhas na mesma mensagem — "RELOGIO VALOR" por
+// linha (ex: os 4 relógios de uma vez, um por linha). Cada linha é
+// tratada de forma independente (erro numa não trava as outras), e no
+// final manda 1 mensagem só, resumindo o que aconteceu com cada uma.
 function processarRegistroTelegram(dadosTelegram) {
   var c = getConfig();
   var msg = dadosTelegram.message.text;
 
-  // Esperado: RELÓGIO VALOR
-  var partes = msg.split(" ");
+  var linhas = msg.split("\n")
+    .map(function (linha) { return linha.trim(); })
+    .filter(function (linha) { return linha; });
 
-  if (partes.length < 2) {
-    enviarTelegram("❌ Envie no formato:\nRELOGIO VALOR");
+  if (linhas.length === 0) {
+    enviarTelegram("❌ Envie no formato:\nRELOGIO VALOR\n(pode mandar vários, um por linha)");
     return;
   }
-
-  var relogio = partes[0];
-  var leituraAtual = converterNumero(partes[1]);
 
   var planilha = SpreadsheetApp.openById(c.planilhaId);
   var sheet = planilha.getSheetByName(c.nomeAba);
-
   var mapa = mapaColunas(sheet);
-  var colRelogio = mapa[relogio.toUpperCase()];
-  if (!colRelogio) {
-    enviarTelegram(
-      "❌ Relógio \"" + relogio + "\" não encontrado nos cabeçalhos da aba \"" + c.nomeAba + "\".\n" +
-      "Confere se digitou certo (tem que bater com o cabeçalho da coluna)."
-    );
-    return;
-  }
   var colData = colunaObrigatoria(mapa, c.nomeAba, "Carimbo de data/hora");
 
   var dados = sheet.getDataRange().getValues();
   var hoje = Utilities.formatDate(new Date(), "GMT-3", "dd/MM/yyyy");
 
+  // Acha a linha de hoje uma vez só — se nenhuma leitura desta mensagem
+  // precisar criar linha nova, essa variável nunca é usada pra isso.
   var linhaHoje = -1;
   for (var i = dados.length - 1; i >= 1; i--) {
     var celData = dados[i][colData - 1];
@@ -122,48 +117,59 @@ function processarRegistroTelegram(dadosTelegram) {
     }
   }
 
-  // 🔒 BLOQUEIO DE DUPLICIDADE — já tem valor nessa coluna, na linha de hoje?
-  if (linhaHoje !== -1) {
-    var valorExistente = dados[linhaHoje - 1][colRelogio - 1];
-    if (valorExistente !== "" && valorExistente != null) {
-      if (!jaEnviouHoje(relogio)) {
-        enviarTelegram("⚠️ RELÓGIO " + relogio + " JÁ REGISTRADO HOJE");
-        marcarComoEnviado(relogio);
-      }
+  var resultados = [];
+
+  linhas.forEach(function (linha) {
+    var partes = linha.split(" ").filter(function (p) { return p; });
+    if (partes.length < 2) {
+      resultados.push("❓ \"" + linha + "\" — formato inválido, esperado RELOGIO VALOR");
       return;
     }
-  }
 
-  // 🔍 ÚLTIMA LEITURA DESSE RELÓGIO (linha anterior com valor na mesma coluna)
-  var ultimaLeitura = 0;
-  for (var j = dados.length - 1; j >= 1; j--) {
-    var valor = dados[j][colRelogio - 1];
-    if (valor !== "" && valor != null) {
-      ultimaLeitura = converterNumero(valor);
-      break;
+    var relogio = partes[0];
+    var leituraAtual = converterNumero(partes[1]);
+    var colRelogio = mapa[relogio.toUpperCase()];
+
+    if (!colRelogio) {
+      resultados.push("❌ " + relogio + " — relógio não encontrado nos cabeçalhos da aba");
+      return;
     }
-  }
 
-  var consumo = leituraAtual - ultimaLeitura;
+    // 🔒 já tem valor nessa coluna, na linha de hoje?
+    if (linhaHoje !== -1) {
+      var valorExistente = dados[linhaHoje - 1][colRelogio - 1];
+      if (valorExistente !== "" && valorExistente != null) {
+        resultados.push("⚠️ " + relogio + " — já registrado hoje");
+        return;
+      }
+    }
 
-  // 💾 SALVA NA PLANILHA — preenche a linha de hoje, ou cria uma nova
-  if (linhaHoje !== -1) {
+    // 🔍 última leitura desse relógio (linha anterior com valor na mesma coluna)
+    var ultimaLeitura = 0;
+    for (var j = dados.length - 1; j >= 1; j--) {
+      var valor = dados[j][colRelogio - 1];
+      if (valor !== "" && valor != null) {
+        ultimaLeitura = converterNumero(valor);
+        break;
+      }
+    }
+    var consumo = leituraAtual - ultimaLeitura;
+
+    // 💾 salva — preenche a linha de hoje (criando se ainda não existir)
+    if (linhaHoje === -1) {
+      var novaLinha = new Array(sheet.getLastColumn()).fill("");
+      novaLinha[colData - 1] = new Date();
+      sheet.appendRow(novaLinha);
+      linhaHoje = sheet.getLastRow();
+      dados.push(novaLinha);
+    }
     sheet.getRange(linhaHoje, colRelogio).setValue(leituraAtual);
-  } else {
-    var novaLinha = new Array(sheet.getLastColumn()).fill("");
-    novaLinha[colData - 1] = new Date();
-    novaLinha[colRelogio - 1] = leituraAtual;
-    sheet.appendRow(novaLinha);
-  }
+    dados[linhaHoje - 1][colRelogio - 1] = leituraAtual; // reflete no snapshot em memória, pra "última leitura" das próximas linhas desta mesma mensagem já enxergar isto se repetido
 
-  // 📲 RESPOSTA TELEGRAM
-  var resposta = "✅ Registro recebido\n\n";
-  resposta += "Relógio: " + relogio + "\n";
-  resposta += "Anterior: " + ultimaLeitura + "\n";
-  resposta += "Atual: " + leituraAtual + "\n";
-  resposta += "Consumo: " + consumo;
+    resultados.push("✅ " + relogio + " — " + ultimaLeitura + " → " + leituraAtual + " (consumo " + consumo + ")");
+  });
 
-  enviarTelegram(resposta);
+  enviarTelegram(resultados.join("\n"));
 }
 
 // ================= AVISOS (mural de post-its do painel) =================
