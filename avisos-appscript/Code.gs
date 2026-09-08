@@ -413,11 +413,13 @@ function removerAviso(id) {
 }
 
 // ================= DIAGNÓSTICO DO TELEGRAM (rodar manualmente) =================
-// Duas funções pra rodar direto no editor (▶ Executar, escolhendo o
+// Três funções pra rodar direto no editor (▶ Executar, escolhendo o
 // nome da função no menu ao lado do botão) — sem precisar mandar
-// mensagem nenhuma pro bot. Isolam os dois motivos mais prováveis do
-// bot não responder: token/chat ID errados, ou o Telegram nem sabendo
-// pra onde mandar as mensagens (webhook desatualizado).
+// mensagem nenhuma pro bot. Isolam os motivos mais prováveis do bot não
+// responder (ou responder duplicado/desatualizado): token/chat ID
+// errados, o Telegram não sabendo pra onde mandar as mensagens, ou o
+// Telegram mandando pra um link (implantação) diferente do que você
+// acabou de atualizar.
 
 /**
  * 1) Roda esta primeiro. Manda uma mensagem de teste direto (sem
@@ -448,6 +450,31 @@ function registrarWebhookTelegram() {
   var resposta = UrlFetchApp.fetch(url);
   Logger.log(resposta.getContentText());
   enviarTelegram("🔗 Webhook registrado pra:\n" + urlAtual);
+}
+
+/**
+ * 3) Roda esta se, mesmo depois de implantar uma correção (Nova
+ * versão), o bot continuar se comportando como o código ANTIGO (ex.:
+ * respostas duplicadas voltando mesmo depois do conserto). Um projeto
+ * pode acumular várias implantações (cada uma com seu próprio link
+ * /exec) — se a "Nova versão" foi aplicada numa implantação diferente
+ * da que o Telegram está realmente chamando, o Telegram continua
+ * batendo no código velho pra sempre. Esta função manda pro seu
+ * Telegram o link EXATO que ele está usando agora; compare o trecho
+ * depois de "/macros/s/" e antes de "/exec" com o "Código de
+ * implantação" de cada entrada em Implantar > Gerenciar implantações —
+ * a implantação com o MESMO trecho é a única que precisa da Nova
+ * versão. Se não bater com nenhuma que você reconhece, rode
+ * registrarWebhookTelegram() (função 2) pra realinhar o Telegram com a
+ * implantação certa (URL_EXEC_PUBLICADA).
+ */
+function verificarWebhookAtual() {
+  var c = getConfig();
+  var url = "https://api.telegram.org/bot" + c.telegramToken + "/getWebhookInfo";
+  var resposta = UrlFetchApp.fetch(url);
+  Logger.log(resposta.getContentText());
+  var info = JSON.parse(resposta.getContentText());
+  enviarTelegram("🔍 Link que o Telegram está usando agora:\n" + info.result.url);
 }
 
 // ================= ROTEAMENTO DO WEB APP =================
