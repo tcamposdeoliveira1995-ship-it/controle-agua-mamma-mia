@@ -5,8 +5,9 @@
  * então o doPost, lá embaixo, decide sozinho qual dos dois é, pelo
  * formato do corpo recebido.
  *
- * planilhaId aponta pra planilha de água — é onde tanto a aba "Dados"
- * (leituras) quanto a aba "AVISOS" (mural) vivem.
+ * planilhaId aponta pra planilha de água — é onde tanto a aba
+ * "Respostas ao formulário 1" (leituras, 1 linha por dia x 1 coluna por
+ * relógio) quanto a aba "AVISOS" (mural) vivem.
  */
 
 // Link publicado (/exec) desse Web App — o mesmo que está em
@@ -26,7 +27,7 @@ function getConfig() {
     telegramToken: props.getProperty("TELEGRAM_TOKEN"),
     chatId: props.getProperty("TELEGRAM_CHAT_ID"),
     planilhaId: "1tixTJ74aaEo-EuCfTFl-efWOT7p-TIgN0su8NzX8aKw",
-    nomeAba: "dados"
+    nomeAba: "Respostas ao formulário 1"
   };
 }
 
@@ -71,39 +72,13 @@ function marcarComoEnviado(relogio) {
   props.setProperty(chave, "true");
 }
 
-// ================= VERIFICA DUPLICIDADE =================
-function jaRegistradoHoje(sheet, relogio) {
-  var dados = sheet.getDataRange().getValues();
-  var hoje = Utilities.formatDate(new Date(), "GMT-3", "dd/MM/yyyy");
-
-  for (var i = dados.length - 1; i > 0; i--) {
-    var data = Utilities.formatDate(new Date(dados[i][0]), "GMT-3", "dd/MM/yyyy");
-
-    if (dados[i][1] == relogio && data == hoje) {
-      return true;
-    }
-  }
-
-  return false;
-}
-
-// ================= BUSCA ÚLTIMA LEITURA =================
-function buscarUltimaLeitura(sheet, relogio) {
-  var dados = sheet.getDataRange().getValues();
-
-  for (var i = dados.length - 1; i > 0; i--) {
-    if (dados[i][1] == relogio) {
-      return dados[i][2];
-    }
-  }
-
-  return null;
-}
-
 // ================= REGISTRO DE LEITURA (webhook do Telegram) =================
-// Mesma lógica de sempre, só que extraída pra uma função própria — o
-// doPost lá embaixo chama essa aqui quando reconhece que é uma
-// mensagem do Telegram, não mais o código direto dentro do doPost.
+// A aba (Respostas ao formulário 1) tem 1 LINHA POR DIA, com 1 COLUNA
+// por relógio (cabeçalho = o próprio código do relógio, ex:
+// "Y21T156506") — não é 1 linha por leitura. Então "RELOGIO VALOR"
+// funciona assim: acha (ou cria) a linha de hoje, e preenche a coluna
+// daquele relógio nela. Duas leituras de relógios diferentes no mesmo
+// dia caem na mesma linha, cada uma na sua coluna.
 function processarRegistroTelegram(dadosTelegram) {
   var c = getConfig();
   var msg = dadosTelegram.message.text;
@@ -122,30 +97,64 @@ function processarRegistroTelegram(dadosTelegram) {
   var planilha = SpreadsheetApp.openById(c.planilhaId);
   var sheet = planilha.getSheetByName(c.nomeAba);
 
-  // 🔒 BLOQUEIO DE DUPLICIDADE
-  if (jaRegistradoHoje(sheet, relogio)) {
-
-    if (!jaEnviouHoje(relogio)) {
-      enviarTelegram("⚠️ RELÓGIO " + relogio + " JÁ REGISTRADO HOJE");
-      marcarComoEnviado(relogio);
-    }
-
+  var mapa = mapaColunas(sheet);
+  var colRelogio = mapa[relogio.toUpperCase()];
+  if (!colRelogio) {
+    enviarTelegram(
+      "❌ Relógio \"" + relogio + "\" não encontrado nos cabeçalhos da aba \"" + c.nomeAba + "\".\n" +
+      "Confere se digitou certo (tem que bater com o cabeçalho da coluna)."
+    );
     return;
   }
+  var colData = colunaObrigatoria(mapa, c.nomeAba, "Carimbo de data/hora");
 
-  // 🔍 BUSCA ÚLTIMA LEITURA
-  var ultimaLeituraRaw = buscarUltimaLeitura(sheet, relogio);
-  var ultimaLeitura = ultimaLeituraRaw ? converterNumero(ultimaLeituraRaw) : 0;
+  var dados = sheet.getDataRange().getValues();
+  var hoje = Utilities.formatDate(new Date(), "GMT-3", "dd/MM/yyyy");
+
+  var linhaHoje = -1;
+  for (var i = dados.length - 1; i >= 1; i--) {
+    var celData = dados[i][colData - 1];
+    if (!celData) continue;
+    var dataFormatada = Utilities.formatDate(new Date(celData), "GMT-3", "dd/MM/yyyy");
+    if (dataFormatada === hoje) {
+      linhaHoje = i + 1; // +1 porque getRange é 1-based
+      break;
+    }
+  }
+
+  // 🔒 BLOQUEIO DE DUPLICIDADE — já tem valor nessa coluna, na linha de hoje?
+  if (linhaHoje !== -1) {
+    var valorExistente = dados[linhaHoje - 1][colRelogio - 1];
+    if (valorExistente !== "" && valorExistente != null) {
+      if (!jaEnviouHoje(relogio)) {
+        enviarTelegram("⚠️ RELÓGIO " + relogio + " JÁ REGISTRADO HOJE");
+        marcarComoEnviado(relogio);
+      }
+      return;
+    }
+  }
+
+  // 🔍 ÚLTIMA LEITURA DESSE RELÓGIO (linha anterior com valor na mesma coluna)
+  var ultimaLeitura = 0;
+  for (var j = dados.length - 1; j >= 1; j--) {
+    var valor = dados[j][colRelogio - 1];
+    if (valor !== "" && valor != null) {
+      ultimaLeitura = converterNumero(valor);
+      break;
+    }
+  }
 
   var consumo = leituraAtual - ultimaLeitura;
 
-  // 💾 SALVA NA PLANILHA
-  sheet.appendRow([
-    new Date(),
-    relogio,
-    leituraAtual,
-    consumo
-  ]);
+  // 💾 SALVA NA PLANILHA — preenche a linha de hoje, ou cria uma nova
+  if (linhaHoje !== -1) {
+    sheet.getRange(linhaHoje, colRelogio).setValue(leituraAtual);
+  } else {
+    var novaLinha = new Array(sheet.getLastColumn()).fill("");
+    novaLinha[colData - 1] = new Date();
+    novaLinha[colRelogio - 1] = leituraAtual;
+    sheet.appendRow(novaLinha);
+  }
 
   // 📲 RESPOSTA TELEGRAM
   var resposta = "✅ Registro recebido\n\n";
@@ -174,11 +183,11 @@ function mapaColunas(sheet) {
   return mapa;
 }
 
-function colunaObrigatoria(mapa, nomeColuna) {
+function colunaObrigatoria(mapa, nomeAba, nomeColuna) {
   var indice = mapa[nomeColuna.toUpperCase()];
   if (!indice) {
     throw new Error(
-      'Coluna "' + nomeColuna + '" não encontrada na aba "' + ABA_AVISOS + '". ' +
+      'Coluna "' + nomeColuna + '" não encontrada na aba "' + nomeAba + '". ' +
       "Verifique se o cabeçalho na linha 1 não foi alterado ou removido."
     );
   }
@@ -202,8 +211,8 @@ function respostaJson(objeto) {
 function listarAvisos() {
   var aba = obterAbaAvisos();
   var mapa = mapaColunas(aba);
-  var colId = colunaObrigatoria(mapa, "ID");
-  var colTexto = colunaObrigatoria(mapa, "TEXTO");
+  var colId = colunaObrigatoria(mapa, ABA_AVISOS, "ID");
+  var colTexto = colunaObrigatoria(mapa, ABA_AVISOS, "TEXTO");
 
   var dados = aba.getDataRange().getValues();
   var avisos = [];
@@ -227,8 +236,8 @@ function criarAviso(texto) {
   try {
     var aba = obterAbaAvisos();
     var mapa = mapaColunas(aba);
-    var colId = colunaObrigatoria(mapa, "ID");
-    var colTexto = colunaObrigatoria(mapa, "TEXTO");
+    var colId = colunaObrigatoria(mapa, ABA_AVISOS, "ID");
+    var colTexto = colunaObrigatoria(mapa, ABA_AVISOS, "TEXTO");
     var colCriado = mapa["CRIADO_EM"];
 
     var id = Utilities.getUuid();
@@ -255,8 +264,8 @@ function editarAviso(id, texto) {
   try {
     var aba = obterAbaAvisos();
     var mapa = mapaColunas(aba);
-    var colId = colunaObrigatoria(mapa, "ID");
-    var colTexto = colunaObrigatoria(mapa, "TEXTO");
+    var colId = colunaObrigatoria(mapa, ABA_AVISOS, "ID");
+    var colTexto = colunaObrigatoria(mapa, ABA_AVISOS, "TEXTO");
     var colAtualizado = mapa["ATUALIZADO_EM"];
 
     var dados = aba.getDataRange().getValues();
@@ -282,7 +291,7 @@ function removerAviso(id) {
   try {
     var aba = obterAbaAvisos();
     var mapa = mapaColunas(aba);
-    var colId = colunaObrigatoria(mapa, "ID");
+    var colId = colunaObrigatoria(mapa, ABA_AVISOS, "ID");
 
     var dados = aba.getDataRange().getValues();
     for (var i = dados.length - 1; i >= 1; i--) {
