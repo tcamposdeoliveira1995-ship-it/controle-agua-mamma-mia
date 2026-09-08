@@ -3,11 +3,23 @@
  * Script) pro mural de post-its fixado no header do painel
  * (mammamia-control.vercel.app), editável direto na tela.
  *
+ * IMPORTANTE: este é um projeto Apps Script PRÓPRIO E SEPARADO — não
+ * cole isso dentro do Apps Script de nenhuma outra planilha que já
+ * tenha código (ex: a planilha de água, que já tem doGet/doPost
+ * próprios pra outra coisa). Um projeto só pode ter 1 doGet e 1 doPost
+ * — colar em cima de um projeto existente sobrescreve/entra em
+ * conflito com o que já tinha lá. Por isso este script aponta pra
+ * planilha pelo ID (`PLANILHA_ID` abaixo), em vez de depender de estar
+ * "dentro" dela — funciona projeto novo e solto, sem tocar em nada que
+ * já existe.
+ *
  * Como instalar:
- * 1) Crie uma planilha nova no Google Sheets (ex: "AVISOS MAMMA MIA").
- * 2) Nela, crie uma aba chamada exatamente AVISOS com o cabeçalho:
- *    ID | TEXTO | CRIADO_EM | ATUALIZADO_EM
- * 3) Extensões > Apps Script, cole este arquivo inteiro no Code.gs.
+ * 1) script.google.com > Novo projeto (NÃO pelo menu Extensões de
+ *    dentro de uma planilha — direto pelo site do Apps Script, pra
+ *    criar um projeto solto, sem vínculo com planilha nenhuma).
+ * 2) Apague o conteúdo padrão e cole este arquivo inteiro.
+ * 3) Confira/ajuste a constante `PLANILHA_ID` abaixo — já está com o
+ *    ID da planilha de água, que é onde a aba AVISOS foi criada.
  * 4) Implantar > Nova implantação > App da Web:
  *      Executar como: Eu
  *      Quem pode acessar: Qualquer pessoa
@@ -21,10 +33,11 @@
  * pelo botão de editar quantidade em Insumos Críticos.
  */
 
+var PLANILHA_ID = "1tixTJ74aaEo-EuCfTFl-efWOT7p-TIgN0su8NzX8aKw";
 var ABA_AVISOS = "AVISOS";
 
 function obterAba() {
-  var aba = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(ABA_AVISOS);
+  var aba = SpreadsheetApp.openById(PLANILHA_ID).getSheetByName(ABA_AVISOS);
   if (!aba) {
     throw new Error('Aba "' + ABA_AVISOS + '" não foi encontrada na planilha.');
   }
