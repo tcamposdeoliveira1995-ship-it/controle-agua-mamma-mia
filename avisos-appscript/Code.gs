@@ -9,6 +9,15 @@
  * (leituras) quanto a aba "AVISOS" (mural) vivem.
  */
 
+// Link publicado (/exec) desse Web App — o mesmo que está em
+// AVISOS_EXEC_URL no painel (src/main.js). Fixo aqui de propósito:
+// ScriptApp.getService().getUrl() devolve o link /dev (só funciona
+// logado no navegador, não pro Telegram) quando a função roda
+// manualmente pelo editor — então não dá pra confiar nele pra
+// registrar o webhook. Se um dia fizer uma "Nova implantação" (não
+// "Nova versão") e o link mudar, atualiza aqui E no painel.
+var URL_EXEC_PUBLICADA = "https://script.google.com/macros/s/AKfycbzHvvPZzBDSB730gShVCl7CPQb23h37w8k8B-cY8n1RI-NkBJzp0eUP5m-rbtj3nGdwpw/exec";
+
 // ================= CONFIG =================
 function getConfig() {
   var props = PropertiesService.getScriptProperties();
@@ -310,15 +319,16 @@ function testarTelegram() {
 
 /**
  * 2) Roda esta depois que testarTelegram funcionar. Registra (ou
- * corrige) o webhook do Telegram pra apontar pro link /exec ATUAL
- * desse projeto — é isso que faz o Telegram saber que deve mandar as
- * mensagens que você digita pro bot pra cá. Precisa rodar de novo toda
- * vez que uma "Nova implantação" (não "Nova versão") gerar um link
- * /exec diferente do anterior.
+ * corrige) o webhook do Telegram pra apontar pro link /exec publicado
+ * (URL_EXEC_PUBLICADA acima) — é isso que faz o Telegram saber que deve
+ * mandar as mensagens que você digita pro bot pra cá. Precisa rodar de
+ * novo toda vez que uma "Nova implantação" (não "Nova versão") gerar um
+ * link /exec diferente do anterior (e aí também precisa atualizar
+ * URL_EXEC_PUBLICADA aqui em cima e AVISOS_EXEC_URL no painel).
  */
 function registrarWebhookTelegram() {
   var c = getConfig();
-  var urlAtual = ScriptApp.getService().getUrl();
+  var urlAtual = URL_EXEC_PUBLICADA;
   var url = "https://api.telegram.org/bot" + c.telegramToken + "/setWebhook?url=" + encodeURIComponent(urlAtual);
   var resposta = UrlFetchApp.fetch(url);
   Logger.log(resposta.getContentText());
