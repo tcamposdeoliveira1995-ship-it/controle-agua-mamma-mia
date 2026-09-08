@@ -26,7 +26,7 @@ function getConfig() {
     telegramToken: props.getProperty("TELEGRAM_TOKEN"),
     chatId: props.getProperty("TELEGRAM_CHAT_ID"),
     planilhaId: "1tixTJ74aaEo-EuCfTFl-efWOT7p-TIgN0su8NzX8aKw",
-    nomeAba: "Dados"
+    nomeAba: "dados"
   };
 }
 
@@ -358,7 +358,19 @@ function doPost(e) {
   var dados = JSON.parse(e.postData.contents);
 
   if (dados.message) {
-    processarRegistroTelegram(dados);
+    // Nunca deixa um erro aqui passar em silêncio de novo — se algo
+    // quebrar (aba errada, planilha sem permissão, etc.), pelo menos
+    // chega um aviso no Telegram em vez de nada.
+    try {
+      processarRegistroTelegram(dados);
+    } catch (erro) {
+      Logger.log("Erro no registro de água: " + erro);
+      try {
+        enviarTelegram("⚠️ Erro ao registrar: " + erro.message);
+      } catch (erroTelegram) {
+        Logger.log("Nem o aviso de erro foi enviado: " + erroTelegram);
+      }
+    }
     return ContentService.createTextOutput("ok");
   }
 
