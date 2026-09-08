@@ -1,48 +1,159 @@
 /**
- * AVISOS — MAMMA MIA CONTROL. Backend simples (Google Sheets + Apps
- * Script) pro mural de post-its fixado no header do painel
- * (mammamia-control.vercel.app), editável direto na tela.
+ * PROJETO ÚNICO: registro de água via Telegram + mural de Avisos do
+ * painel (mammamia-control.vercel.app). Os dois moram no mesmo projeto
+ * Apps Script porque só existe 1 link (/exec) e 1 doPost por projeto —
+ * então o doPost, lá embaixo, decide sozinho qual dos dois é, pelo
+ * formato do corpo recebido.
  *
- * IMPORTANTE: este é um projeto Apps Script PRÓPRIO E SEPARADO — não
- * cole isso dentro do Apps Script de nenhuma outra planilha que já
- * tenha código (ex: a planilha de água, que já tem doGet/doPost
- * próprios pra outra coisa). Um projeto só pode ter 1 doGet e 1 doPost
- * — colar em cima de um projeto existente sobrescreve/entra em
- * conflito com o que já tinha lá. Por isso este script aponta pra
- * planilha pelo ID (`PLANILHA_ID` abaixo), em vez de depender de estar
- * "dentro" dela — funciona projeto novo e solto, sem tocar em nada que
- * já existe.
- *
- * Como instalar:
- * 1) script.google.com > Novo projeto (NÃO pelo menu Extensões de
- *    dentro de uma planilha — direto pelo site do Apps Script, pra
- *    criar um projeto solto, sem vínculo com planilha nenhuma).
- * 2) Apague o conteúdo padrão e cole este arquivo inteiro.
- * 3) Confira/ajuste a constante `PLANILHA_ID` abaixo — já está com o
- *    ID da planilha de água, que é onde a aba AVISOS foi criada.
- * 4) Implantar > Nova implantação > App da Web:
- *      Executar como: Eu
- *      Quem pode acessar: Qualquer pessoa
- *    Copia o link gerado (termina em /exec) e me manda — eu troco no
- *    painel (constante AVISOS_EXEC_URL em src/main.js).
- *
- * Diferente do resto do ecossistema (que lê CSV publicado, com alguns
- * minutos de atraso), aqui o painel chama esse Web App direto via
- * fetch — tanto pra ler quanto pra escrever — pra editar e ver
- * refletido na hora, sem esperar cache nenhum. Mesmo padrão já usado
- * pelo botão de editar quantidade em Insumos Críticos.
+ * planilhaId aponta pra planilha de água — é onde tanto a aba "Dados"
+ * (leituras) quanto a aba "AVISOS" (mural) vivem.
  */
 
-var PLANILHA_ID = "1tixTJ74aaEo-EuCfTFl-efWOT7p-TIgN0su8NzX8aKw";
-var ABA_AVISOS = "AVISOS";
+// ================= CONFIG =================
+function getConfig() {
+  var props = PropertiesService.getScriptProperties();
 
-function obterAba() {
-  var aba = SpreadsheetApp.openById(PLANILHA_ID).getSheetByName(ABA_AVISOS);
-  if (!aba) {
-    throw new Error('Aba "' + ABA_AVISOS + '" não foi encontrada na planilha.');
-  }
-  return aba;
+  return {
+    telegramToken: props.getProperty("TELEGRAM_TOKEN"),
+    chatId: props.getProperty("TELEGRAM_CHAT_ID"),
+    planilhaId: "1tixTJ74aaEo-EuCfTFl-efWOT7p-TIgN0su8NzX8aKw",
+    nomeAba: "Dados"
+  };
 }
+
+// ================= TELEGRAM =================
+function enviarTelegram(msg) {
+  var c = getConfig();
+
+  var url = "https://api.telegram.org/bot" + c.telegramToken + "/sendMessage";
+
+  UrlFetchApp.fetch(url, {
+    method: "post",
+    contentType: "application/json",
+    payload: JSON.stringify({
+      chat_id: c.chatId,
+      text: msg
+    })
+  });
+}
+
+// ================= CONVERSÃO NUMÉRICA =================
+function converterNumero(valor) {
+  if (typeof valor === "string") {
+    valor = valor.replace(/\./g, "").replace(",", ".");
+  }
+  return parseFloat(valor);
+}
+
+// ================= CONTROLE DE ALERTA =================
+function jaEnviouHoje(relogio) {
+  var props = PropertiesService.getScriptProperties();
+  var hoje = Utilities.formatDate(new Date(), "GMT-3", "yyyy-MM-dd");
+  var chave = "alerta_" + relogio + "_" + hoje;
+
+  return props.getProperty(chave);
+}
+
+function marcarComoEnviado(relogio) {
+  var props = PropertiesService.getScriptProperties();
+  var hoje = Utilities.formatDate(new Date(), "GMT-3", "yyyy-MM-dd");
+  var chave = "alerta_" + relogio + "_" + hoje;
+
+  props.setProperty(chave, "true");
+}
+
+// ================= VERIFICA DUPLICIDADE =================
+function jaRegistradoHoje(sheet, relogio) {
+  var dados = sheet.getDataRange().getValues();
+  var hoje = Utilities.formatDate(new Date(), "GMT-3", "dd/MM/yyyy");
+
+  for (var i = dados.length - 1; i > 0; i--) {
+    var data = Utilities.formatDate(new Date(dados[i][0]), "GMT-3", "dd/MM/yyyy");
+
+    if (dados[i][1] == relogio && data == hoje) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+// ================= BUSCA ÚLTIMA LEITURA =================
+function buscarUltimaLeitura(sheet, relogio) {
+  var dados = sheet.getDataRange().getValues();
+
+  for (var i = dados.length - 1; i > 0; i--) {
+    if (dados[i][1] == relogio) {
+      return dados[i][2];
+    }
+  }
+
+  return null;
+}
+
+// ================= REGISTRO DE LEITURA (webhook do Telegram) =================
+// Mesma lógica de sempre, só que extraída pra uma função própria — o
+// doPost lá embaixo chama essa aqui quando reconhece que é uma
+// mensagem do Telegram, não mais o código direto dentro do doPost.
+function processarRegistroTelegram(dadosTelegram) {
+  var c = getConfig();
+  var msg = dadosTelegram.message.text;
+
+  // Esperado: RELÓGIO VALOR
+  var partes = msg.split(" ");
+
+  if (partes.length < 2) {
+    enviarTelegram("❌ Envie no formato:\nRELOGIO VALOR");
+    return;
+  }
+
+  var relogio = partes[0];
+  var leituraAtual = converterNumero(partes[1]);
+
+  var planilha = SpreadsheetApp.openById(c.planilhaId);
+  var sheet = planilha.getSheetByName(c.nomeAba);
+
+  // 🔒 BLOQUEIO DE DUPLICIDADE
+  if (jaRegistradoHoje(sheet, relogio)) {
+
+    if (!jaEnviouHoje(relogio)) {
+      enviarTelegram("⚠️ RELÓGIO " + relogio + " JÁ REGISTRADO HOJE");
+      marcarComoEnviado(relogio);
+    }
+
+    return;
+  }
+
+  // 🔍 BUSCA ÚLTIMA LEITURA
+  var ultimaLeituraRaw = buscarUltimaLeitura(sheet, relogio);
+  var ultimaLeitura = ultimaLeituraRaw ? converterNumero(ultimaLeituraRaw) : 0;
+
+  var consumo = leituraAtual - ultimaLeitura;
+
+  // 💾 SALVA NA PLANILHA
+  sheet.appendRow([
+    new Date(),
+    relogio,
+    leituraAtual,
+    consumo
+  ]);
+
+  // 📲 RESPOSTA TELEGRAM
+  var resposta = "✅ Registro recebido\n\n";
+  resposta += "Relógio: " + relogio + "\n";
+  resposta += "Anterior: " + ultimaLeitura + "\n";
+  resposta += "Atual: " + leituraAtual + "\n";
+  resposta += "Consumo: " + consumo;
+
+  enviarTelegram(resposta);
+}
+
+// ================= AVISOS (mural de post-its do painel) =================
+// Aba AVISOS, na mesma planilha de água (colunas: ID | TEXTO |
+// CRIADO_EM | ATUALIZADO_EM). Editar/criar/remover chamado direto do
+// painel (mammamia-control.vercel.app) via fetch nesse mesmo /exec.
+
+var ABA_AVISOS = "AVISOS";
 
 function mapaColunas(sheet) {
   var cabecalhos = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
@@ -65,46 +176,22 @@ function colunaObrigatoria(mapa, nomeColuna) {
   return indice;
 }
 
+function obterAbaAvisos() {
+  var aba = SpreadsheetApp.openById(getConfig().planilhaId).getSheetByName(ABA_AVISOS);
+  if (!aba) {
+    throw new Error('Aba "' + ABA_AVISOS + '" não foi encontrada na planilha.');
+  }
+  return aba;
+}
+
 function respostaJson(objeto) {
   return ContentService
     .createTextOutput(JSON.stringify(objeto))
     .setMimeType(ContentService.MimeType.JSON);
 }
 
-/** GET — lista todos os avisos (id + texto), na ordem da planilha. */
-function doGet(e) {
-  try {
-    return respostaJson(listarAvisos());
-  } catch (erro) {
-    return respostaJson({ ok: false, erro: erro.message });
-  }
-}
-
-/**
- * POST — cria, edita ou remove um aviso, conforme o campo "acao" no
- * corpo (JSON): "criar" (texto), "editar" (id, texto) ou "remover"
- * (id). O cliente manda com Content-Type text/plain de propósito —
- * evita o preflight OPTIONS que o Apps Script não trata, então dá pra
- * chamar direto de um site em outro domínio (o painel, hospedado no
- * Vercel) sem CORS travar a requisição.
- */
-function doPost(e) {
-  try {
-    var dados = JSON.parse(e.postData.contents);
-    var acao = dados.acao;
-
-    if (acao === "criar") return respostaJson(criarAviso(dados.texto));
-    if (acao === "editar") return respostaJson(editarAviso(dados.id, dados.texto));
-    if (acao === "remover") return respostaJson(removerAviso(dados.id));
-
-    throw new Error("Ação inválida: " + acao);
-  } catch (erro) {
-    return respostaJson({ ok: false, erro: erro.message });
-  }
-}
-
 function listarAvisos() {
-  var aba = obterAba();
+  var aba = obterAbaAvisos();
   var mapa = mapaColunas(aba);
   var colId = colunaObrigatoria(mapa, "ID");
   var colTexto = colunaObrigatoria(mapa, "TEXTO");
@@ -129,7 +216,7 @@ function criarAviso(texto) {
   var lock = LockService.getScriptLock();
   lock.waitLock(30000);
   try {
-    var aba = obterAba();
+    var aba = obterAbaAvisos();
     var mapa = mapaColunas(aba);
     var colId = colunaObrigatoria(mapa, "ID");
     var colTexto = colunaObrigatoria(mapa, "TEXTO");
@@ -157,7 +244,7 @@ function editarAviso(id, texto) {
   var lock = LockService.getScriptLock();
   lock.waitLock(30000);
   try {
-    var aba = obterAba();
+    var aba = obterAbaAvisos();
     var mapa = mapaColunas(aba);
     var colId = colunaObrigatoria(mapa, "ID");
     var colTexto = colunaObrigatoria(mapa, "TEXTO");
@@ -184,7 +271,7 @@ function removerAviso(id) {
   var lock = LockService.getScriptLock();
   lock.waitLock(30000);
   try {
-    var aba = obterAba();
+    var aba = obterAbaAvisos();
     var mapa = mapaColunas(aba);
     var colId = colunaObrigatoria(mapa, "ID");
 
@@ -198,5 +285,42 @@ function removerAviso(id) {
     throw new Error("Aviso não encontrado.");
   } finally {
     lock.releaseLock();
+  }
+}
+
+// ================= ROTEAMENTO DO WEB APP =================
+
+/** GET — só usado pelo painel, pra listar os avisos. */
+function doGet(e) {
+  try {
+    return respostaJson(listarAvisos());
+  } catch (erro) {
+    return respostaJson({ ok: false, erro: erro.message });
+  }
+}
+
+/**
+ * Um projeto Apps Script só pode ter 1 doPost — esse aqui atende dois
+ * usos que antes eram (indevidamente) dois doPost em conflito: o
+ * webhook do Telegram (registro de leitura do relógio de água) e as
+ * ações do mural de Avisos do painel. Distingue pelo formato do corpo:
+ * webhook do Telegram manda {message: {...}}; o painel manda
+ * {acao: "criar"|"editar"|"remover", ...}.
+ */
+function doPost(e) {
+  var dados = JSON.parse(e.postData.contents);
+
+  if (dados.message) {
+    processarRegistroTelegram(dados);
+    return ContentService.createTextOutput("ok");
+  }
+
+  try {
+    if (dados.acao === "criar") return respostaJson(criarAviso(dados.texto));
+    if (dados.acao === "editar") return respostaJson(editarAviso(dados.id, dados.texto));
+    if (dados.acao === "remover") return respostaJson(removerAviso(dados.id));
+    throw new Error("Ação inválida: " + dados.acao);
+  } catch (erro) {
+    return respostaJson({ ok: false, erro: erro.message });
   }
 }

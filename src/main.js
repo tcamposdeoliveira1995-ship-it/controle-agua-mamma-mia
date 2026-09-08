@@ -25,11 +25,9 @@ const INSUMOS_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTxAviE
 const REFEICOES_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTrD-GbjBDnRbfpgiYcTd6W8wHcQMVE37hMs2l_a7xNvvFrZ0A1TydyWGRxI90AfTXa6Hbht2JvIbUK/pub?gid=1519326032&single=true&output=csv';
 const AUSENCIAS_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTrD-GbjBDnRbfpgiYcTd6W8wHcQMVE37hMs2l_a7xNvvFrZ0A1TydyWGRxI90AfTXa6Hbht2JvIbUK/pub?gid=632854171&single=true&output=csv';
 const PRODUCAO_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTrD-GbjBDnRbfpgiYcTd6W8wHcQMVE37hMs2l_a7xNvvFrZ0A1TydyWGRxI90AfTXa6Hbht2JvIbUK/pub?gid=1492952412&single=true&output=csv';
-// TODO: troque pela URL /exec real depois de criar a planilha AVISOS
-// (colunas ID, TEXTO, CRIADO_EM, ATUALIZADO_EM) + Apps Script + deploy —
-// mesmo processo do Refeitório. Sem isso configurado, o mural de avisos
-// só não aparece, não quebra o resto do painel.
-const AVISOS_EXEC_URL = 'https://script.google.com/macros/s/SEU_ID_AQUI/exec';
+// Mesmo projeto Apps Script do webhook de leitura de água (Telegram) —
+// o doPost de lá roteia entre os dois usos pelo formato do corpo.
+const AVISOS_EXEC_URL = 'https://script.google.com/macros/s/AKfycbzHvvPZzBDSB730gShVCl7CPQb23h37w8k8B-cY8n1RI-NkBJzp0eUP5m-rbtj3nGdwpw/exec';
 const INSUMOS_EXEC_URL = 'https://script.google.com/macros/s/AKfycbxtrM875Sb92YmXJRQUyTTW1fYgEIyDYwg_D6FJqlQHcsyiPvg8frozc2nug8WbTJzM/exec';
 const DEDETIZACAO_EXEC_URL = 'https://script.google.com/macros/s/AKfycbzboegVJXJT55v2iOPr51DvgHFRShIN-dLnZzhGdfpTh1pnohV92k9LiIn6M6jE9ekt/exec';
 
