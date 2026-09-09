@@ -3435,17 +3435,41 @@ function textoIngredientes(ingredientePrincipal, extras) {
   return partes.length ? partes.join(' · ') : '-';
 }
 
+// Arredonda pra 1 casa decimal evitando erro de ponto flutuante (ex.:
+// 0.1 + 0.2 não dar 0.30000000000000004) — usado em qualquer soma de
+// KG desta aba antes de exibir, pra um total sempre bater com a soma
+// das partes mostradas ao lado dele.
+function arredondarKg(valor) {
+  return Math.round(valor * 10) / 10;
+}
+
 // Total de sobra da categoria, detalhando por unidade (TC/YUKA) quando
 // mais de uma contribuiu naquele dia — "3.0 kg (TC: 2.0 · YUKA: 1.0)".
 // Com só uma unidade (ou nenhuma, ex.: dado antigo sem a coluna
 // UNIDADE), mostra só o total, sem parênteses — não precisa nomear o
 // óbvio. Módulo-escopo pelo mesmo motivo de textoIngredientes (tela e
 // PDF usam a mesma formatação).
+//
+// O número à esquerda é a SOMA DAS PARTES JÁ ARREDONDADAS (não o total
+// bruto arredondado à parte) — isso garante que "TC: 0.4 · YUKA: 0.3"
+// sempre bate com "0.7 kg" na frente, mesmo quando arredondar cada
+// unidade separadamente não dá exatamente o mesmo resultado que
+// arredondar a soma bruta de uma vez (ex.: TC=0.35+YUKA=0.25=0.60 bruto,
+// mas 0.35 e 0.25 arredondam pra 0.4 e 0.3, que somam 0.7 — mostrar
+// "0.6 kg (TC: 0.4 · YUKA: 0.3)" pareceria conta errada). Sobra sem
+// unidade (dado antigo/coluna ainda não criada) entra no total mas
+// nunca aparece nomeada nos parênteses.
 function textoSobra(total, sobraPorUnidade) {
   const unidades = Object.keys(sobraPorUnidade || {}).sort();
-  if (unidades.length < 2) return `${total.toFixed(1)} kg`;
-  const detalhe = unidades.map(u => `${u}: ${sobraPorUnidade[u].toFixed(1)}`).join(' · ');
-  return `${total.toFixed(1)} kg (${detalhe})`;
+  if (unidades.length < 2) return `${arredondarKg(total).toFixed(1)} kg`;
+
+  const partesNomeadas = unidades.map(u => arredondarKg(sobraPorUnidade[u]));
+  const somaUnidades = unidades.reduce((soma, u) => soma + sobraPorUnidade[u], 0);
+  const resto = arredondarKg(total - somaUnidades); // sobra sem unidade, se houver
+  const totalExibido = arredondarKg(partesNomeadas.reduce((soma, v) => soma + v, 0) + Math.max(resto, 0));
+
+  const detalhe = unidades.map((u, i) => `${u}: ${partesNomeadas[i].toFixed(1)}`).join(' · ');
+  return `${totalExibido.toFixed(1)} kg (${detalhe})`;
 }
 
 async function carregarRefeicoes() {
@@ -3658,15 +3682,23 @@ async function carregarRefeicoes() {
       const porCategoria = {};
       producaoDoDia.forEach(p => {
         if (!porCategoria[p.item]) porCategoria[p.item] = { produzido: 0, sobra: 0, cru: 0, ingrediente: '', extras: [], sobraPorUnidade: {} };
-        porCategoria[p.item].produzido += p.kgProduzido;
-        porCategoria[p.item].sobra += p.kgSobra;
-        porCategoria[p.item].cru += p.kgCru;
+        // arredondarKg (3 casas) depois de cada soma: sem isso, 0.1+0.2
+        // etc. acumula erro de ponto flutuante e o total pode não bater
+        // com a soma das partes exibidas (ex.: TC+YUKA != total na
+        // coluna Sobra) — só um problema de exibição, os valores em si
+        // sempre estiveram certos, mas ficava esquisito de ver.
+        porCategoria[p.item].produzido = arredondarKg(porCategoria[p.item].produzido + p.kgProduzido);
+        porCategoria[p.item].sobra = arredondarKg(porCategoria[p.item].sobra + p.kgSobra);
+        porCategoria[p.item].cru = arredondarKg(porCategoria[p.item].cru + p.kgCru);
         if (p.ingrediente) porCategoria[p.item].ingrediente = p.ingrediente;
         // Sobra COM unidade também entra no detalhamento por unidade (TC/
         // YUKA) — sobra sem unidade (dado antigo, ou coluna ainda não
         // criada) só soma no total, sem aparecer nomeada (ver
         // textoSobra).
         if (p.unidade && p.kgSobra) {
+          // Guardado sem arredondar (arredondarKg só na hora de exibir,
+          // dentro de textoSobra) — é o que permite deduzir o "resto"
+          // sem unidade corretamente por subtração exata.
           porCategoria[p.item].sobraPorUnidade[p.unidade] = (porCategoria[p.item].sobraPorUnidade[p.unidade] || 0) + p.kgSobra;
         }
       });
