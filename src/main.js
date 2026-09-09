@@ -25,6 +25,10 @@ const INSUMOS_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTxAviE
 const REFEICOES_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTrD-GbjBDnRbfpgiYcTd6W8wHcQMVE37hMs2l_a7xNvvFrZ0A1TydyWGRxI90AfTXa6Hbht2JvIbUK/pub?gid=1519326032&single=true&output=csv';
 const AUSENCIAS_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTrD-GbjBDnRbfpgiYcTd6W8wHcQMVE37hMs2l_a7xNvvFrZ0A1TydyWGRxI90AfTXa6Hbht2JvIbUK/pub?gid=632854171&single=true&output=csv';
 const PRODUCAO_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTrD-GbjBDnRbfpgiYcTd6W8wHcQMVE37hMs2l_a7xNvvFrZ0A1TydyWGRxI90AfTXa6Hbht2JvIbUK/pub?gid=1492952412&single=true&output=csv';
+// CONFIG_RENDIMENTO — linhas TIPO=USO são os ingredientes extras
+// lançados na tela de Produção (ver refeitorio-mamma-mia); linhas sem
+// TIPO são a config de rendimento esperado, ignoradas aqui.
+const CONFIG_RENDIMENTO_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTrD-GbjBDnRbfpgiYcTd6W8wHcQMVE37hMs2l_a7xNvvFrZ0A1TydyWGRxI90AfTXa6Hbht2JvIbUK/pub?gid=289097055&single=true&output=csv';
 // Mesmo projeto Apps Script do webhook de leitura de água (Telegram) —
 // o doPost de lá roteia entre os dois usos pelo formato do corpo.
 const AVISOS_EXEC_URL = 'https://script.google.com/macros/s/AKfycbzHvvPZzBDSB730gShVCl7CPQb23h37w8k8B-cY8n1RI-NkBJzp0eUP5m-rbtj3nGdwpw/exec';
@@ -3418,6 +3422,19 @@ function _renderizarHistoricoHigienizacao(registros, countEl, historicoBody) {
 // de gerar (ver refeicoesGerarPDF mais abaixo).
 let ultimoEstadoRefeicoes = null;
 
+// Junta o ingrediente principal (Frango, Farofa — "Qual?" no formulário)
+// com os extras (calabresa, cenoura...) num texto só, pra uma coluna só
+// na tabela/PDF: "Frango · calabresa, cenoura". Módulo-escopo (não
+// dentro de carregarRefeicoes) porque tanto a tela quanto o PDF
+// (refeicoesGerarPDF) precisam formatar do mesmo jeito.
+function textoIngredientes(ingredientePrincipal, extras) {
+  const extrasUnicos = [...new Set((extras || []).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+  const partes = [];
+  if (ingredientePrincipal) partes.push(ingredientePrincipal);
+  if (extrasUnicos.length) partes.push(extrasUnicos.join(', '));
+  return partes.length ? partes.join(' · ') : '-';
+}
+
 async function carregarRefeicoes() {
   const conteudo = document.getElementById('refeicoes-conteudo');
   const inputData = document.getElementById('refeicoes-filtro-data');
@@ -3436,15 +3453,23 @@ async function carregarRefeicoes() {
     const linhasRefeicoes = parseCSVLinhas(await respostaRefeicoes.text());
     const linhasAusencias = parseCSVLinhas(await respostaAusencias.text());
 
-    // Produção busca à parte, com seu próprio try/catch: o gid ainda não
-    // está configurado (ver TODO em PRODUCAO_CSV_URL), então uma falha aqui
-    // não pode derrubar Refeições/Ausências, que já funcionam.
+    // Produção e Config. de Rendimento buscam à parte, cada uma com seu
+    // próprio try/catch: uma falha nelas não pode derrubar Refeições/
+    // Ausências, que já funcionam independente disso.
     let linhasProducao = [];
     try {
       const respostaProducao = await fetch(PRODUCAO_CSV_URL, { cache: 'no-store' });
       if (respostaProducao.ok) linhasProducao = parseCSVLinhas(await respostaProducao.text());
     } catch (erroProducao) {
       console.warn('[REFEICOES] Produção não carregada (gid ainda não configurado?)', erroProducao);
+    }
+
+    let linhasConfigRendimento = [];
+    try {
+      const respostaConfigRendimento = await fetch(CONFIG_RENDIMENTO_CSV_URL, { cache: 'no-store' });
+      if (respostaConfigRendimento.ok) linhasConfigRendimento = parseCSVLinhas(await respostaConfigRendimento.text());
+    } catch (erroConfigRendimento) {
+      console.warn('[REFEICOES] Ingredientes extras não carregados', erroConfigRendimento);
     }
 
     let registros = [];
@@ -3506,6 +3531,10 @@ async function carregarRefeicoes() {
       // sobra em vez de descartar, então "perda" não reflete o processo real
       // — removido a pedido do usuário.)
       const idxKgCru = cabecalhoProd.findIndex(c => c.includes('KG_CRU') || c.includes('KGCRU'));
+      // Também opcional (mesma lógica) — o ingrediente principal da
+      // categoria (Frango, Farofa...), só existe pra Prato Principal e
+      // Guarnição no formulário, mas lido aqui igual pra todas.
+      const idxIngrediente = cabecalhoProd.findIndex(c => c === 'INGREDIENTE');
 
       producao = linhasProducao.slice(1)
         .filter(cols => cols.some(c => c.trim() !== ''))
@@ -3515,8 +3544,33 @@ async function carregarRefeicoes() {
           kgProduzido: Number((cols[idxKgProduzido] || '0').replace(',', '.')) || 0,
           kgSobra: Number((cols[idxKgSobra] || '0').replace(',', '.')) || 0,
           kgCru: idxKgCru === -1 ? 0 : Number((cols[idxKgCru] || '0').replace(',', '.')) || 0,
+          ingrediente: idxIngrediente === -1 ? '' : (cols[idxIngrediente] || '').trim(),
         }))
         .filter(p => p.item);
+    }
+
+    // Ingredientes extras (calabresa, cenoura...) — linhas TIPO=USO de
+    // CONFIG_RENDIMENTO (ver refeitorio-mamma-mia/Code.gs,
+    // registrarIngredientesExtras). Linhas sem TIPO são a config de
+    // rendimento esperado, ignoradas aqui — só interessa o uso diário.
+    let ingredientesExtras = [];
+    if (linhasConfigRendimento.length >= 2) {
+      const cabecalhoConfig = linhasConfigRendimento[0].map(c => c.trim().toUpperCase());
+      const idxCategoriaExtra = cabecalhoConfig.findIndex(c => c === 'CATEGORIA');
+      const idxTipoExtra = cabecalhoConfig.findIndex(c => c === 'TIPO');
+      const idxDataExtra = cabecalhoConfig.findIndex(c => c === 'DATA');
+      const idxItemExtra = cabecalhoConfig.findIndex(c => c === 'ITEM');
+
+      if (idxCategoriaExtra !== -1 && idxTipoExtra !== -1 && idxDataExtra !== -1 && idxItemExtra !== -1) {
+        ingredientesExtras = linhasConfigRendimento.slice(1)
+          .filter(cols => (cols[idxTipoExtra] || '').trim().toUpperCase() === 'USO')
+          .map(cols => ({
+            nome: (cols[idxCategoriaExtra] || '').trim(),
+            data: (cols[idxDataExtra] || '').trim(),
+            item: (cols[idxItemExtra] || '').trim(),
+          }))
+          .filter(e => e.nome);
+      }
     }
 
     function converterDataBRParaOrdenacao(dataBR) {
@@ -3584,20 +3638,29 @@ async function carregarRefeicoes() {
       const producaoDoDia = producao.filter(p => p.data === dataSelecionadaBR);
       const porCategoria = {};
       producaoDoDia.forEach(p => {
-        if (!porCategoria[p.item]) porCategoria[p.item] = { produzido: 0, sobra: 0, cru: 0 };
+        if (!porCategoria[p.item]) porCategoria[p.item] = { produzido: 0, sobra: 0, cru: 0, ingrediente: '', extras: [] };
         porCategoria[p.item].produzido += p.kgProduzido;
         porCategoria[p.item].sobra += p.kgSobra;
         porCategoria[p.item].cru += p.kgCru;
+        if (p.ingrediente) porCategoria[p.item].ingrediente = p.ingrediente;
       });
+      // Ingredientes extras do dia (calabresa, cenoura...), agrupados na
+      // mesma categoria — só entram se a categoria já teve produção
+      // registrada nesse dia (senão não haveria onde mostrar).
+      ingredientesExtras
+        .filter(e => e.data === dataSelecionadaBR && porCategoria[e.item])
+        .forEach(e => porCategoria[e.item].extras.push(e.nome));
+
       const categorias = Object.keys(porCategoria).sort();
       const linhasProducaoHtml = categorias.length
         ? categorias.map(c => {
             const d = porCategoria[c];
             const cru = d.cru > 0 ? `${d.cru.toFixed(1)} kg` : '-';
             const rendimento = d.cru > 0 ? `${((d.produzido / d.cru) * 100).toFixed(0)}%` : '-';
-            return `<tr><td>${c}</td><td>${cru}</td><td>${d.produzido.toFixed(1)} kg</td><td>${d.sobra.toFixed(1)} kg</td><td>${rendimento}</td></tr>`;
+            const ingredientes = textoIngredientes(d.ingrediente, d.extras);
+            return `<tr><td>${c}</td><td>${cru}</td><td>${d.produzido.toFixed(1)} kg</td><td>${d.sobra.toFixed(1)} kg</td><td>${rendimento}</td><td>${ingredientes}</td></tr>`;
           }).join('')
-        : '<tr><td colspan="5" style="color:var(--text-muted);">Nenhuma produção registrada nesse dia.</td></tr>';
+        : '<tr><td colspan="6" style="color:var(--text-muted);">Nenhuma produção registrada nesse dia.</td></tr>';
 
       const linhasPresencaHtml = presentesDoDia.length
         ? presentesDoDia.map(nome => `<tr><td>${nome}</td></tr>`).join('')
@@ -3630,7 +3693,7 @@ async function carregarRefeicoes() {
         <div class="panel-header" style="margin-top:1.8rem;"><h3>🍲 Produção e Sobra</h3></div>
         <div class="table-responsive">
           <table class="modern-table">
-            <thead><tr><th>Categoria</th><th>Cru</th><th>Produzido</th><th>Sobra</th><th>Rendimento</th></tr></thead>
+            <thead><tr><th>Categoria</th><th>Cru</th><th>Produzido</th><th>Sobra</th><th>Rendimento</th><th>Ingredientes</th></tr></thead>
             <tbody>${linhasProducaoHtml}</tbody>
           </table>
         </div>
@@ -3696,15 +3759,17 @@ function refeicoesGerarPDF(estado) {
         const d = porCategoria[c];
         const cru = d.cru > 0 ? `${d.cru.toFixed(1)} kg` : '-';
         const rendimento = d.cru > 0 ? `${((d.produzido / d.cru) * 100).toFixed(0)}%` : '-';
+        const ingredientes = textoIngredientes(d.ingrediente, d.extras);
         return `<tr>
           <td style="font-size:11px;padding:5px 6px;">${c}</td>
           <td style="font-size:11px;padding:5px 6px;">${cru}</td>
           <td style="font-size:11px;padding:5px 6px;">${d.produzido.toFixed(1)} kg</td>
           <td style="font-size:11px;padding:5px 6px;">${d.sobra.toFixed(1)} kg</td>
           <td style="font-size:11px;padding:5px 6px;">${rendimento}</td>
+          <td style="font-size:11px;padding:5px 6px;">${ingredientes}</td>
         </tr>`;
       }).join('')
-    : '<tr><td colspan="5" style="font-size:11px;padding:5px 6px;color:#a09284;">Nenhuma produção registrada nesse dia.</td></tr>';
+    : '<tr><td colspan="6" style="font-size:11px;padding:5px 6px;color:#a09284;">Nenhuma produção registrada nesse dia.</td></tr>';
 
   function secao(titulo, cabecalhos, linhasHtml) {
     return `
@@ -3742,7 +3807,7 @@ function refeicoesGerarPDF(estado) {
 
       ${secao('Lista de Presença', ['Nome'], linhasPresenca)}
       ${secao('Ausências (faltas e férias)', ['Nome', 'Tipo', 'Data'], linhasAusencias)}
-      ${secao('Produção e Sobra', ['Categoria', 'Cru', 'Produzido', 'Sobra', 'Rendimento'], linhasProducao)}
+      ${secao('Produção e Sobra', ['Categoria', 'Cru', 'Produzido', 'Sobra', 'Rendimento', 'Ingredientes'], linhasProducao)}
 
       <div style="margin-top:24px;padding-top:12px;border-top:1px solid #e8ddd0;font-size:10px;color:#a09284;text-align:center;">
         Mamma Mia Control — Gestão Inteligente de Operações • © 2026 Mamma Mia Salgados
