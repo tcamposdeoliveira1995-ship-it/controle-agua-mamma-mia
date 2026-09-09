@@ -3435,6 +3435,19 @@ function textoIngredientes(ingredientePrincipal, extras) {
   return partes.length ? partes.join(' · ') : '-';
 }
 
+// Total de sobra da categoria, detalhando por unidade (TC/YUKA) quando
+// mais de uma contribuiu naquele dia — "3.0 kg (TC: 2.0 · YUKA: 1.0)".
+// Com só uma unidade (ou nenhuma, ex.: dado antigo sem a coluna
+// UNIDADE), mostra só o total, sem parênteses — não precisa nomear o
+// óbvio. Módulo-escopo pelo mesmo motivo de textoIngredientes (tela e
+// PDF usam a mesma formatação).
+function textoSobra(total, sobraPorUnidade) {
+  const unidades = Object.keys(sobraPorUnidade || {}).sort();
+  if (unidades.length < 2) return `${total.toFixed(1)} kg`;
+  const detalhe = unidades.map(u => `${u}: ${sobraPorUnidade[u].toFixed(1)}`).join(' · ');
+  return `${total.toFixed(1)} kg (${detalhe})`;
+}
+
 async function carregarRefeicoes() {
   const conteudo = document.getElementById('refeicoes-conteudo');
   const inputData = document.getElementById('refeicoes-filtro-data');
@@ -3535,6 +3548,11 @@ async function carregarRefeicoes() {
       // categoria (Frango, Farofa...), só existe pra Prato Principal e
       // Guarnição no formulário, mas lido aqui igual pra todas.
       const idxIngrediente = cabecalhoProd.findIndex(c => c === 'INGREDIENTE');
+      // Também opcional — só linhas de sobra (registrarSobra) preenchem;
+      // linhas de produção (Cru/Produzido) ficam sem unidade, já que a
+      // produção é centralizada numa cozinha só (ver spec
+      // 2026-09-09-sobra-por-unidade-design.md).
+      const idxUnidade = cabecalhoProd.findIndex(c => c === 'UNIDADE');
 
       producao = linhasProducao.slice(1)
         .filter(cols => cols.some(c => c.trim() !== ''))
@@ -3545,6 +3563,7 @@ async function carregarRefeicoes() {
           kgSobra: Number((cols[idxKgSobra] || '0').replace(',', '.')) || 0,
           kgCru: idxKgCru === -1 ? 0 : Number((cols[idxKgCru] || '0').replace(',', '.')) || 0,
           ingrediente: idxIngrediente === -1 ? '' : (cols[idxIngrediente] || '').trim(),
+          unidade: idxUnidade === -1 ? '' : (cols[idxUnidade] || '').trim().toUpperCase(),
         }))
         .filter(p => p.item);
     }
@@ -3638,11 +3657,18 @@ async function carregarRefeicoes() {
       const producaoDoDia = producao.filter(p => p.data === dataSelecionadaBR);
       const porCategoria = {};
       producaoDoDia.forEach(p => {
-        if (!porCategoria[p.item]) porCategoria[p.item] = { produzido: 0, sobra: 0, cru: 0, ingrediente: '', extras: [] };
+        if (!porCategoria[p.item]) porCategoria[p.item] = { produzido: 0, sobra: 0, cru: 0, ingrediente: '', extras: [], sobraPorUnidade: {} };
         porCategoria[p.item].produzido += p.kgProduzido;
         porCategoria[p.item].sobra += p.kgSobra;
         porCategoria[p.item].cru += p.kgCru;
         if (p.ingrediente) porCategoria[p.item].ingrediente = p.ingrediente;
+        // Sobra COM unidade também entra no detalhamento por unidade (TC/
+        // YUKA) — sobra sem unidade (dado antigo, ou coluna ainda não
+        // criada) só soma no total, sem aparecer nomeada (ver
+        // textoSobra).
+        if (p.unidade && p.kgSobra) {
+          porCategoria[p.item].sobraPorUnidade[p.unidade] = (porCategoria[p.item].sobraPorUnidade[p.unidade] || 0) + p.kgSobra;
+        }
       });
       // Ingredientes extras do dia (calabresa, cenoura...), agrupados na
       // mesma categoria — só entram se a categoria já teve produção
@@ -3658,7 +3684,8 @@ async function carregarRefeicoes() {
             const cru = d.cru > 0 ? `${d.cru.toFixed(1)} kg` : '-';
             const rendimento = d.cru > 0 ? `${((d.produzido / d.cru) * 100).toFixed(0)}%` : '-';
             const ingredientes = textoIngredientes(d.ingrediente, d.extras);
-            return `<tr><td>${c}</td><td>${cru}</td><td>${d.produzido.toFixed(1)} kg</td><td>${d.sobra.toFixed(1)} kg</td><td>${rendimento}</td><td>${ingredientes}</td></tr>`;
+            const sobra = textoSobra(d.sobra, d.sobraPorUnidade);
+            return `<tr><td>${c}</td><td>${cru}</td><td>${d.produzido.toFixed(1)} kg</td><td>${sobra}</td><td>${rendimento}</td><td>${ingredientes}</td></tr>`;
           }).join('')
         : '<tr><td colspan="6" style="color:var(--text-muted);">Nenhuma produção registrada nesse dia.</td></tr>';
 
@@ -3760,11 +3787,12 @@ function refeicoesGerarPDF(estado) {
         const cru = d.cru > 0 ? `${d.cru.toFixed(1)} kg` : '-';
         const rendimento = d.cru > 0 ? `${((d.produzido / d.cru) * 100).toFixed(0)}%` : '-';
         const ingredientes = textoIngredientes(d.ingrediente, d.extras);
+        const sobra = textoSobra(d.sobra, d.sobraPorUnidade);
         return `<tr>
           <td style="font-size:11px;padding:5px 6px;">${c}</td>
           <td style="font-size:11px;padding:5px 6px;">${cru}</td>
           <td style="font-size:11px;padding:5px 6px;">${d.produzido.toFixed(1)} kg</td>
-          <td style="font-size:11px;padding:5px 6px;">${d.sobra.toFixed(1)} kg</td>
+          <td style="font-size:11px;padding:5px 6px;">${sobra}</td>
           <td style="font-size:11px;padding:5px 6px;">${rendimento}</td>
           <td style="font-size:11px;padding:5px 6px;">${ingredientes}</td>
         </tr>`;
