@@ -1896,6 +1896,33 @@ function _perdasNormalizar(texto, fallback) {
 
 const PERDAS_PERIODO_LABEL = { TODOS: 'Tudo', MES_ATUAL: 'Este mês', MES_PASSADO: 'Mês passado' };
 
+// Total perdido em cada dia da semana ATUAL (Segunda a Domingo), pro
+// gráfico "Resumo Semanal" — ignora o filtro de período (TODOS/MES_
+// ATUAL/MES_PASSADO) de propósito, já que "semana atual" é um recorte
+// fixo por natureza. Dias sem registro entram com 0, pra mostrar a
+// semana inteira (inclusive os dias que ainda não chegaram).
+function _perdasResumoSemanal(registros) {
+  const hoje = new Date();
+  hoje.setHours(0, 0, 0, 0);
+  // getDay(): Domingo=0..Sábado=6 — tratamos Domingo como o 7º dia da
+  // semana corrente (não o 1º), daí o ajuste abaixo.
+  const diaSemanaHoje = hoje.getDay();
+  const deslocamentoSegunda = diaSemanaHoje === 0 ? 6 : diaSemanaHoje - 1;
+  const segunda = new Date(hoje);
+  segunda.setDate(hoje.getDate() - deslocamentoSegunda);
+
+  const labels = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'];
+  const valores = labels.map((_, i) => {
+    const dia = new Date(segunda);
+    dia.setDate(segunda.getDate() + i);
+    return registros
+      .filter(r => r.data && r.data.getFullYear() === dia.getFullYear() && r.data.getMonth() === dia.getMonth() && r.data.getDate() === dia.getDate())
+      .reduce((soma, r) => soma + r.quantidade, 0);
+  });
+
+  return { labels, valores };
+}
+
 function _perdasGerarPDF(registros, kpis, periodoLabel) {
   const agora = new Date().toLocaleString('pt-BR');
   const linhas = registros.map(r => `
@@ -2004,6 +2031,9 @@ async function carregarPerdas() {
 
     function renderizar() {
       const registrosPeriodo = _perdasFiltrarPorPeriodo(registros, periodoAtual);
+      // Sempre a partir de `registros` (não `registrosPeriodo`) — o
+      // Resumo Semanal ignora o filtro de período de propósito.
+      const resumoSemanal = _perdasResumoSemanal(registros);
 
       const motivos = {}; const produtos = {}; const setores = {}; const responsaveis = {};
       let totalQuantidade = 0;
@@ -2143,6 +2173,7 @@ async function carregarPerdas() {
           <div class="panel-card"><h3>🚨 Perdas por Motivo</h3><div class="chart-wrapper"><canvas id="graficoMotivos"></canvas></div></div>
           <div class="panel-card"><h3>🏆 Ranking de Produtos Perdidos</h3><div class="chart-wrapper"><canvas id="graficoProdutos"></canvas></div></div>
           <div class="panel-card"><h3>👤 Perdas por Responsável</h3><div class="chart-wrapper"><canvas id="graficoResponsaveis"></canvas></div></div>
+          <div class="panel-card"><h3>📅 Resumo Semanal</h3><div class="chart-wrapper"><canvas id="graficoResumoSemanal"></canvas></div></div>
         </div>
 
         <div class="panel-card">
@@ -2167,6 +2198,10 @@ async function carregarPerdas() {
       if (ctxProdutos) new Chart(ctxProdutos, { type: 'bar', data: { labels: labelsProdutos, datasets: [{ label: 'Perdas', data: valoresProdutos }] }, options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false } });
       const ctxResponsaveis = document.getElementById('graficoResponsaveis');
       if (ctxResponsaveis) new Chart(ctxResponsaveis, { type: 'bar', data: { labels: labelsResponsaveis, datasets: [{ label: 'Perdas', data: valoresResponsaveis }] }, options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false } });
+      const ctxResumoSemanal = document.getElementById('graficoResumoSemanal');
+      // Sem indexAxis: 'y' — diferente dos outros 3 (ranking, barra
+      // horizontal), aqui o eixo natural é vertical: dias da semana no X.
+      if (ctxResumoSemanal) new Chart(ctxResumoSemanal, { type: 'bar', data: { labels: resumoSemanal.labels, datasets: [{ label: 'Perdas', data: resumoSemanal.valores }] }, options: { responsive: true, maintainAspectRatio: false } });
 
       atualizarTabela(true);
 
