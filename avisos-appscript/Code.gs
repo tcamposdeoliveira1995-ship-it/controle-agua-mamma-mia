@@ -86,6 +86,34 @@ function marcarComoEnviado(relogio) {
   props.setProperty(chave, "true");
 }
 
+// Trava definitiva contra reenvio de webhook do Telegram — diferente do
+// CacheService (que expira em no máximo 6h), PropertiesService não tem
+// prazo de validade, então um update_id marcado aqui fica bloqueado pra
+// sempre, não importa quanto tempo depois o Telegram reentregar (já
+// visto reentregar quase 19h depois, virando o dia). Guarda só os
+// últimos MAX_UPDATES_GUARDADOS ids, numa lista só (1 Script Property),
+// pra nunca estourar o limite de tamanho de uma propriedade (9KB) — não
+// precisa guardar para sempre, só o suficiente pra cobrir qualquer
+// reenvio tardio plausível.
+var MAX_UPDATES_GUARDADOS = 300;
+var CHAVE_UPDATES_PROCESSADOS = "UPDATES_TELEGRAM_PROCESSADOS";
+
+function jaProcessouUpdate(updateId) {
+  var props = PropertiesService.getScriptProperties();
+  var lista = JSON.parse(props.getProperty(CHAVE_UPDATES_PROCESSADOS) || "[]");
+  return lista.indexOf(updateId) !== -1;
+}
+
+function marcarUpdateProcessado(updateId) {
+  var props = PropertiesService.getScriptProperties();
+  var lista = JSON.parse(props.getProperty(CHAVE_UPDATES_PROCESSADOS) || "[]");
+  lista.push(updateId);
+  if (lista.length > MAX_UPDATES_GUARDADOS) {
+    lista = lista.slice(lista.length - MAX_UPDATES_GUARDADOS);
+  }
+  props.setProperty(CHAVE_UPDATES_PROCESSADOS, JSON.stringify(lista));
+}
+
 // ================= CICLO DE CONSUMO (alertas de 20/40/60/80%/meta) =================
 // O ciclo de faturamento não é mês corrente — começa no dia
 // c.diaInicioCiclo (hoje, dia 7) e vai até o dia anterior ao próximo
@@ -551,12 +579,16 @@ function doPost(e) {
 
   if (dados.message) {
     // O Telegram reenvia a MESMA atualização (mesmo update_id) se não
-    // receber confirmação rápido o suficiente — às vezes num intervalo
-    // bem mais longo que alguns minutos. 21600s (6h, o máximo que
-    // CacheService aceita) é o teto pra pegar isso cedo, sem nem tocar
-    // na planilha; mesmo se esse reenvio escapar dessa janela, a trava
-    // de jaEnviouHoje() lá embaixo garante que a pessoa não vê o aviso
-    // duas vezes de qualquer forma.
+    // receber confirmação rápido o suficiente — e já vimos reentregar
+    // quase 19h depois (bem além do teto de 6h do CacheService). Por
+    // isso duas camadas: CacheService primeiro (rápido, sem tocar na
+    // planilha, cobre a maioria dos casos) e, se passar disso,
+    // jaProcessouUpdate/marcarUpdateProcessado (PropertiesService, sem
+    // prazo de validade — ver função abaixo) como travamento definitivo,
+    // pra nunca mais um reenvio tardio ser tratado como leitura nova de
+    // verdade (o que já aconteceu: reentregou já no dia seguinte e
+    // preencheu a leitura de hoje com o valor de ONTEM, bloqueando o
+    // registro real da pessoa).
     if (dados.update_id != null) {
       var cache = CacheService.getScriptCache();
       var chaveUpdate = "update_" + dados.update_id;
@@ -564,6 +596,11 @@ function doPost(e) {
         return ContentService.createTextOutput("ok");
       }
       cache.put(chaveUpdate, "1", 21600);
+
+      if (jaProcessouUpdate(dados.update_id)) {
+        return ContentService.createTextOutput("ok");
+      }
+      marcarUpdateProcessado(dados.update_id);
     }
 
     // Nunca deixa um erro aqui passar em silêncio de novo — se algo
