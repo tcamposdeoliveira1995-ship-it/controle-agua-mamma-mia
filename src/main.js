@@ -1896,28 +1896,31 @@ function _perdasNormalizar(texto, fallback) {
 
 const PERDAS_PERIODO_LABEL = { TODOS: 'Tudo', MES_ATUAL: 'Este mês', MES_PASSADO: 'Mês passado' };
 
-// Segunda-feira (00:00) da semana ATUAL — base pra tudo relacionado ao
-// "Resumo Semanal" (gráfico dia a dia e lista de produtos), pra não
-// calcular o mesmo deslocamento duas vezes de formas que possam divergir.
-function _perdasInicioSemanaAtual() {
-  const hoje = new Date();
-  hoje.setHours(0, 0, 0, 0);
+// Segunda-feira (00:00) da semana que contém `dataReferencia` (hoje, se
+// omitida) — base pra tudo relacionado ao "Resumo Semanal" (gráfico dia
+// a dia e lista de produtos), pra não calcular o mesmo deslocamento
+// duas vezes de formas que possam divergir. Navegação entre semanas
+// (setas ‹ › / campo de data no card) só muda `dataReferencia`.
+function _perdasInicioSemana(dataReferencia) {
+  const referencia = dataReferencia ? new Date(dataReferencia) : new Date();
+  referencia.setHours(0, 0, 0, 0);
   // getDay(): Domingo=0..Sábado=6 — tratamos Domingo como o 7º dia da
-  // semana corrente (não o 1º), daí o ajuste abaixo.
-  const diaSemanaHoje = hoje.getDay();
-  const deslocamentoSegunda = diaSemanaHoje === 0 ? 6 : diaSemanaHoje - 1;
-  const segunda = new Date(hoje);
-  segunda.setDate(hoje.getDate() - deslocamentoSegunda);
+  // semana (não o 1º), daí o ajuste abaixo.
+  const diaSemana = referencia.getDay();
+  const deslocamentoSegunda = diaSemana === 0 ? 6 : diaSemana - 1;
+  const segunda = new Date(referencia);
+  segunda.setDate(referencia.getDate() - deslocamentoSegunda);
   return segunda;
 }
 
-// Total perdido em cada dia da semana ATUAL (Segunda a Domingo), pro
-// gráfico "Resumo Semanal" — ignora o filtro de período (TODOS/MES_
-// ATUAL/MES_PASSADO) de propósito, já que "semana atual" é um recorte
-// fixo por natureza. Dias sem registro entram com 0, pra mostrar a
-// semana inteira (inclusive os dias que ainda não chegaram).
-function _perdasResumoSemanal(registros) {
-  const segunda = _perdasInicioSemanaAtual();
+// Total perdido em cada dia da semana que contém `dataReferencia`
+// (Segunda a Domingo), pro gráfico "Resumo Semanal" — ignora o filtro
+// de período (TODOS/MES_ATUAL/MES_PASSADO) de propósito, já que
+// "semana" aqui é um recorte à parte, escolhido pelo campo de data do
+// próprio card. Dias sem registro entram com 0, pra mostrar a semana
+// inteira (inclusive dias futuros, quando a semana escolhida é a atual).
+function _perdasResumoSemanal(registros, dataReferencia) {
+  const segunda = _perdasInicioSemana(dataReferencia);
 
   const labels = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'];
   const valores = labels.map((_, i) => {
@@ -1928,14 +1931,14 @@ function _perdasResumoSemanal(registros) {
       .reduce((soma, r) => soma + r.quantidade, 0);
   });
 
-  return { labels, valores };
+  return { labels, valores, segunda };
 }
 
-// Produtos perdidos na semana ATUAL (Segunda até hoje), somados e
+// Produtos perdidos na semana que contém `dataReferencia`, somados e
 // ordenados do maior pro menor — lista ao lado do gráfico Resumo
 // Semanal, mesmo recorte de data (ignora o filtro de período).
-function _perdasProdutosSemana(registros) {
-  const segunda = _perdasInicioSemanaAtual();
+function _perdasProdutosSemana(registros, dataReferencia) {
+  const segunda = _perdasInicioSemana(dataReferencia);
   const domingoFimDoDia = new Date(segunda);
   domingoFimDoDia.setDate(segunda.getDate() + 7); // exclusivo: início da próxima segunda
 
@@ -2052,13 +2055,17 @@ async function carregarPerdas() {
     let periodoAtual = 'TODOS';
     let linhasVisiveis = 25;
     const PAGINA_TAMANHO = 25;
+    // Semana mostrada no card "Resumo Semanal" — começa na atual, mas o
+    // Thales (ou qualquer um) pode navegar pra outras semanas com as
+    // setas ou o campo de data do próprio card, pra comparar.
+    let perdasSemanaSelecionada = new Date();
 
     function renderizar() {
       const registrosPeriodo = _perdasFiltrarPorPeriodo(registros, periodoAtual);
       // Sempre a partir de `registros` (não `registrosPeriodo`) — o
       // Resumo Semanal ignora o filtro de período de propósito.
-      const resumoSemanal = _perdasResumoSemanal(registros);
-      const produtosSemana = _perdasProdutosSemana(registros);
+      const resumoSemanal = _perdasResumoSemanal(registros, perdasSemanaSelecionada);
+      const produtosSemana = _perdasProdutosSemana(registros, perdasSemanaSelecionada);
 
       const motivos = {}; const produtos = {}; const setores = {}; const responsaveis = {};
       let totalQuantidade = 0;
@@ -2195,7 +2202,24 @@ async function carregarPerdas() {
         ${ultimoRegistroHtml}
 
         <div class="panel-card" style="margin-bottom:20px;">
-          <h3>📅 Resumo Semanal</h3>
+          ${(() => {
+            const p = n => String(n).padStart(2, '0');
+            const domingo = new Date(resumoSemanal.segunda);
+            domingo.setDate(resumoSemanal.segunda.getDate() + 6);
+            const labelSegunda = `${p(resumoSemanal.segunda.getDate())}/${p(resumoSemanal.segunda.getMonth() + 1)}`;
+            const labelDomingo = `${p(domingo.getDate())}/${p(domingo.getMonth() + 1)}`;
+            const isoSelecionada = `${perdasSemanaSelecionada.getFullYear()}-${p(perdasSemanaSelecionada.getMonth() + 1)}-${p(perdasSemanaSelecionada.getDate())}`;
+            return `
+            <div class="panel-header" style="margin:0 0 0.8rem;flex-wrap:wrap;gap:0.6rem;">
+              <h3 style="margin:0;">📅 Resumo Semanal (${labelSegunda} a ${labelDomingo})</h3>
+              <div style="display:flex;align-items:center;gap:0.4rem;">
+                <button id="perdas-semana-anterior" class="btn btn-secondary" style="padding:0.35rem 0.7rem;" title="Semana anterior">‹</button>
+                <input type="date" id="perdas-semana-data" value="${isoSelecionada}" style="background: rgba(255,255,255,0.95); border: 1px solid var(--card-border); color: var(--text-primary); padding: 0.35rem 0.6rem; border-radius: var(--border-radius-sm); font-family: var(--font-main); font-size: 0.85rem;">
+                <button id="perdas-semana-seguinte" class="btn btn-secondary" style="padding:0.35rem 0.7rem;" title="Próxima semana">›</button>
+                <button id="perdas-semana-atual" class="btn btn-secondary" style="padding:0.35rem 0.7rem;font-size:0.78rem;">Hoje</button>
+              </div>
+            </div>`;
+          })()}
           <div style="display:flex;gap:20px;flex-wrap:wrap;align-items:stretch;">
             <div class="chart-wrapper" style="flex:2 1 320px;min-width:280px;"><canvas id="graficoResumoSemanal"></canvas></div>
             <div style="flex:1 1 200px;min-width:200px;">
@@ -2245,6 +2269,26 @@ async function carregarPerdas() {
 
       document.getElementById('filtro-periodo-perdas')?.addEventListener('change', e => {
         periodoAtual = e.target.value;
+        renderizar();
+      });
+      document.getElementById('perdas-semana-data')?.addEventListener('change', e => {
+        if (!e.target.value) return;
+        const [ano, mes, dia] = e.target.value.split('-').map(Number);
+        perdasSemanaSelecionada = new Date(ano, mes - 1, dia);
+        renderizar();
+      });
+      document.getElementById('perdas-semana-anterior')?.addEventListener('click', () => {
+        perdasSemanaSelecionada = new Date(perdasSemanaSelecionada);
+        perdasSemanaSelecionada.setDate(perdasSemanaSelecionada.getDate() - 7);
+        renderizar();
+      });
+      document.getElementById('perdas-semana-seguinte')?.addEventListener('click', () => {
+        perdasSemanaSelecionada = new Date(perdasSemanaSelecionada);
+        perdasSemanaSelecionada.setDate(perdasSemanaSelecionada.getDate() + 7);
+        renderizar();
+      });
+      document.getElementById('perdas-semana-atual')?.addEventListener('click', () => {
+        perdasSemanaSelecionada = new Date();
         renderizar();
       });
       document.getElementById('busca-perdas')?.addEventListener('input', () => atualizarTabela(true));
