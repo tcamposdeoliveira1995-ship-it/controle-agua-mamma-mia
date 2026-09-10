@@ -2194,23 +2194,24 @@ async function carregarPerdas() {
 
         ${ultimoRegistroHtml}
 
+        <div class="panel-card" style="margin-bottom:20px;">
+          <h3>📅 Resumo Semanal</h3>
+          <div style="display:flex;gap:20px;flex-wrap:wrap;align-items:stretch;">
+            <div class="chart-wrapper" style="flex:2 1 320px;min-width:280px;"><canvas id="graficoResumoSemanal"></canvas></div>
+            <div style="flex:1 1 200px;min-width:200px;">
+              <div class="ranking-list">${
+                produtosSemana.length
+                  ? produtosSemana.map(([produto, qtd]) => `<div class="ranking-item"><span>${produto}</span><span>${qtd.toLocaleString('pt-BR')}</span></div>`).join('')
+                  : '<p style="color:var(--text-muted);font-size:0.85rem;">Nenhuma perda essa semana.</p>'
+              }</div>
+            </div>
+          </div>
+        </div>
+
         <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:16px;margin-bottom:20px;">
           <div class="panel-card"><h3>🚨 Perdas por Motivo</h3><div class="chart-wrapper"><canvas id="graficoMotivos"></canvas></div></div>
           <div class="panel-card"><h3>🏆 Ranking de Produtos Perdidos</h3><div class="chart-wrapper"><canvas id="graficoProdutos"></canvas></div></div>
           <div class="panel-card"><h3>👤 Perdas por Responsável</h3><div class="chart-wrapper"><canvas id="graficoResponsaveis"></canvas></div></div>
-          <div class="panel-card">
-            <h3>📅 Resumo Semanal</h3>
-            <div style="display:flex;gap:16px;flex-wrap:wrap;align-items:stretch;">
-              <div class="chart-wrapper" style="flex:1 1 220px;min-width:220px;"><canvas id="graficoResumoSemanal"></canvas></div>
-              <div style="flex:1 1 160px;min-width:160px;">
-                <div class="ranking-list">${
-                  produtosSemana.length
-                    ? produtosSemana.map(([produto, qtd]) => `<div class="ranking-item"><span>${produto}</span><span>${qtd.toLocaleString('pt-BR')}</span></div>`).join('')
-                    : '<p style="color:var(--text-muted);font-size:0.85rem;">Nenhuma perda essa semana.</p>'
-                }</div>
-              </div>
-            </div>
-          </div>
         </div>
 
         <div class="panel-card">
