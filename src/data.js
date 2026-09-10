@@ -197,9 +197,14 @@ export function getCycleStats(readings, cycleKey) {
     startCycleDate = info.start; endCycleDate = info.end; label = info.label;
   }
 
+  // Inclui leituras isInitial (troca/reset de relógio) de propósito — o
+  // cálculo de consumo por medidor, mais abaixo, precisa delas pra saber
+  // onde fechar um trecho e abrir outro. calculateConsumptions() já
+  // zera o campo `consumption` nelas, então elas nunca contam consumo
+  // por engano nos outros usos de cycleReadings (picos/vazamento).
   const cycleReadings = processedReadings.filter(r => {
     const rDate = new Date(r.date);
-    return rDate >= startCycleDate && rDate <= endCycleDate && !r.isInitial;
+    return rDate >= startCycleDate && rDate <= endCycleDate;
   });
 
   const totalDays = Math.ceil((endCycleDate - startCycleDate) / (1000 * 60 * 60 * 24));
@@ -221,11 +226,11 @@ export function getCycleStats(readings, cycleKey) {
   cycleReadings.forEach(r => {
     const id = r.meterId;
     if (metersData[id]) {
-      // IMPORTANTE: o consumo do ciclo não é somado aqui.
-      // A primeira leitura registrada dentro do ciclo é o marco inicial (baseline).
-      // O consumo acumulado será calculado abaixo por: última leitura - baseline.
-      // Isso evita contar consumo anterior ao dia 07 e evita inflar o total quando
-      // uma leitura intermediária é digitada abaixo da anterior.
+      // IMPORTANTE: o consumo do ciclo não é somado aqui — só min/max
+      // data e índice. O consumo em si é calculado mais abaixo, por
+      // medidor, usando como baseline a última leitura ANTES do início
+      // do ciclo (mesma regra do bot do Telegram), não a primeira já
+      // dentro dele.
       metersData[id].readingsCount++;
       const rDate = new Date(r.date);
       if (!metersData[id].minDate || rDate < metersData[id].minDate) { metersData[id].minDate = rDate; metersData[id].firstIndex = r.index; }
@@ -235,34 +240,57 @@ export function getCycleStats(readings, cycleKey) {
   });
 
   // Consumo líquido do ciclo por hidrômetro.
-  // Regra normal: última leitura do ciclo - primeira leitura do ciclo.
-  // Se houver troca/reset de relógio (isInitial), fecha o trecho anterior e inicia
-  // um novo baseline a partir da leitura marcada como reset.
+  // Baseline: a ÚLTIMA leitura ANTES do início do ciclo (não a primeira
+  // leitura já dentro dele) — mesma regra do bot do Telegram
+  // (calcularConsumoCiclo, avisos-appscript/Code.gs), pra o % mostrado
+  // aqui bater com o % que o bot usa pra disparar os alertas de
+  // 20/40/60/80% da meta. Sem leitura nenhuma antes do ciclo (relógio
+  // novo ou histórico não importado), cai no mesmo fallback do bot: usa
+  // a primeira leitura já dentro do ciclo, e o consumo começa em 0 nela.
+  // Se houver troca/reset de relógio (isInitial) dentro do ciclo, fecha
+  // o trecho anterior e inicia um novo baseline a partir da leitura
+  // marcada como reset — e se o PRÓPRIO primeiro registro do ciclo já
+  // for um reset, não faz sentido olhar pra antes do ciclo (índice de
+  // outro relógio), o consumo começa do zero ali.
   Object.keys(metersData).forEach(id => {
+    const allMeterReadings = processedReadings
+      .filter(r => r.meterId === id)
+      .sort((a, b) => new Date(a.date) - new Date(b.date));
+
     const meterCycleReadings = cycleReadings
       .filter(r => r.meterId === id)
       .sort((a, b) => new Date(a.date) - new Date(b.date));
 
-    if (meterCycleReadings.length < 2) {
+    if (meterCycleReadings.length === 0) {
       metersData[id].consumption = 0;
       return;
     }
 
+    let baseline;
+    if (meterCycleReadings[0].isInitial) {
+      baseline = meterCycleReadings[0].index;
+    } else {
+      const leiturasAntesDoCiclo = allMeterReadings.filter(r => new Date(r.date) < startCycleDate);
+      baseline = leiturasAntesDoCiclo.length > 0
+        ? leiturasAntesDoCiclo[leiturasAntesDoCiclo.length - 1].index
+        : meterCycleReadings[0].index;
+    }
+
     let total = 0;
-    let baseline = meterCycleReadings[0].index;
     let previousIndex = baseline;
 
-    for (let i = 1; i < meterCycleReadings.length; i++) {
-      const reading = meterCycleReadings[i];
-
+    meterCycleReadings.forEach((reading, i) => {
+      if (i === 0 && !reading.isInitial) {
+        previousIndex = reading.index;
+        return;
+      }
       if (reading.isInitial) {
-        // Fecha o relógio anterior sem permitir consumo negativo.
+        // Fecha o trecho anterior sem permitir consumo negativo.
         total += Math.max(0, previousIndex - baseline);
         baseline = reading.index;
       }
-
       previousIndex = reading.index;
-    }
+    });
 
     total += Math.max(0, previousIndex - baseline);
     metersData[id].consumption = Number(total.toFixed(3));
