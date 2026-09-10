@@ -2059,6 +2059,11 @@ async function carregarPerdas() {
     // Thales (ou qualquer um) pode navegar pra outras semanas com as
     // setas ou o campo de data do próprio card, pra comparar.
     let perdasSemanaSelecionada = new Date();
+    // Comparação com uma segunda semana — desligada por padrão; liga ao
+    // clicar em "Comparar com outra semana", que revela o segundo campo
+    // de data e o gráfico comparativo.
+    let perdasCompararAtiva = false;
+    let perdasSemanaComparacao = (() => { const d = new Date(); d.setDate(d.getDate() - 7); return d; })();
 
     function renderizar() {
       const registrosPeriodo = _perdasFiltrarPorPeriodo(registros, periodoAtual);
@@ -2066,6 +2071,7 @@ async function carregarPerdas() {
       // Resumo Semanal ignora o filtro de período de propósito.
       const resumoSemanal = _perdasResumoSemanal(registros, perdasSemanaSelecionada);
       const produtosSemana = _perdasProdutosSemana(registros, perdasSemanaSelecionada);
+      const resumoComparacao = perdasCompararAtiva ? _perdasResumoSemanal(registros, perdasSemanaComparacao) : null;
 
       const motivos = {}; const produtos = {}; const setores = {}; const responsaveis = {};
       let totalQuantidade = 0;
@@ -2209,14 +2215,21 @@ async function carregarPerdas() {
             const labelSegunda = `${p(resumoSemanal.segunda.getDate())}/${p(resumoSemanal.segunda.getMonth() + 1)}`;
             const labelDomingo = `${p(domingo.getDate())}/${p(domingo.getMonth() + 1)}`;
             const isoSelecionada = `${perdasSemanaSelecionada.getFullYear()}-${p(perdasSemanaSelecionada.getMonth() + 1)}-${p(perdasSemanaSelecionada.getDate())}`;
+            const isoComparacao = `${perdasSemanaComparacao.getFullYear()}-${p(perdasSemanaComparacao.getMonth() + 1)}-${p(perdasSemanaComparacao.getDate())}`;
+            const comparacaoControlesHtml = perdasCompararAtiva
+              ? `<label style="font-size:0.82rem;color:var(--text-muted);">Comparar com:</label>
+                 <input type="date" id="perdas-semana-comparacao-data" value="${isoComparacao}" style="background: rgba(255,255,255,0.95); border: 1px solid var(--card-border); color: var(--text-primary); padding: 0.35rem 0.6rem; border-radius: var(--border-radius-sm); font-family: var(--font-main); font-size: 0.85rem;">
+                 <button id="perdas-comparar-fechar" class="btn btn-secondary" style="padding:0.35rem 0.7rem;font-size:0.78rem;">✕ Fechar comparação</button>`
+              : `<button id="perdas-comparar-abrir" class="btn btn-secondary" style="padding:0.35rem 0.7rem;font-size:0.78rem;">🆚 Comparar com outra semana</button>`;
             return `
             <div class="panel-header" style="margin:0 0 0.8rem;flex-wrap:wrap;gap:0.6rem;">
               <h3 style="margin:0;">📅 Resumo Semanal (${labelSegunda} a ${labelDomingo})</h3>
-              <div style="display:flex;align-items:center;gap:0.4rem;">
+              <div style="display:flex;align-items:center;gap:0.4rem;flex-wrap:wrap;">
                 <button id="perdas-semana-anterior" class="btn btn-secondary" style="padding:0.35rem 0.7rem;" title="Semana anterior">‹</button>
                 <input type="date" id="perdas-semana-data" value="${isoSelecionada}" style="background: rgba(255,255,255,0.95); border: 1px solid var(--card-border); color: var(--text-primary); padding: 0.35rem 0.6rem; border-radius: var(--border-radius-sm); font-family: var(--font-main); font-size: 0.85rem;">
                 <button id="perdas-semana-seguinte" class="btn btn-secondary" style="padding:0.35rem 0.7rem;" title="Próxima semana">›</button>
                 <button id="perdas-semana-atual" class="btn btn-secondary" style="padding:0.35rem 0.7rem;font-size:0.78rem;">Hoje</button>
+                ${comparacaoControlesHtml}
               </div>
             </div>`;
           })()}
@@ -2231,6 +2244,12 @@ async function carregarPerdas() {
             </div>
           </div>
         </div>
+
+        ${resumoComparacao ? `
+        <div class="panel-card" style="margin-bottom:20px;">
+          <h3>🆚 Comparação entre semanas</h3>
+          <div class="chart-wrapper" style="height:260px;"><canvas id="graficoComparacaoSemanas"></canvas></div>
+        </div>` : ''}
 
         <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:16px;margin-bottom:20px;">
           <div class="panel-card"><h3>🚨 Perdas por Motivo</h3><div class="chart-wrapper"><canvas id="graficoMotivos"></canvas></div></div>
@@ -2265,6 +2284,27 @@ async function carregarPerdas() {
       // horizontal), aqui o eixo natural é vertical: dias da semana no X.
       if (ctxResumoSemanal) new Chart(ctxResumoSemanal, { type: 'bar', data: { labels: resumoSemanal.labels, datasets: [{ label: 'Perdas', data: resumoSemanal.valores }] }, options: { responsive: true, maintainAspectRatio: false } });
 
+      if (resumoComparacao) {
+        const labelIntervalo = segunda => {
+          const p = n => String(n).padStart(2, '0');
+          const domingo = new Date(segunda);
+          domingo.setDate(segunda.getDate() + 6);
+          return `${p(segunda.getDate())}/${p(segunda.getMonth() + 1)} a ${p(domingo.getDate())}/${p(domingo.getMonth() + 1)}`;
+        };
+        const ctxComparacao = document.getElementById('graficoComparacaoSemanas');
+        if (ctxComparacao) new Chart(ctxComparacao, {
+          type: 'bar',
+          data: {
+            labels: resumoSemanal.labels,
+            datasets: [
+              { label: labelIntervalo(resumoSemanal.segunda), data: resumoSemanal.valores },
+              { label: labelIntervalo(resumoComparacao.segunda), data: resumoComparacao.valores },
+            ],
+          },
+          options: { responsive: true, maintainAspectRatio: false },
+        });
+      }
+
       atualizarTabela(true);
 
       document.getElementById('filtro-periodo-perdas')?.addEventListener('change', e => {
@@ -2289,6 +2329,20 @@ async function carregarPerdas() {
       });
       document.getElementById('perdas-semana-atual')?.addEventListener('click', () => {
         perdasSemanaSelecionada = new Date();
+        renderizar();
+      });
+      document.getElementById('perdas-comparar-abrir')?.addEventListener('click', () => {
+        perdasCompararAtiva = true;
+        renderizar();
+      });
+      document.getElementById('perdas-comparar-fechar')?.addEventListener('click', () => {
+        perdasCompararAtiva = false;
+        renderizar();
+      });
+      document.getElementById('perdas-semana-comparacao-data')?.addEventListener('change', e => {
+        if (!e.target.value) return;
+        const [ano, mes, dia] = e.target.value.split('-').map(Number);
+        perdasSemanaComparacao = new Date(ano, mes - 1, dia);
         renderizar();
       });
       document.getElementById('busca-perdas')?.addEventListener('input', () => atualizarTabela(true));
