@@ -1896,12 +1896,10 @@ function _perdasNormalizar(texto, fallback) {
 
 const PERDAS_PERIODO_LABEL = { TODOS: 'Tudo', MES_ATUAL: 'Este mês', MES_PASSADO: 'Mês passado' };
 
-// Total perdido em cada dia da semana ATUAL (Segunda a Domingo), pro
-// gráfico "Resumo Semanal" — ignora o filtro de período (TODOS/MES_
-// ATUAL/MES_PASSADO) de propósito, já que "semana atual" é um recorte
-// fixo por natureza. Dias sem registro entram com 0, pra mostrar a
-// semana inteira (inclusive os dias que ainda não chegaram).
-function _perdasResumoSemanal(registros) {
+// Segunda-feira (00:00) da semana ATUAL — base pra tudo relacionado ao
+// "Resumo Semanal" (gráfico dia a dia e lista de produtos), pra não
+// calcular o mesmo deslocamento duas vezes de formas que possam divergir.
+function _perdasInicioSemanaAtual() {
   const hoje = new Date();
   hoje.setHours(0, 0, 0, 0);
   // getDay(): Domingo=0..Sábado=6 — tratamos Domingo como o 7º dia da
@@ -1910,6 +1908,16 @@ function _perdasResumoSemanal(registros) {
   const deslocamentoSegunda = diaSemanaHoje === 0 ? 6 : diaSemanaHoje - 1;
   const segunda = new Date(hoje);
   segunda.setDate(hoje.getDate() - deslocamentoSegunda);
+  return segunda;
+}
+
+// Total perdido em cada dia da semana ATUAL (Segunda a Domingo), pro
+// gráfico "Resumo Semanal" — ignora o filtro de período (TODOS/MES_
+// ATUAL/MES_PASSADO) de propósito, já que "semana atual" é um recorte
+// fixo por natureza. Dias sem registro entram com 0, pra mostrar a
+// semana inteira (inclusive os dias que ainda não chegaram).
+function _perdasResumoSemanal(registros) {
+  const segunda = _perdasInicioSemanaAtual();
 
   const labels = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'];
   const valores = labels.map((_, i) => {
@@ -1921,6 +1929,22 @@ function _perdasResumoSemanal(registros) {
   });
 
   return { labels, valores };
+}
+
+// Produtos perdidos na semana ATUAL (Segunda até hoje), somados e
+// ordenados do maior pro menor — lista ao lado do gráfico Resumo
+// Semanal, mesmo recorte de data (ignora o filtro de período).
+function _perdasProdutosSemana(registros) {
+  const segunda = _perdasInicioSemanaAtual();
+  const domingoFimDoDia = new Date(segunda);
+  domingoFimDoDia.setDate(segunda.getDate() + 7); // exclusivo: início da próxima segunda
+
+  const porProduto = {};
+  registros
+    .filter(r => r.data && r.data >= segunda && r.data < domingoFimDoDia)
+    .forEach(r => { porProduto[r.produto] = (porProduto[r.produto] || 0) + r.quantidade; });
+
+  return Object.entries(porProduto).sort((a, b) => b[1] - a[1]);
 }
 
 function _perdasGerarPDF(registros, kpis, periodoLabel) {
@@ -2034,6 +2058,7 @@ async function carregarPerdas() {
       // Sempre a partir de `registros` (não `registrosPeriodo`) — o
       // Resumo Semanal ignora o filtro de período de propósito.
       const resumoSemanal = _perdasResumoSemanal(registros);
+      const produtosSemana = _perdasProdutosSemana(registros);
 
       const motivos = {}; const produtos = {}; const setores = {}; const responsaveis = {};
       let totalQuantidade = 0;
@@ -2173,7 +2198,19 @@ async function carregarPerdas() {
           <div class="panel-card"><h3>🚨 Perdas por Motivo</h3><div class="chart-wrapper"><canvas id="graficoMotivos"></canvas></div></div>
           <div class="panel-card"><h3>🏆 Ranking de Produtos Perdidos</h3><div class="chart-wrapper"><canvas id="graficoProdutos"></canvas></div></div>
           <div class="panel-card"><h3>👤 Perdas por Responsável</h3><div class="chart-wrapper"><canvas id="graficoResponsaveis"></canvas></div></div>
-          <div class="panel-card"><h3>📅 Resumo Semanal</h3><div class="chart-wrapper"><canvas id="graficoResumoSemanal"></canvas></div></div>
+          <div class="panel-card">
+            <h3>📅 Resumo Semanal</h3>
+            <div style="display:flex;gap:16px;flex-wrap:wrap;align-items:stretch;">
+              <div class="chart-wrapper" style="flex:1 1 220px;min-width:220px;"><canvas id="graficoResumoSemanal"></canvas></div>
+              <div style="flex:1 1 160px;min-width:160px;">
+                <div class="ranking-list">${
+                  produtosSemana.length
+                    ? produtosSemana.map(([produto, qtd]) => `<div class="ranking-item"><span>${produto}</span><span>${qtd.toLocaleString('pt-BR')}</span></div>`).join('')
+                    : '<p style="color:var(--text-muted);font-size:0.85rem;">Nenhuma perda essa semana.</p>'
+                }</div>
+              </div>
+            </div>
+          </div>
         </div>
 
         <div class="panel-card">
