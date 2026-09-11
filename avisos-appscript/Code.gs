@@ -1,23 +1,16 @@
 /**
  * PROJETO ÚNICO: registro de água via Telegram + mural de Avisos do
  * painel (mammamia-control.vercel.app). Os dois moram no mesmo projeto
- * Apps Script porque só existe 1 link (/exec) e 1 doPost por projeto —
- * então o doPost, lá embaixo, decide sozinho qual dos dois é, pelo
- * formato do corpo recebido.
+ * Apps Script porque só existe 1 link (/exec) e 1 doPost por projeto.
+ *
+ * O registro de água NÃO usa webhook do Telegram (ver "TELEGRAM VIA
+ * POLLING" mais abaixo, e o motivo da troca) — então hoje o doPost só
+ * atende o painel de Avisos ({acao: "criar"|"editar"|"remover"}).
  *
  * planilhaId aponta pra planilha de água — é onde tanto a aba
  * "Respostas ao formulário 1" (leituras, 1 linha por dia x 1 coluna por
  * relógio) quanto a aba "AVISOS" (mural) vivem.
  */
-
-// Link publicado (/exec) desse Web App — o mesmo que está em
-// AVISOS_EXEC_URL no painel (src/main.js). Fixo aqui de propósito:
-// ScriptApp.getService().getUrl() devolve o link /dev (só funciona
-// logado no navegador, não pro Telegram) quando a função roda
-// manualmente pelo editor — então não dá pra confiar nele pra
-// registrar o webhook. Se um dia fizer uma "Nova implantação" (não
-// "Nova versão") e o link mudar, atualiza aqui E no painel.
-var URL_EXEC_PUBLICADA = "https://script.google.com/macros/s/AKfycbzHvvPZzBDSB730gShVCl7CPQb23h37w8k8B-cY8n1RI-NkBJzp0eUP5m-rbtj3nGdwpw/exec";
 
 // ================= CONFIG =================
 function getConfig() {
@@ -86,33 +79,10 @@ function marcarComoEnviado(relogio) {
   props.setProperty(chave, "true");
 }
 
-// Trava definitiva contra reenvio de webhook do Telegram — diferente do
-// CacheService (que expira em no máximo 6h), PropertiesService não tem
-// prazo de validade, então um update_id marcado aqui fica bloqueado pra
-// sempre, não importa quanto tempo depois o Telegram reentregar (já
-// visto reentregar quase 19h depois, virando o dia). Guarda só os
-// últimos MAX_UPDATES_GUARDADOS ids, numa lista só (1 Script Property),
-// pra nunca estourar o limite de tamanho de uma propriedade (9KB) — não
-// precisa guardar para sempre, só o suficiente pra cobrir qualquer
-// reenvio tardio plausível.
-var MAX_UPDATES_GUARDADOS = 300;
-var CHAVE_UPDATES_PROCESSADOS = "UPDATES_TELEGRAM_PROCESSADOS";
-
-function jaProcessouUpdate(updateId) {
-  var props = PropertiesService.getScriptProperties();
-  var lista = JSON.parse(props.getProperty(CHAVE_UPDATES_PROCESSADOS) || "[]");
-  return lista.indexOf(updateId) !== -1;
-}
-
-function marcarUpdateProcessado(updateId) {
-  var props = PropertiesService.getScriptProperties();
-  var lista = JSON.parse(props.getProperty(CHAVE_UPDATES_PROCESSADOS) || "[]");
-  lista.push(updateId);
-  if (lista.length > MAX_UPDATES_GUARDADOS) {
-    lista = lista.slice(lista.length - MAX_UPDATES_GUARDADOS);
-  }
-  props.setProperty(CHAVE_UPDATES_PROCESSADOS, JSON.stringify(lista));
-}
+// (A trava contra reenvio de webhook — update_id em Cache/Properties —
+// foi removida junto com o webhook em si; ver seção "TELEGRAM VIA
+// POLLING" mais abaixo. getUpdates com offset correto nunca reentrega
+// a mesma atualização duas vezes, então não precisa mais dessa trava.)
 
 // ================= CICLO DE CONSUMO (alertas de 20/40/60/80%/meta) =================
 // O ciclo de faturamento não é mês corrente — começa no dia
@@ -457,102 +427,100 @@ function removerAviso(id) {
   }
 }
 
-// ================= DIAGNÓSTICO DO TELEGRAM (rodar manualmente) =================
-// Três funções pra rodar direto no editor (▶ Executar, escolhendo o
-// nome da função no menu ao lado do botão) — sem precisar mandar
-// mensagem nenhuma pro bot. Isolam os motivos mais prováveis do bot não
-// responder (ou responder duplicado/desatualizado): token/chat ID
-// errados, o Telegram não sabendo pra onde mandar as mensagens, ou o
-// Telegram mandando pra um link (implantação) diferente do que você
-// acabou de atualizar.
+// ================= TELEGRAM VIA POLLING (não usa mais webhook) =================
+// Por que a troca: o Apps Script, por natureza da plataforma, responde
+// chamadas externas com um redirecionamento (302) antes de servir o
+// conteúdo — e o Telegram não segue redirecionamento quando entrega
+// mensagem pra um webhook. Isso é estrutural (não é erro de
+// implantação: já confirmamos "Quem pode acessar: Qualquer pessoa"
+// certo) — o Telegram registrava a entrega como falha (mesmo quando o
+// nosso código rodava certinho por trás) e represava numa fila que
+// precisava ser limpa manualmente, sempre voltando a entupir.
+//
+// A troca: em vez do Telegram EMPURRAR mensagem pro nosso link
+// (webhook — lado problemático), o próprio Apps Script passa a BUSCAR
+// mensagens novas a cada 1 minuto (polling, getUpdates). Quem inicia a
+// chamada passa a ser sempre o nosso lado — o mesmo caminho que
+// enviarTelegram() já usa há muito tempo sem esse problema — então o
+// 302 deixa de ser um problema estrutural.
 
 /**
  * 1) Roda esta primeiro. Manda uma mensagem de teste direto (sem
- * passar pelo Telegram nem pelo webhook). Chegou no seu Telegram? O
- * TELEGRAM_TOKEN e TELEGRAM_CHAT_ID (Configurações do projeto >
- * Propriedades do script) estão certos. Não chegou / deu erro na
- * execução? É isso que precisa corrigir primeiro — confere se essas
- * duas propriedades existem *nesse* projeto (elas não vêm sozinhas de
- * um projeto antigo, são por projeto).
+ * depender do polling nem de nada do Telegram receber). Chegou no seu
+ * Telegram? O TELEGRAM_TOKEN e TELEGRAM_CHAT_ID (Configurações do
+ * projeto > Propriedades do script) estão certos.
  */
 function testarTelegram() {
   enviarTelegram("🧪 Teste de conexão — se você recebeu isso, o token e o chat ID estão certos.");
 }
 
 /**
- * 2) Roda esta depois que testarTelegram funcionar. Registra (ou
- * corrige) o webhook do Telegram pra apontar pro link /exec publicado
- * (URL_EXEC_PUBLICADA acima) — é isso que faz o Telegram saber que deve
- * mandar as mensagens que você digita pro bot pra cá. Precisa rodar de
- * novo toda vez que uma "Nova implantação" (não "Nova versão") gerar um
- * link /exec diferente do anterior (e aí também precisa atualizar
- * URL_EXEC_PUBLICADA aqui em cima e AVISOS_EXEC_URL no painel).
+ * 2) Roda esta UMA VEZ pra migrar do webhook antigo pro polling novo:
+ * desliga o webhook (se ainda tiver algum registrado — getUpdates não
+ * funciona com webhook ativo) e liga a checagem automática a cada 1
+ * minuto. Depois disso não precisa rodar de novo, nem quando fizer uma
+ * implantação nova — o polling não depende do link /exec mudar.
  */
-function registrarWebhookTelegram() {
-  var c = getConfig();
-  var urlAtual = URL_EXEC_PUBLICADA;
-  var url = "https://api.telegram.org/bot" + c.telegramToken + "/setWebhook?url=" + encodeURIComponent(urlAtual);
-  var resposta = UrlFetchApp.fetch(url);
-  Logger.log(resposta.getContentText());
-  enviarTelegram("🔗 Webhook registrado pra:\n" + urlAtual);
-}
-
-/**
- * 3) Roda esta se, mesmo depois de implantar uma correção (Nova
- * versão), o bot continuar se comportando como o código ANTIGO (ex.:
- * respostas duplicadas voltando mesmo depois do conserto). Um projeto
- * pode acumular várias implantações (cada uma com seu próprio link
- * /exec) — se a "Nova versão" foi aplicada numa implantação diferente
- * da que o Telegram está realmente chamando, o Telegram continua
- * batendo no código velho pra sempre. Esta função manda pro seu
- * Telegram o link EXATO que ele está usando agora; compare o trecho
- * depois de "/macros/s/" e antes de "/exec" com o "Código de
- * implantação" de cada entrada em Implantar > Gerenciar implantações —
- * a implantação com o MESMO trecho é a única que precisa da Nova
- * versão. Se não bater com nenhuma que você reconhece, rode
- * registrarWebhookTelegram() (função 2) pra realinhar o Telegram com a
- * implantação certa (URL_EXEC_PUBLICADA).
- */
-function verificarWebhookAtual() {
-  var c = getConfig();
-  var url = "https://api.telegram.org/bot" + c.telegramToken + "/getWebhookInfo";
-  var resposta = UrlFetchApp.fetch(url);
-  Logger.log(resposta.getContentText());
-  var info = JSON.parse(resposta.getContentText()).result;
-
-  var msg = "🔍 Link que o Telegram está usando agora:\n" + info.url +
-    "\n\n📬 Mensagens pendentes na fila: " + info.pending_update_count;
-  if (info.last_error_message) {
-    msg += "\n⚠️ Último erro registrado pelo Telegram: " + info.last_error_message;
-  }
-  enviarTelegram(msg);
-}
-
-/**
- * 4) Roda esta se ficarem chegando respostas repetidas ("já registrado
- * hoje" etc.) de tempos em tempos por muito tempo seguido — minutos ou
- * até dezenas de minutos — SEM você ter mandado nada de novo. Isso
- * acontece quando o Telegram acumula uma FILA de mensagens antigas que
- * nunca foram confirmadas direito (de algum problema já corrigido) e
- * fica reenviando essa fila aos poucos, de novo e de novo, até esvaziar
- * — inclusive atrapalhando/atrasando a resposta às suas mensagens novas
- * de verdade (como os alertas de % que não chegam). Rode
- * verificarWebhookAtual() (função 3) antes: se "Mensagens pendentes na
- * fila" vier maior que 0, é isso. Esta função descarta a fila acumulada
- * e registra o webhook de novo do zero.
- */
-function limparFilaTelegram() {
+function configurarPollingTelegram() {
   var c = getConfig();
 
   var urlRemover = "https://api.telegram.org/bot" + c.telegramToken + "/deleteWebhook?drop_pending_updates=true";
   var respRemover = UrlFetchApp.fetch(urlRemover);
   Logger.log("deleteWebhook: " + respRemover.getContentText());
 
-  var urlRegistrar = "https://api.telegram.org/bot" + c.telegramToken + "/setWebhook?url=" + encodeURIComponent(URL_EXEC_PUBLICADA);
-  var respRegistrar = UrlFetchApp.fetch(urlRegistrar);
-  Logger.log("setWebhook: " + respRegistrar.getContentText());
+  // Remove qualquer trigger antigo dessa função, pra rodar essa
+  // configuração de novo não duplicar o agendamento (ficaria checando
+  // 2x por minuto, processando tudo em dobro).
+  ScriptApp.getProjectTriggers().forEach(function (t) {
+    if (t.getHandlerFunction() === "verificarMensagensTelegram") ScriptApp.deleteTrigger(t);
+  });
+  ScriptApp.newTrigger("verificarMensagensTelegram").timeBased().everyMinutes(1).create();
 
-  enviarTelegram("🧹 Fila de mensagens pendentes do Telegram foi descartada e o webhook foi registrado de novo. As próximas leituras devem responder na hora, sem eco de mensagens antigas.");
+  enviarTelegram("⏱️ Checagem automática configurada — o bot agora busca mensagens novas a cada 1 minuto, sem depender de webhook. Não precisa mais rodar nenhuma função de fila/webhook.");
+}
+
+/**
+ * 3) Não precisa rodar manualmente — é chamada sozinha, a cada 1
+ * minuto, pelo trigger criado em configurarPollingTelegram(). Busca as
+ * mensagens novas desde a última checagem (offset guardado em
+ * TELEGRAM_OFFSET) e processa cada uma. getUpdates com offset correto
+ * nunca reentrega a mesma atualização duas vezes — diferente do
+ * webhook, não precisa de nenhuma trava extra contra reenvio.
+ */
+function verificarMensagensTelegram() {
+  var c = getConfig();
+  var props = PropertiesService.getScriptProperties();
+  var offset = Number(props.getProperty("TELEGRAM_OFFSET")) || 0;
+
+  var url = "https://api.telegram.org/bot" + c.telegramToken + "/getUpdates?timeout=0&offset=" + offset;
+  var resposta = UrlFetchApp.fetch(url);
+  var dados = JSON.parse(resposta.getContentText());
+  if (!dados.ok || !dados.result || dados.result.length === 0) return;
+
+  dados.result.forEach(function (update) {
+    if (update.message) {
+      // Nunca deixa um erro aqui passar em silêncio — se algo quebrar
+      // (aba errada, planilha sem permissão, etc.), pelo menos chega
+      // um aviso no Telegram em vez de nada.
+      try {
+        processarRegistroTelegram(update);
+      } catch (erro) {
+        Logger.log("Erro no registro de água: " + erro);
+        try {
+          enviarTelegram("⚠️ Erro ao registrar: " + erro.message);
+        } catch (erroTelegram) {
+          Logger.log("Nem o aviso de erro foi enviado: " + erroTelegram);
+        }
+      }
+    }
+    // Sempre avança o offset, mesmo pra atualizações que não são
+    // mensagem de texto (ex.: um /start, sticker...) — senão o
+    // getUpdates fica preso reentregando pra sempre a mesma atualização
+    // que nunca é tratada.
+    offset = update.update_id + 1;
+  });
+
+  props.setProperty("TELEGRAM_OFFSET", String(offset));
 }
 
 // ================= ROTEAMENTO DO WEB APP =================
@@ -567,57 +535,12 @@ function doGet(e) {
 }
 
 /**
- * Um projeto Apps Script só pode ter 1 doPost — esse aqui atende dois
- * usos que antes eram (indevidamente) dois doPost em conflito: o
- * webhook do Telegram (registro de leitura do relógio de água) e as
- * ações do mural de Avisos do painel. Distingue pelo formato do corpo:
- * webhook do Telegram manda {message: {...}}; o painel manda
+ * O registro de água não usa mais webhook do Telegram (ver "TELEGRAM
+ * VIA POLLING" acima) — então doPost hoje só atende o painel de Avisos:
  * {acao: "criar"|"editar"|"remover", ...}.
  */
 function doPost(e) {
   var dados = JSON.parse(e.postData.contents);
-
-  if (dados.message) {
-    // O Telegram reenvia a MESMA atualização (mesmo update_id) se não
-    // receber confirmação rápido o suficiente — e já vimos reentregar
-    // quase 19h depois (bem além do teto de 6h do CacheService). Por
-    // isso duas camadas: CacheService primeiro (rápido, sem tocar na
-    // planilha, cobre a maioria dos casos) e, se passar disso,
-    // jaProcessouUpdate/marcarUpdateProcessado (PropertiesService, sem
-    // prazo de validade — ver função abaixo) como travamento definitivo,
-    // pra nunca mais um reenvio tardio ser tratado como leitura nova de
-    // verdade (o que já aconteceu: reentregou já no dia seguinte e
-    // preencheu a leitura de hoje com o valor de ONTEM, bloqueando o
-    // registro real da pessoa).
-    if (dados.update_id != null) {
-      var cache = CacheService.getScriptCache();
-      var chaveUpdate = "update_" + dados.update_id;
-      if (cache.get(chaveUpdate)) {
-        return ContentService.createTextOutput("ok");
-      }
-      cache.put(chaveUpdate, "1", 21600);
-
-      if (jaProcessouUpdate(dados.update_id)) {
-        return ContentService.createTextOutput("ok");
-      }
-      marcarUpdateProcessado(dados.update_id);
-    }
-
-    // Nunca deixa um erro aqui passar em silêncio de novo — se algo
-    // quebrar (aba errada, planilha sem permissão, etc.), pelo menos
-    // chega um aviso no Telegram em vez de nada.
-    try {
-      processarRegistroTelegram(dados);
-    } catch (erro) {
-      Logger.log("Erro no registro de água: " + erro);
-      try {
-        enviarTelegram("⚠️ Erro ao registrar: " + erro.message);
-      } catch (erroTelegram) {
-        Logger.log("Nem o aviso de erro foi enviado: " + erroTelegram);
-      }
-    }
-    return ContentService.createTextOutput("ok");
-  }
 
   try {
     if (dados.acao === "criar") return respostaJson(criarAviso(dados.texto));
