@@ -249,10 +249,72 @@ function fecharRequisicao(id, statusFinal, entreguePor, observacoesEntrega) {
 
 
 /****************************************************
+ * HISTÓRICO DE REQUISIÇÕES JÁ CONCLUÍDAS
+ * Só STATUS === CONCLUÍDO — PARCIALMENTE continua
+ * contando como pendente (aparece em
+ * listarRequisicoesAbertas, não aqui). Mais recente
+ * primeiro. "Entregue por"/"Data de entrega" só vêm
+ * preenchidos pras requisições fechadas por este app —
+ * as fechadas manualmente antes dele existir ficam com
+ * esses campos em branco, o que é esperado.
+ ****************************************************/
+
+function listarRequisicoesFechadas() {
+  var sheet = obterSheet();
+  var cols = obterMapaColunas(sheet);
+  var dados = sheet.getDataRange().getValues();
+
+  var fechadas = [];
+  for (var i = 1; i < dados.length; i++) {
+    var linha = dados[i];
+    var id = (linha[cols.id - 1] || "").toString().trim();
+    var status = (linha[cols.status - 1] || "").toString().trim().toUpperCase();
+    if (!id || status !== STATUS_CONCLUIDO) continue;
+
+    var itensTexto = (linha[cols.itensLivre - 1] || "").toString().trim();
+    var quantidade = linha[cols.quantidadeSolicitada - 1];
+    if (quantidade !== "" && quantidade !== null && quantidade !== undefined) {
+      itensTexto += (itensTexto ? "\n" : "") + "Quantidade: " + quantidade;
+    }
+
+    var dataEntregaBruta = linha[cols.dataEntrega - 1];
+    var dataEntregaTexto = "";
+    if (dataEntregaBruta) {
+      try {
+        dataEntregaTexto = Utilities.formatDate(new Date(dataEntregaBruta), "America/Sao_Paulo", "dd/MM/yyyy HH:mm");
+      } catch (erroData) {
+        dataEntregaTexto = String(dataEntregaBruta);
+      }
+    }
+
+    fechadas.push({
+      id: id,
+      requisitante: linha[cols.requisitante - 1],
+      unidade: linha[cols.unidade - 1],
+      setor: linha[cols.setor - 1],
+      tipo: linha[cols.tipo - 1],
+      itens: itensTexto,
+      prioridade: (linha[cols.prioridade - 1] || "").toString().trim(),
+      finalidade: linha[cols.finalidade - 1],
+      entreguePor: (linha[cols.entreguePor - 1] || "").toString().trim(),
+      dataEntrega: dataEntregaTexto,
+      obsEntrega: linha[cols.obsEntrega - 1],
+    });
+  }
+
+  // Mais recente primeiro.
+  fechadas.reverse();
+
+  return fechadas;
+}
+
+
+/****************************************************
  * ROTEAMENTO DO WEB APP
- * ".../exec" → Menu.html (2 cards: Abrir, que aponta
- * pro Google Forms, e Fechar, que abre a tela abaixo).
+ * ".../exec" → Menu.html (3 cards: Abrir, que aponta
+ * pro Google Forms; Fechar; Histórico).
  * ".../exec?tela=fechar" → FecharRequisicao.html.
+ * ".../exec?tela=historico" → HistoricoRequisicoes.html.
  ****************************************************/
 
 function doGet(e) {
@@ -262,6 +324,13 @@ function doGet(e) {
     return HtmlService
       .createHtmlOutputFromFile("FecharRequisicao")
       .setTitle("Fechar Requisição — Mamma Mia")
+      .addMetaTag("viewport", "width=device-width, initial-scale=1");
+  }
+
+  if (tela === "historico") {
+    return HtmlService
+      .createHtmlOutputFromFile("HistoricoRequisicoes")
+      .setTitle("Histórico de Requisições — Mamma Mia")
       .addMetaTag("viewport", "width=device-width, initial-scale=1");
   }
 
