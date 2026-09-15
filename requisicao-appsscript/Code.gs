@@ -30,6 +30,7 @@ var NOME_ABA_REQUISICOES = "REQUISIÇÃO DE MATÉRIA-PRIMA E RECHEIOS - MAMMA MI
 
 var STATUS_CONCLUIDO = "CONCLUÍDO";
 var STATUS_PARCIAL = "PARCIALMENTE";
+var STATUS_CANCELADO = "CANCELADO";
 var STATUSES_VALIDOS_FECHAMENTO = [STATUS_CONCLUIDO, STATUS_PARCIAL];
 
 
@@ -227,8 +228,12 @@ function enviarTelegram(mensagem) {
 
 /****************************************************
  * LISTAR REQUISIÇÕES EM ABERTO
- * "Em aberto" = STATUS diferente de CONCLUÍDO (cobre
- * ABERTO e PARCIALMENTE). Mais recente primeiro.
+ * "Em aberto" = STATUS diferente de CONCLUÍDO e de
+ * CANCELADO (cobre ABERTO, AGUARDANDO, EM SEPARAÇÃO e
+ * PARCIALMENTE — os dois primeiros vêm do fluxo normal
+ * do Forms, "EM SEPARAÇÃO"/"CANCELADO" vêm do painel do
+ * site de água, ver `atualizarStatusPorQuery`). Mais
+ * recente primeiro.
  ****************************************************/
 
 function listarRequisicoesAbertas() {
@@ -242,7 +247,7 @@ function listarRequisicoesAbertas() {
     var linha = dados[i];
     var id = (linha[cols.id - 1] || "").toString().trim();
     var status = (linha[cols.status - 1] || "").toString().trim().toUpperCase();
-    if (!id || status === STATUS_CONCLUIDO) continue;
+    if (!id || status === STATUS_CONCLUIDO || status === STATUS_CANCELADO) continue;
 
     abertas.push({
       id: id,
@@ -374,15 +379,73 @@ function listarRequisicoesFechadas() {
 
 
 /****************************************************
+ * COMPATIBILIDADE COM O PAINEL DE ÁGUA (site
+ * controle-agua-mamma-mia, seção "Central" de MP e
+ * Recheios): o botão de lá (EM SEPARAÇÃO/CONCLUÍDO/
+ * CANCELADO, em src/main.js `atualizarStatusCentral`)
+ * já chama ESTE MESMO Web App via
+ * ".../exec?rq=<ID>&status=<STATUS>" e espera um JSON
+ * { sucesso: true|false } de volta — não uma tela HTML.
+ * Isso já existia antes deste projeto de Fechar/
+ * Histórico; se não for tratado aqui, esse botão do site
+ * passa a receber o HTML do Menu em vez de JSON e quebra
+ * silenciosamente.
+ ****************************************************/
+
+function atualizarStatusPorQuery(rq, statusNovo) {
+  var resultado = { sucesso: false };
+
+  try {
+    var id = (rq || "").toString().trim();
+    var status = (statusNovo || "").toString().trim().toUpperCase();
+    if (!id) throw new Error("Parâmetro 'rq' vazio.");
+    if (!status) throw new Error("Parâmetro 'status' vazio.");
+
+    var sheet = obterSheet();
+    var cols = obterMapaColunas(sheet);
+    var dados = sheet.getDataRange().getValues();
+
+    var linhaEncontrada = -1;
+    for (var i = 1; i < dados.length; i++) {
+      if ((dados[i][cols.id - 1] || "").toString().trim() === id) {
+        linhaEncontrada = i + 1; // +1 porque getRange é 1-based
+        break;
+      }
+    }
+    if (linhaEncontrada === -1) throw new Error("Requisição não encontrada: " + id);
+
+    sheet.getRange(linhaEncontrada, cols.status).setValue(status);
+    resultado.sucesso = true;
+  } catch (erro) {
+    Logger.log("Falha em atualizarStatusPorQuery(" + rq + ", " + statusNovo + "): " + erro);
+    resultado.erro = String(erro);
+  }
+
+  return ContentService
+    .createTextOutput(JSON.stringify(resultado))
+    .setMimeType(ContentService.MimeType.JSON);
+}
+
+
+/****************************************************
  * ROTEAMENTO DO WEB APP
  * ".../exec" → Menu.html (3 cards: Abrir, que aponta
  * pro Google Forms; Fechar; Histórico).
  * ".../exec?tela=fechar" → FecharRequisicao.html.
  * ".../exec?tela=historico" → HistoricoRequisicoes.html.
+ * ".../exec?rq=<ID>&status=<STATUS>" → JSON, ver
+ * `atualizarStatusPorQuery` acima (usado pelo painel de
+ * água, não pelas telas HTML deste projeto).
  ****************************************************/
 
 function doGet(e) {
-  var tela = e && e.parameter && e.parameter.tela;
+  var parametros = (e && e.parameter) || {};
+
+  if (parametros.rq && parametros.status) {
+    return atualizarStatusPorQuery(parametros.rq, parametros.status);
+  }
+
+  var tela = parametros.tela;
 
   if (tela === "fechar") {
     return HtmlService

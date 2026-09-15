@@ -38,6 +38,21 @@ mudaram isso depois de ver a planilha real do usuário
 Isso reduz o escopo pra **só a tela de Fechar Requisição** (+ um Histórico de consulta) — as peças
 que realmente não existiam.
 
+3. **Descoberta tardia: já existia uma terceira porta de entrada pro mesmo `STATUS`.** O painel
+   `controle-agua-mamma-mia` (site de água) tem uma seção "Central" (`src/main.js`,
+   `atualizarStatusCentral`) com botões **EM SEPARAÇÃO** / **CONCLUÍDO** / **CANCELADO** que já
+   chamavam **este mesmo Web App** via `GET .../exec?rq=<ID>&status=<STATUS>`, esperando um JSON
+   `{ sucesso: true|false }` de volta — não uma tela HTML. Isso já existia antes deste projeto de
+   Fechar/Histórico. Quando o `doGet(e)` foi reescrito pra rotear por `?tela=...`, essa chamada
+   passou a receber o HTML do `Menu.html` em vez de JSON, quebrando o botão do site silenciosamente
+   (só apareceria como "❌ Erro ao atualizar status." pro usuário, sem pista do motivo real).
+   **Corrigido:** `doGet(e)` agora confere `rq`/`status` primeiro e, se presentes, atualiza o
+   `STATUS` da requisição e devolve o JSON esperado via `atualizarStatusPorQuery()`, antes mesmo de
+   olhar pro parâmetro `tela`. `CANCELADO` (só usado por essa Central, não pelo Forms nem por esta
+   tela de Fechar) também passou a ser excluído da lista de pendentes
+   (`listarRequisicoesAbertas()`) — uma requisição cancelada não deveria continuar aparecendo como
+   coisa a fazer.
+
 ## Objetivo
 
 Um Web App em Apps Script, visualmente consistente com `manutencao-appsscript/`, com um menu de 3
