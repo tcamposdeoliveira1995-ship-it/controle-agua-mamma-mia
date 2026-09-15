@@ -110,6 +110,74 @@ function obterSheet() {
   return aba;
 }
 
+/**
+ * Deixa legível o título de uma pergunta em formato de grade, ex:
+ * "Item requisitado [Matéria-prima | AÇAFRAO | KG]" vira "AÇAFRAO (KG)".
+ * Colunas que não batem com esse formato voltam como vieram.
+ */
+function formatarNomeColunaProduto(nomeColuna) {
+  var match = nomeColuna.match(/^Item requisitado\s*\[(.+)\]$/i);
+  if (!match) return nomeColuna;
+
+  var partes = match[1].split("|").map(function (p) { return p.trim(); });
+  var unidade = partes.length >= 2 ? partes[partes.length - 1] : "";
+  var produto = partes.length >= 2 ? partes[partes.length - 2] : partes[0];
+
+  return unidade ? produto + " (" + unidade + ")" : produto;
+}
+
+/**
+ * Acha, uma vez por chamada, todas as colunas da planilha que NÃO são
+ * um dos campos conhecidos em `cols` — na prática, as dezenas de
+ * colunas por produto do Forms antigo (ex: "Farinha 101 (PCT)") e as
+ * de pergunta em grade. Usado só pra leitura (nunca grava nelas): quem
+ * preenche a requisição às vezes usa o campo de texto livre, às vezes
+ * marca quantidade direto nessas colunas por produto — o app precisa
+ * mostrar os dois jeitos sem manter uma lista fixa de produtos.
+ */
+function obterColunasProduto(sheet, cols) {
+  var conhecidas = {};
+  Object.keys(cols).forEach(function (chave) { conhecidas[cols[chave]] = true; });
+
+  var totalColunas = sheet.getLastColumn();
+  var cabecalhos = sheet.getRange(1, 1, 1, totalColunas).getValues()[0];
+
+  var colunasProduto = [];
+  for (var i = 1; i <= totalColunas; i++) {
+    if (conhecidas[i]) continue;
+    var nome = (cabecalhos[i - 1] || "").toString().trim();
+    if (!nome) continue;
+    colunasProduto.push({ indice: i, nome: formatarNomeColunaProduto(nome) });
+  }
+  return colunasProduto;
+}
+
+/**
+ * Monta o texto de itens de uma linha: o campo de texto livre (se
+ * preenchido), a "Quantidade solicitada" avulsa (se houver) e qualquer
+ * coluna por produto com valor diferente de vazio/zero.
+ */
+function montarItensTexto(linha, cols, colunasProduto) {
+  var partes = [];
+
+  var itensLivre = (linha[cols.itensLivre - 1] || "").toString().trim();
+  if (itensLivre) partes.push(itensLivre);
+
+  var quantidade = linha[cols.quantidadeSolicitada - 1];
+  if (quantidade !== "" && quantidade !== null && quantidade !== undefined) {
+    partes.push("Quantidade: " + quantidade);
+  }
+
+  colunasProduto.forEach(function (coluna) {
+    var valor = linha[coluna.indice - 1];
+    if (valor === "" || valor === null || valor === undefined) return;
+    if (typeof valor === "number" && valor === 0) return;
+    partes.push(coluna.nome + ": " + valor);
+  });
+
+  return partes.join("\n");
+}
+
 
 /****************************************************
  * TELEGRAM
@@ -152,6 +220,7 @@ function enviarTelegram(mensagem) {
 function listarRequisicoesAbertas() {
   var sheet = obterSheet();
   var cols = obterMapaColunas(sheet);
+  var colunasProduto = obterColunasProduto(sheet, cols);
   var dados = sheet.getDataRange().getValues();
 
   var abertas = [];
@@ -161,19 +230,13 @@ function listarRequisicoesAbertas() {
     var status = (linha[cols.status - 1] || "").toString().trim().toUpperCase();
     if (!id || status === STATUS_CONCLUIDO) continue;
 
-    var itensTexto = (linha[cols.itensLivre - 1] || "").toString().trim();
-    var quantidade = linha[cols.quantidadeSolicitada - 1];
-    if (quantidade !== "" && quantidade !== null && quantidade !== undefined) {
-      itensTexto += (itensTexto ? "\n" : "") + "Quantidade: " + quantidade;
-    }
-
     abertas.push({
       id: id,
       requisitante: linha[cols.requisitante - 1],
       unidade: linha[cols.unidade - 1],
       setor: linha[cols.setor - 1],
       tipo: linha[cols.tipo - 1],
-      itens: itensTexto,
+      itens: montarItensTexto(linha, cols, colunasProduto),
       prioridade: (linha[cols.prioridade - 1] || "").toString().trim(),
       finalidade: linha[cols.finalidade - 1],
       observacoes: linha[cols.observacoes - 1],
@@ -262,6 +325,7 @@ function fecharRequisicao(id, statusFinal, entreguePor, observacoesEntrega) {
 function listarRequisicoesFechadas() {
   var sheet = obterSheet();
   var cols = obterMapaColunas(sheet);
+  var colunasProduto = obterColunasProduto(sheet, cols);
   var dados = sheet.getDataRange().getValues();
 
   var fechadas = [];
@@ -270,12 +334,6 @@ function listarRequisicoesFechadas() {
     var id = (linha[cols.id - 1] || "").toString().trim();
     var status = (linha[cols.status - 1] || "").toString().trim().toUpperCase();
     if (!id || status !== STATUS_CONCLUIDO) continue;
-
-    var itensTexto = (linha[cols.itensLivre - 1] || "").toString().trim();
-    var quantidade = linha[cols.quantidadeSolicitada - 1];
-    if (quantidade !== "" && quantidade !== null && quantidade !== undefined) {
-      itensTexto += (itensTexto ? "\n" : "") + "Quantidade: " + quantidade;
-    }
 
     var dataEntregaBruta = linha[cols.dataEntrega - 1];
     var dataEntregaTexto = "";
@@ -293,7 +351,7 @@ function listarRequisicoesFechadas() {
       unidade: linha[cols.unidade - 1],
       setor: linha[cols.setor - 1],
       tipo: linha[cols.tipo - 1],
-      itens: itensTexto,
+      itens: montarItensTexto(linha, cols, colunasProduto),
       prioridade: (linha[cols.prioridade - 1] || "").toString().trim(),
       finalidade: linha[cols.finalidade - 1],
       entreguePor: (linha[cols.entreguePor - 1] || "").toString().trim(),
