@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    :root {
+      --bg: #f7f3ee;
+      --card-bg: #ffffff;
+      --border: #e8ddd0;
+      --text: #4b433c;
+      --text-muted: #8a8570;
+      --gold: #b79b6c;
+      --green: #8f9b72;
+      --red: #c07a6c;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      -webkit-tap-highlight-color: transparent;
+    }
+    header {
+      background: var(--text);
+      color: #fff;
+      padding: 1rem 1.1rem;
+      position: sticky;
+      top: 0;
+      z-index: 5;
+    }
+    header h1 { font-size: 1.05rem; margin: 0; font-weight: 700; }
+    header p { margin: 0.15rem 0 0; font-size: 0.78rem; color: #d8d2c6; }
+    .link-menu { display: inline-block; margin-bottom: 0.5rem; font-size: 0.78rem; color: #d8d2c6; text-decoration: none; }
+    main { padding: 1rem; max-width: 480px; margin: 0 auto; padding-bottom: 3rem; }
+
+    .estado-carregando, .estado-vazio {
+      text-align: center;
+      color: var(--text-muted);
+      padding: 3rem 1rem;
+      font-size: 0.95rem;
+    }
+
+    .req-card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1rem 1.1rem;
+      margin-bottom: 0.75rem;
+      cursor: pointer;
+      transition: transform 0.1s ease;
+    }
+    .req-card:active { transform: scale(0.98); }
+    .req-card-topo { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.4rem; }
+    .req-card-id { font-weight: 700; font-size: 1rem; }
+    .badge {
+      font-size: 0.72rem;
+      font-weight: 700;
+      padding: 0.2rem 0.55rem;
+      border-radius: 20px;
+      color: #fff;
+      white-space: nowrap;
+      background: var(--gold);
+    }
+    .req-card-setor { font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0.3rem; }
+    .req-card-itens { font-size: 0.82rem; color: var(--text); line-height: 1.4; white-space: pre-line; }
+
+    .form-secao { background: var(--card-bg); border: 1px solid var(--border); border-radius: 12px; padding: 1.2rem; }
+    .form-secao label { display: block; font-size: 0.8rem; font-weight: 600; color: var(--text-muted); margin: 0.9rem 0 0.35rem; }
+    .form-secao label:first-child { margin-top: 0; }
+    textarea, input[type="text"] {
+      width: 100%;
+      font-size: 1rem;
+      padding: 0.7rem 0.8rem;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      font-family: inherit;
+      background: #fff;
+      color: var(--text);
+    }
+    textarea { min-height: 70px; resize: vertical; }
+
+    .btn {
+      display: block;
+      width: 100%;
+      padding: 0.9rem;
+      border-radius: 10px;
+      border: none;
+      font-size: 1rem;
+      font-weight: 700;
+      cursor: pointer;
+      text-align: center;
+    }
+    .btn-primario { background: var(--green); color: #fff; margin-top: 1.2rem; }
+    .btn-primario:disabled { opacity: 0.6; }
+    .btn-secundario { background: none; color: var(--text-muted); margin-top: 0.6rem; font-weight: 600; }
+
+    .voltar { display: inline-block; margin-bottom: 0.8rem; color: var(--text-muted); font-size: 0.85rem; cursor: pointer; }
+
+    .alerta {
+      background: #fbe9e7;
+      border: 1px solid var(--red);
+      color: #8c3f33;
+      border-radius: 8px;
+      padding: 0.7rem 0.9rem;
+      font-size: 0.85rem;
+      margin-bottom: 1rem;
+    }
+
+    .sucesso { text-align: center; padding: 3rem 1rem; }
+    .sucesso .icone { font-size: 3rem; margin-bottom: 0.5rem; }
+    .sucesso h2 { margin: 0 0 0.3rem; font-size: 1.15rem; }
+    .sucesso p { color: var(--text-muted); font-size: 0.9rem; }
+  </style>
+</head>
+<body>
+  <header>
+    <a class="link-menu" href="?">‹ Menu</a>
+    <h1>✅ Fechar Requisição</h1>
+    <p>Requisição MP e Recheios · Mamma Mia</p>
+  </header>
+
+  <main id="app">
+    <div class="estado-carregando" id="tela-carregando">Carregando requisições abertas…</div>
+  </main>
+
+  <script>
+    var requisicaoSelecionada = null;
+
+    function iniciar() {
+      google.script.run
+        .withSuccessHandler(renderizarLista)
+        .withFailureHandler(mostrarErroFatal)
+        .listarRequisicoesAbertas();
+    }
+
+    function mostrarErroFatal(erro) {
+      document.getElementById('app').innerHTML =
+        '<div class="alerta">' + escaparHtml(erro.message || String(erro)) + '</div>';
+    }
+
+    function escaparHtml(texto) {
+      var div = document.createElement('div');
+      div.textContent = texto == null ? '' : String(texto);
+      return div.innerHTML;
+    }
+
+    function renderizarLista(requisicoesAbertas) {
+      var app = document.getElementById('app');
+
+      if (!requisicoesAbertas || requisicoesAbertas.length === 0) {
+        app.innerHTML = '<div class="estado-vazio">✅ Nenhuma requisição em aberto no momento.</div>';
+        return;
+      }
+
+      var html = '';
+      requisicoesAbertas.forEach(function (req, idx) {
+        html +=
+          '<div class="req-card" data-idx="' + idx + '">' +
+            '<div class="req-card-topo">' +
+              '<span class="req-card-id">' + escaparHtml(req.id) + '</span>' +
+              '<span class="badge">' + escaparHtml(req.tipo || '-') + '</span>' +
+            '</div>' +
+            '<div class="req-card-setor">' + escaparHtml(req.requisitante || '-') + ' · ' + escaparHtml(req.unidade || '-') + ' · ' + escaparHtml(req.setor || '-') + '</div>' +
+            '<div class="req-card-itens">' + escaparHtml(req.itens || '') + '</div>' +
+          '</div>';
+      });
+      app.innerHTML = html;
+
+      Array.prototype.forEach.call(app.querySelectorAll('.req-card'), function (card) {
+        card.addEventListener('click', function () {
+          requisicaoSelecionada = requisicoesAbertas[Number(card.getAttribute('data-idx'))];
+          renderizarFormulario();
+        });
+      });
+    }
+
+    function renderizarFormulario() {
+      var app = document.getElementById('app');
+
+      app.innerHTML =
+        '<div class="voltar" id="btn-voltar">‹ Voltar para a lista</div>' +
+        '<div class="form-secao">' +
+          '<div class="req-card-topo">' +
+            '<span class="req-card-id">' + escaparHtml(requisicaoSelecionada.id) + '</span>' +
+            '<span class="badge">' + escaparHtml(requisicaoSelecionada.tipo || '-') + '</span>' +
+          '</div>' +
+          '<div class="req-card-setor">' + escaparHtml(requisicaoSelecionada.requisitante || '-') + ' · ' + escaparHtml(requisicaoSelecionada.unidade || '-') + ' · ' + escaparHtml(requisicaoSelecionada.setor || '-') + '</div>' +
+          '<div class="req-card-itens">' + escaparHtml(requisicaoSelecionada.itens || '') + '</div>' +
+          '<label for="campo-entregue-por">Entregue por <span style="color:var(--red)">*</span></label>' +
+          '<input type="text" id="campo-entregue-por" placeholder="Seu nome">' +
+          '<label for="campo-observacoes">Observações</label>' +
+          '<textarea id="campo-observacoes" placeholder="Opcional — ex: entregue parcialmente, faltou item X..."></textarea>' +
+          '<div id="area-erro"></div>' +
+          '<button class="btn btn-primario" id="btn-confirmar">Confirmar entrega ✅</button>' +
+          '<button class="btn btn-secundario" id="btn-cancelar">Cancelar</button>' +
+        '</div>';
+
+      document.getElementById('btn-voltar').addEventListener('click', iniciar);
+      document.getElementById('btn-cancelar').addEventListener('click', iniciar);
+      document.getElementById('btn-confirmar').addEventListener('click', confirmarEntrega);
+    }
+
+    function confirmarEntrega() {
+      var entreguePor = document.getElementById('campo-entregue-por').value.trim();
+      var observacoes = document.getElementById('campo-observacoes').value.trim();
+      var areaErro = document.getElementById('area-erro');
+      var botao = document.getElementById('btn-confirmar');
+
+      areaErro.innerHTML = '';
+
+      if (!entreguePor) {
+        areaErro.innerHTML = '<div class="alerta">Informe quem está entregando os itens.</div>';
+        return;
+      }
+
+      botao.disabled = true;
+      botao.textContent = 'Enviando...';
+
+      google.script.run
+        .withSuccessHandler(renderizarSucesso)
+        .withFailureHandler(function (erro) {
+          botao.disabled = false;
+          botao.textContent = 'Confirmar entrega ✅';
+          areaErro.innerHTML = '<div class="alerta">' + escaparHtml(erro.message || String(erro)) + '</div>';
+        })
+        .fecharRequisicao(requisicaoSelecionada.id, entreguePor, observacoes);
+    }
+
+    function renderizarSucesso(resultado) {
+      document.getElementById('app').innerHTML =
+        '<div class="sucesso">' +
+          '<div class="icone">✅</div>' +
+          '<h2>' + escaparHtml(resultado.id) + ' entregue</h2>' +
+          '<p>Voltando para a lista...</p>' +
+        '</div>';
+      setTimeout(iniciar, 2200);
+    }
+
+    iniciar();
+  </script>
+</body>
+</html>
