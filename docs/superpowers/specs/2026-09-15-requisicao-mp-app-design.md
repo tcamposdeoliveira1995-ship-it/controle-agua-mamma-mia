@@ -45,9 +45,31 @@ de código, porém:
   padrão de propriedades do Telegram (`TELEGRAM_TOKEN`, `TELEGRAM_CHAT_ID` em
   `PropertiesService.getScriptProperties()`) já usados pelos outros apps da Mamma Mia.
 
-## Planilha (aba única, primeira aba do spreadsheet)
+## Planilha real usada (atualização pós-implementação)
 
-Cabeçalhos exatos (linha 1), localizados por nome (não por posição):
+O usuário criou o app na planilha já existente **"BASE - REQUISIÇÃO MP E RECHEIOS"**
+(`1aDbE5qxZdtTlPsJbDJF6V_0QiCsQnv4-9xuGafRIuhw`), não numa planilha em branco. Essa planilha já
+tinha várias abas de um fluxo anterior (Forms + planilhas auxiliares de conferência), então o app
+foi ajustado para conviver com elas em vez de presumir "primeira aba = requisições":
+
+- **`FecharRequisicao`** (nome dado pelo usuário) — é a aba nova, só com o cabeçalho (linha 1)
+  descrito abaixo, sem dados. É nela que `abrirRequisicao`/`fecharRequisicao`/
+  `listarRequisicoesAbertas` leem e gravam. `obterSheet()` busca por esse nome exato
+  (`getSheetByName`), não mais por posição (`getSheets()[0]`) — a primeira aba da planilha é, na
+  verdade, a resposta antiga do Google Forms, com ~100 colunas (uma por produto) e dados
+  históricos reais; usar `getSheets()[0]` teria feito o app ler/gravar na aba errada.
+- **`BASE_REQUISICAO_MP_RECHEIOS`** — aba **já existente**, com o catálogo real e atual de produtos
+  em 3 colunas: `TIPO`, `ITEM`, `UN_MEDIDA` (112 produtos: 94 de Matéria-prima, 18 de Recheio; sem
+  categoria de Embalagens). É mais completo e mais atual que o `CATALOGO_PRODUTOS` do script
+  original do Forms — por isso o catálogo do app **não fica mais hardcoded em `Code.gs`**; é lido
+  ao vivo dessa aba (`obterCatalogoDaPlanilha()`), formatado como `"ITEM (UNIDADE)"`. Isso também
+  significa que adicionar/renomear um produto na planilha passa a valer no app sem reimplantar
+  nada.
+- **`BASE_CONSOLIDADA`** e **`BASE_CONTROLE_YUKA`** — abas auxiliares de conferência (quantidade
+  pedida x recebida) já existentes, usadas por outro processo manual. Fora de escopo: o app não lê
+  nem escreve nelas.
+
+Cabeçalhos exatos da aba `FecharRequisicao` (linha 1), localizados por nome (não por posição):
 
 `Timestamp`, `ID`, `STATUS`, `Nome do requisitante`, `Unidade solicitante`, `Setor solicitante`,
 `Tipo de item requisitado`, `Itens solicitados`, `Finalidade da requisição`, `Documento`,
@@ -55,13 +77,23 @@ Cabeçalhos exatos (linha 1), localizados por nome (não por posição):
 
 `STATUS` é `"Solicitado"` (ao abrir) ou `"Entregue"` (ao fechar).
 
+`Setor solicitante` e `Tipo de item requisitado` também foram ajustados para bater com o uso real
+observado na aba antiga do Forms, em vez dos setores copiados da tela de OS (que são de
+manutenção, não de requisição de estoque):
+- Setores: `Estoque`, `Produção`, `Expedição`, `Cocção`, `CD`, `Outro`.
+- Tipos: os valores de `TIPO` que existirem em `BASE_REQUISICAO_MP_RECHEIOS` (hoje `Matéria-prima`
+  e `Recheio`) mais `Outro`, calculados dinamicamente — não fixos no código.
+
 ## Componentes
 
 ### `Code.gs`
 
-- `CATALOGO` — mesmo catálogo de produtos do script original, agora agrupado por categoria
-  (`Matéria-prima`, `Recheio`, `Embalagens/Descartáveis`) para alimentar o seletor de itens da
-  tela de abertura. Nomes e unidades idênticos ao catálogo já validado pelo usuário.
+- `obterCatalogoDaPlanilha()` — lê a aba `BASE_REQUISICAO_MP_RECHEIOS` (colunas `TIPO`, `ITEM`,
+  `UN_MEDIDA`, localizadas por cabeçalho) e devolve os produtos agrupados por tipo, já formatados
+  como `"ITEM (UNIDADE)"`. Substitui o catálogo fixo que estava planejado originalmente — ver
+  "Planilha real usada" acima.
+- `obterDadosAberturaRequisicao()` — chamado pelo cliente via `google.script.run` na tela de
+  abertura; devolve `{ catalogo, opcoesUnidade, opcoesSetor, opcoesTipoItem }` num único payload.
 - `getColumnIndexByHeader` / `obterMapaColunas` — mesmo padrão defensivo do `manutencao-appsscript`.
 - `gerarIDRequisicao()` — mesma lógica já existente (contador diário em `PropertiesService`,
   protegido por `LockService`), formato `RQ-AAAAMMDD-NNN`.
@@ -92,12 +124,14 @@ fixa — não depende de saber o link de implantação de antemão.
 ### `AbrirRequisicao.html`
 
 Mesma base visual/CSS de `AbrirOS.html`. Campos do cabeçalho da requisição (Nome do requisitante,
-Unidade solicitante, Setor solicitante — mesmas opções de setor usadas em OS, com "Outro" —, Tipo
-de item requisitado, Finalidade). Abaixo, o catálogo agrupado por categoria com um campo numérico
-de quantidade por produto e um filtro de texto no topo (73+ produtos não cabem numa lista sem
-busca). Só os produtos com quantidade > 0 viram itens da requisição. Validação no cliente: campos
-obrigatórios preenchidos e pelo menos 1 item selecionado, antes de chamar
-`google.script.run.abrirRequisicao(dados)`.
+Unidade solicitante, Setor solicitante — opções `Estoque`/`Produção`/`Expedição`/`Cocção`/`CD`/
+`Outro`, vindas do uso real da aba antiga do Forms, com fallback "Outro" —, Tipo de item
+requisitado, Finalidade). Catálogo, opções de setor e de tipo chegam num só payload de
+`obterDadosAberturaRequisicao()`, chamado ao carregar a tela. Abaixo, o catálogo agrupado por
+categoria (lido da planilha) com um campo numérico de quantidade por produto e um filtro de texto
+no topo (112+ produtos não cabem numa lista sem busca). Só os produtos com quantidade > 0 viram
+itens da requisição. Validação no cliente: campos obrigatórios preenchidos e pelo menos 1 item
+selecionado, antes de chamar `google.script.run.abrirRequisicao(dados)`.
 
 ### `FecharRequisicao.html`
 
@@ -117,10 +151,11 @@ opcional), confirma chamando `fecharRequisicao(id, entreguePor, observacoes)`.
 
 ## Passos de implantação (feitos pelo usuário, com o código já pronto)
 
-1. Criar uma planilha nova (ou usar uma em branco) e colar os cabeçalhos exatos listados acima na
-   linha 1.
-2. Extensões → Apps Script, colar `Code.gs`, `Menu.html`, `AbrirRequisicao.html`,
-   `FecharRequisicao.html`.
+1. ✅ Já feito: aba `FecharRequisicao` criada na planilha "BASE - REQUISIÇÃO MP E RECHEIOS", com os
+   13 cabeçalhos exatos na linha 1. A aba `BASE_REQUISICAO_MP_RECHEIOS` (catálogo) já existia.
+2. Nessa MESMA planilha: Extensões → Apps Script (isso cria um script vinculado a ela — importante,
+   já que `obterSheet()`/`obterCatalogoDaPlanilha()` usam `SpreadsheetApp.getActiveSpreadsheet()`).
+   Colar `Code.gs`, `Menu.html`, `AbrirRequisicao.html`, `FecharRequisicao.html`.
 3. Configurar `TELEGRAM_TOKEN` e `TELEGRAM_CHAT_ID` em Configurações do projeto → Propriedades do
    script (mesmos valores já usados nos outros bots da Mamma Mia, ou um chat novo se quiser separar
    o aviso de requisição do de manutenção).

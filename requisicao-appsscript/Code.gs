@@ -8,60 +8,41 @@
  *   - Fechar Requisição: lista as requisições em aberto e dá baixa.
  *
  * Como instalar:
- * 1) Crie uma planilha nova e cole na linha 1, nesta ordem, os
- *    cabeçalhos: Timestamp, ID, STATUS, Nome do requisitante, Unidade
+ * 1) Na planilha BASE - REQUISIÇÃO MP E RECHEIOS, confirme que existe
+ *    uma aba chamada exatamente "FecharRequisicao" com estes cabeçalhos
+ *    na linha 1: Timestamp, ID, STATUS, Nome do requisitante, Unidade
  *    solicitante, Setor solicitante, Tipo de item requisitado, Itens
  *    solicitados, Finalidade da requisição, Documento, Entregue por,
  *    Data de entrega, Observações de entrega.
- * 2) Extensões > Apps Script > cole este arquivo e os 3 HTML ao lado.
- * 3) Configurações do projeto > Propriedades do script > adicione
+ * 2) O catálogo de produtos é lido ao vivo da aba já existente
+ *    "BASE_REQUISICAO_MP_RECHEIOS" (colunas TIPO, ITEM, UN_MEDIDA) —
+ *    nada a criar aqui, só não renomear essa aba ou essas colunas.
+ * 3) Extensões > Apps Script (nessa MESMA planilha, pra virar um script
+ *    vinculado a ela) > cole este arquivo e os 3 HTML ao lado.
+ * 4) Configurações do projeto > Propriedades do script > adicione
  *    TELEGRAM_TOKEN e TELEGRAM_CHAT_ID.
- * 4) Implantar > Nova implantação > App da Web (Executar como: Eu;
+ * 5) Implantar > Nova implantação > App da Web (Executar como: Eu;
  *    Quem pode acessar: Qualquer pessoa).
  */
 
 /****************************************************
- * CATÁLOGO DE PRODUTOS, agrupado por categoria (usado
- * pela tela de Abrir Requisição para montar o seletor).
+ * ABAS DA PLANILHA
+ * NOME_ABA_REQUISICOES: aba única com as requisições
+ * (abertas e fechadas) — criada pelo usuário com os
+ * cabeçalhos exatos descritos no topo deste arquivo.
+ * NOME_ABA_CATALOGO: aba já existente na planilha da
+ * Mamma Mia com o catálogo real de produtos (colunas
+ * TIPO, ITEM, UN_MEDIDA) — o catálogo é lido dali em
+ * vez de ficar fixo no código, pra qualquer edição
+ * (produto novo, unidade trocada) valer sem precisar
+ * reimplantar o Web App.
  ****************************************************/
 
-const CATALOGO = {
-
-  "Matéria-prima": [
-    "Apresuntado (PÇ)", "Achocolatado (KG)", "Açucar (FD)", "Amido podium (PCT)",
-    "Amido (P.Q.R) (PCT)", "Antimofo (PCT)", "Azeitona (BD)", "Café (PCT)",
-    "Calabresa (KG)", "Chocolate bisnaga (KG)", "Corante gema (L)", "Creme culinário (L)",
-    "Farinha 101 (PCT)", "Farinha ciabatta (FD)", "Farinha italiano (FD)", "Fermento (UNI)",
-    "Flocos de batata (PCT)", "Dourador (CX)", "Gergelim (PCT)", "Gluten (PCT)",
-    "Hamburger crú (KG)", "Leite (L)", "Leite em pó (KG)", "Margarina balde (BL)",
-    "Margarina qually (KG)", "Margarina ricca (CX)", "Mortadela (PÇ)", "Óleo (GL)",
-    "Orégano (UNI)", "Ovo (PCT)", "Peito de frango (PÇ)", "Peito de peru (PÇ)", "Provolone (PÇ)",
-    "Queijo meia cura (CX)", "Queijo minas (PÇ)", "Queijo mussarela fatiar (PÇ)",
-    "Queijo parmesão triturado (PCT)", "Queijo prato (PÇ)", "Requeijao coronata (UNI)",
-    "Requeijao tirolez (UNI)", "Requeijao top milk (UNI)", "Ricota (UNI)", "Sal (FD)",
-    "Salame (PÇ)", "Suco em pó (UNI)", "Requeijao catupiry (UNI)",
-    "Mix dadinho (PCT)", "MELHORADOR (CX)", "Essência de Manteiga (CX)", "Goiabada (BD)",
-    "MIX FD 750 (CX)", "AMACIANTE ESFIHA (CX)"
-  ],
-
-  "Recheio": [
-    "TOMATE IN NATURA (CX)", "SALSA PICADA (PCT)", "CEBOLA PICADA (PCT)",
-    "MOLHO DE TOMATE (PCT)", "BACON TRITURADO (PCT)", "BROCOLIS (PCT)",
-    "FRANGO (KG)", "PROTEÍNA CALABRESA (PCT)", "PROTEÍNA FRANGO (PCT)",
-    "CARNE MOIDA (KG)", "CARNE LOUCA (KG)", "MOLHO CHEDDAR (PCT)"
-  ],
-
-  "Embalagens/Descartáveis": [
-    "BOBINA FLOW PACK (RL)", "STRESH (RL)", "CAIXA PEQUENA (UNI)", "CAIXA GRANDE (UNI)",
-    "ETIQUETA (CX)", "DUREX (FD)", "EMBALAGEM 34X45 (PCT)", "EMBALAGEM 40X60  (PCT)",
-    "Caixa de empada (UN)"
-  ]
-
-};
+var NOME_ABA_REQUISICOES = "FecharRequisicao";
+var NOME_ABA_CATALOGO = "BASE_REQUISICAO_MP_RECHEIOS";
 
 var OPCOES_UNIDADE = ["TC", "YUKA", "DS"];
-var OPCOES_SETOR = ["Produção", "Cozinha", "Limpeza", "Manutenção", "Outro"];
-var OPCOES_TIPO_ITEM = ["Matéria-prima", "Recheio", "Embalagens/Descartáveis", "Outro"];
+var OPCOES_SETOR = ["Estoque", "Produção", "Expedição", "Cocção", "CD", "Outro"];
 
 var STATUS_SOLICITADO = "Solicitado";
 var STATUS_ENTREGUE = "Entregue";
@@ -114,7 +95,56 @@ function obterMapaColunas(sheet) {
 }
 
 function obterSheet() {
-  return SpreadsheetApp.getActiveSpreadsheet().getSheets()[0];
+  var aba = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(NOME_ABA_REQUISICOES);
+  if (!aba) {
+    throw new Error('Aba "' + NOME_ABA_REQUISICOES + '" não foi encontrada na planilha.');
+  }
+  return aba;
+}
+
+
+/****************************************************
+ * CATÁLOGO (lido ao vivo da aba BASE_REQUISICAO_MP_RECHEIOS)
+ * Colunas TIPO, ITEM, UN_MEDIDA, localizadas por
+ * cabeçalho — mesma filosofia defensiva do resto do
+ * arquivo. Devolve os itens agrupados por TIPO, já
+ * formatados como "ITEM (UNIDADE)" (mesmo formato usado
+ * na linha "Itens solicitados"), e a lista de tipos na
+ * ordem em que aparecem na planilha.
+ ****************************************************/
+
+function obterCatalogoDaPlanilha() {
+  var aba = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(NOME_ABA_CATALOGO);
+  if (!aba) {
+    throw new Error('Aba "' + NOME_ABA_CATALOGO + '" não foi encontrada na planilha.');
+  }
+
+  var colTipo = getColumnIndexByHeader(aba, "TIPO");
+  var colItem = getColumnIndexByHeader(aba, "ITEM");
+  var colUnidade = getColumnIndexByHeader(aba, "UN_MEDIDA");
+
+  var ultimaLinha = aba.getLastRow();
+  if (ultimaLinha < 2) return { catalogo: {}, tipos: [] };
+
+  var valores = aba.getRange(2, 1, ultimaLinha - 1, aba.getLastColumn()).getValues();
+
+  var catalogo = {};
+  var tipos = [];
+
+  valores.forEach(function (linha) {
+    var tipo = (linha[colTipo - 1] || "").toString().trim();
+    var item = (linha[colItem - 1] || "").toString().trim();
+    var unidade = (linha[colUnidade - 1] || "").toString().trim();
+    if (!tipo || !item) return;
+
+    if (!catalogo[tipo]) {
+      catalogo[tipo] = [];
+      tipos.push(tipo);
+    }
+    catalogo[tipo].push(unidade ? item + " (" + unidade + ")" : item);
+  });
+
+  return { catalogo: catalogo, tipos: tipos };
 }
 
 
@@ -125,11 +155,12 @@ function obterSheet() {
  ****************************************************/
 
 function obterDadosAberturaRequisicao() {
+  var info = obterCatalogoDaPlanilha();
   return {
-    catalogo: CATALOGO,
+    catalogo: info.catalogo,
     opcoesUnidade: OPCOES_UNIDADE,
     opcoesSetor: OPCOES_SETOR,
-    opcoesTipoItem: OPCOES_TIPO_ITEM,
+    opcoesTipoItem: info.tipos.concat(["Outro"]),
   };
 }
 
