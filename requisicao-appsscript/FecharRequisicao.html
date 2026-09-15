@@ -63,8 +63,25 @@
       white-space: nowrap;
       background: var(--gold);
     }
+    .badge-urgente, .badge-critica { background: var(--red); }
+    .badge-alta { background: #d6aa5f; }
+    .badge-media { background: #c9b25a; }
+    .badge-baixa { background: var(--green); }
     .req-card-setor { font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0.3rem; }
     .req-card-itens { font-size: 0.82rem; color: var(--text); line-height: 1.4; white-space: pre-line; }
+    .req-card-finalidade { font-size: 0.78rem; color: var(--text-muted); margin-top: 0.35rem; font-style: italic; }
+
+    .opcoes-radio { display: flex; flex-direction: column; gap: 0.5rem; }
+    .opcao-radio {
+      display: flex;
+      align-items: center;
+      gap: 0.55rem;
+      padding: 0.65rem 0.8rem;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      font-size: 0.95rem;
+    }
+    .opcao-radio input { margin: 0; }
 
     .form-secao { background: var(--card-bg); border: 1px solid var(--border); border-radius: 12px; padding: 1.2rem; }
     .form-secao label { display: block; font-size: 0.8rem; font-weight: 600; color: var(--text-muted); margin: 0.9rem 0 0.35rem; }
@@ -146,6 +163,17 @@
       return div.innerHTML;
     }
 
+    function classeBadge(prioridade) {
+      switch ((prioridade || '').toUpperCase()) {
+        case 'URGENTE': return 'badge-urgente';
+        case 'CRÍTICA': return 'badge-critica';
+        case 'ALTA': return 'badge-alta';
+        case 'MÉDIA': return 'badge-media';
+        case 'BAIXA': return 'badge-baixa';
+        default: return '';
+      }
+    }
+
     function renderizarLista(requisicoesAbertas) {
       var app = document.getElementById('app');
 
@@ -160,10 +188,11 @@
           '<div class="req-card" data-idx="' + idx + '">' +
             '<div class="req-card-topo">' +
               '<span class="req-card-id">' + escaparHtml(req.id) + '</span>' +
-              '<span class="badge">' + escaparHtml(req.tipo || '-') + '</span>' +
+              '<span class="badge ' + classeBadge(req.prioridade) + '">' + escaparHtml(req.prioridade || req.status || '-') + '</span>' +
             '</div>' +
             '<div class="req-card-setor">' + escaparHtml(req.requisitante || '-') + ' · ' + escaparHtml(req.unidade || '-') + ' · ' + escaparHtml(req.setor || '-') + '</div>' +
             '<div class="req-card-itens">' + escaparHtml(req.itens || '') + '</div>' +
+            (req.finalidade ? '<div class="req-card-finalidade">🎯 ' + escaparHtml(req.finalidade) + '</div>' : '') +
           '</div>';
       });
       app.innerHTML = html;
@@ -184,16 +213,22 @@
         '<div class="form-secao">' +
           '<div class="req-card-topo">' +
             '<span class="req-card-id">' + escaparHtml(requisicaoSelecionada.id) + '</span>' +
-            '<span class="badge">' + escaparHtml(requisicaoSelecionada.tipo || '-') + '</span>' +
+            '<span class="badge ' + classeBadge(requisicaoSelecionada.prioridade) + '">' + escaparHtml(requisicaoSelecionada.prioridade || requisicaoSelecionada.status || '-') + '</span>' +
           '</div>' +
           '<div class="req-card-setor">' + escaparHtml(requisicaoSelecionada.requisitante || '-') + ' · ' + escaparHtml(requisicaoSelecionada.unidade || '-') + ' · ' + escaparHtml(requisicaoSelecionada.setor || '-') + '</div>' +
           '<div class="req-card-itens">' + escaparHtml(requisicaoSelecionada.itens || '') + '</div>' +
+          (requisicaoSelecionada.finalidade ? '<div class="req-card-finalidade">🎯 ' + escaparHtml(requisicaoSelecionada.finalidade) + '</div>' : '') +
+          '<label>Como ficou a entrega? <span style="color:var(--red)">*</span></label>' +
+          '<div class="opcoes-radio">' +
+            '<label class="opcao-radio"><input type="radio" name="campo-status" value="CONCLUÍDO" checked> Entregue por completo</label>' +
+            '<label class="opcao-radio"><input type="radio" name="campo-status" value="PARCIALMENTE"> Entregue parcialmente</label>' +
+          '</div>' +
           '<label for="campo-entregue-por">Entregue por <span style="color:var(--red)">*</span></label>' +
           '<input type="text" id="campo-entregue-por" placeholder="Seu nome">' +
           '<label for="campo-observacoes">Observações</label>' +
-          '<textarea id="campo-observacoes" placeholder="Opcional — ex: entregue parcialmente, faltou item X..."></textarea>' +
+          '<textarea id="campo-observacoes" placeholder="Opcional — ex: faltou item X, quantidade menor que a pedida..."></textarea>' +
           '<div id="area-erro"></div>' +
-          '<button class="btn btn-primario" id="btn-confirmar">Confirmar entrega ✅</button>' +
+          '<button class="btn btn-primario" id="btn-confirmar">Confirmar baixa ✅</button>' +
           '<button class="btn btn-secundario" id="btn-cancelar">Cancelar</button>' +
         '</div>';
 
@@ -203,6 +238,7 @@
     }
 
     function confirmarEntrega() {
+      var statusFinal = document.querySelector('input[name="campo-status"]:checked').value;
       var entreguePor = document.getElementById('campo-entregue-por').value.trim();
       var observacoes = document.getElementById('campo-observacoes').value.trim();
       var areaErro = document.getElementById('area-erro');
@@ -222,17 +258,18 @@
         .withSuccessHandler(renderizarSucesso)
         .withFailureHandler(function (erro) {
           botao.disabled = false;
-          botao.textContent = 'Confirmar entrega ✅';
+          botao.textContent = 'Confirmar baixa ✅';
           areaErro.innerHTML = '<div class="alerta">' + escaparHtml(erro.message || String(erro)) + '</div>';
         })
-        .fecharRequisicao(requisicaoSelecionada.id, entreguePor, observacoes);
+        .fecharRequisicao(requisicaoSelecionada.id, statusFinal, entreguePor, observacoes);
     }
 
     function renderizarSucesso(resultado) {
+      var texto = resultado.status === 'PARCIALMENTE' ? 'entregue parcialmente' : 'concluída';
       document.getElementById('app').innerHTML =
         '<div class="sucesso">' +
           '<div class="icone">✅</div>' +
-          '<h2>' + escaparHtml(resultado.id) + ' entregue</h2>' +
+          '<h2>' + escaparHtml(resultado.id) + ' ' + texto + '</h2>' +
           '<p>Voltando para a lista...</p>' +
         '</div>';
       setTimeout(iniciar, 2200);

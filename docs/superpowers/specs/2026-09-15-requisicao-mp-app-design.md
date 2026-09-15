@@ -1,164 +1,156 @@
-# Requisição de MP e Recheios — App próprio (substituindo o Google Forms)
+# Fechar Requisição de MP e Recheios (a abertura continua no Google Forms)
 
 **Data:** 2026-09-15
-**Status:** Aprovado para implementação
+**Status:** Aprovado para implementação (revisado após ver a planilha real)
 
 ## Problema
 
-Hoje a requisição de matéria-prima/recheios/embalagens é feita por um Google Forms com ~75
-perguntas (uma por produto do catálogo), lido por um Apps Script cheio de camadas de correção
-(`CATALOGO_PRODUTOS`, `ALIASES_PRODUTOS`, `CAMPOS_META`, grade, texto livre, "rede de segurança")
-só para compensar o fato de o Forms não garantir que o título de cada pergunta bate com o nome do
-produto. Isso já causou pelo menos um bug real (itens de "Proteína" sumindo da mensagem do
-Telegram). O dono do negócio pediu um app próprio, no mesmo padrão das outras telas internas —
-"tipo as OS": um menu com **Abrir Requisição** e **Fechar Requisição**.
+A requisição de matéria-prima/recheios/embalagens é aberta pelo Google Forms e cai numa aba de
+respostas. A equipe já mantém manualmente uma coluna `STATUS` (`ABERTO`/`CONCLUÍDO`/`PARCIALMENTE`)
+nessa aba, mas não tem uma forma própria de dar baixa — o fechamento depende de editar a célula de
+Status direto na planilha, sem registrar quem entregou nem quando. O dono do negócio pediu um app
+"tipo as OS" com **Abrir** e **Fechar**.
+
+## Histórico desta espec (por que ela mudou)
+
+A primeira versão deste plano assumia que a abertura também seria refeita como uma tela própria
+(substituindo o Forms), com uma planilha nova e um catálogo de produtos embutido. Duas coisas
+mudaram isso depois de ver a planilha real do usuário
+(`1aDbE5qxZdtTlPsJbDJF6V_0QiCsQnv4-9xuGafRIuhw`, "BASE - REQUISIÇÃO MP E RECHEIOS"):
+
+1. **A abertura pelo Forms já funciona e já é a fonte real dos dados** — a planilha tem 211
+   requisições reais, com ID (`REQUISICOES`, formato `REQ-AAAAMMDD-HHMMSS-N`) e `STATUS` já
+   preenchidos por uma automação que não faz parte deste projeto. O usuário confirmou: "as
+   requisições para abrir vêm de formulário" — ou seja, **não** trocar a abertura, só fechar o que
+   já existe.
+2. **O catálogo de ~75 produtos do Forms está morto na prática** — nas 211 linhas reais, ninguém
+   preenche as colunas por produto; todo mundo escreve em texto livre num único campo ("Item
+   requisitado / Quantidade requisitada", ex: `"10 FARDOS DE EMBALAGEM DE PÃO DE QUEIJO GOURMET
+   4KG"`). Por isso o app de fechamento lê esse campo de texto livre, não tenta reconstruir uma
+   lista de itens estruturada.
+
+Isso reduz o escopo pra **só a tela de Fechar Requisição** — a peça que realmente não existia.
 
 ## Objetivo
 
-Um Web App em Apps Script, visualmente consistente com `manutencao-appsscript/`, com:
-1. **Abrir Requisição** — formulário próprio (não Forms) onde o solicitante escolhe os produtos do
-   catálogo e a quantidade de cada um, preenche os dados da requisição e envia. Gera um Doc e avisa
-   no Telegram — mesma automação que já existe hoje.
-2. **Fechar Requisição** — tela para quem entrega os itens dar baixa numa requisição em aberto:
-   escolhe a requisição na lista, informa quem está entregando, confirma. Isso **não existe hoje**
-   (o script atual não tem conceito de status/baixa) — é a peça nova que falta pra virar "tipo as OS".
+Um Web App em Apps Script, visualmente consistente com `manutencao-appsscript/`, com um menu de 2
+cards:
+1. **Abrir Requisição** — link direto pro Google Forms já existente (sem mudança nenhuma).
+2. **Fechar Requisição** — tela nova: lista as requisições com `STATUS` `ABERTO` ou `PARCIALMENTE`,
+   quem está entregando escolhe uma, informa se foi entrega total ou parcial, seu nome e uma
+   observação opcional, e confirma.
 
-## Decisão de arquitetura
+## Planilha real usada
 
-Novo projeto de Apps Script, próprio, com planilha própria — não reaproveita o projeto de
-manutenção (domínio diferente: produtos e estoque, não ordens de serviço/Trello). Mesma filosofia
-de código, porém:
+Planilha **"BASE - REQUISIÇÃO MP E RECHEIOS"** já existente, com 5 abas:
 
-- **Elimina toda a camada de reconciliação de nomes** (`ALIASES_PRODUTOS`, `CAMPOS_META`,
-  `getItensDeGrade`, `getItensDeTextoLivre`, a "rede de segurança" com `⚠️`). Essa complexidade só
-  existia para compensar a falta de controle sobre os títulos de pergunta do Forms. Num formulário
-  HTML próprio, os nomes dos produtos vêm exatamente como estão em `CATALOGO_PRODUTOS` — não há
-  nome divergente pra reconciliar.
-- **Um produto = uma linha do array `itens` enviado pelo cliente**, não uma coluna da planilha. A
-  planilha de respostas passa a ter uma única coluna de texto "Itens solicitados" (uma linha por
-  item, formato `Produto (UNIDADE): Quantidade`), em vez de ~75 colunas quase todas vazias.
-- Mantém os mesmos princípios defensivos do `manutencao-appsscript`: colunas localizadas por
-  cabeçalho (`getColumnIndexByHeader`/`obterMapaColunas`), não por posição fixa; `LockService` para
-  gerar o ID sequencial sem corrida; falha em Doc/Telegram isolada em `try/catch` própria, sem
-  desfazer a requisição já gravada.
-- Reaproveita a mesma pasta de logo (`LOGO_ID = "1mBHCppmwzj65IlT7kCKXInhSV-ltqE3I"`) e o mesmo
-  padrão de propriedades do Telegram (`TELEGRAM_TOKEN`, `TELEGRAM_CHAT_ID` em
-  `PropertiesService.getScriptProperties()`) já usados pelos outros apps da Mamma Mia.
+- **`REQUISIÇÃO DE MATÉRIA-PRIMA E RECHEIOS - MAMMA MIA CONTROL`** — aba de respostas do Forms
+  (nome real completo, sem truncar — cuidado ao copiar, o nome de exibição no Google Sheets pode
+  aparecer cortado em ferramentas que exportam pra `.xlsx`, que tem limite de 31 caracteres pra
+  nome de aba). É **nela** que o app lê e grava. 211 linhas reais, 107 colunas. Colunas relevantes
+  (localizadas por cabeçalho, não por posição):
+  - `Timestamp`, `Nome do requisitante`, `Unidade solicitante`, `Setor solicitante`, `Tipo de item
+    requisitado`, `Prioridade`, `Finalidade da requisição`, `Observações`.
+  - O campo de itens em texto livre — título real (com instruções embutidas): `"Item requisitado /
+    Quantidade requisitada\nPreencha uma linha para cada item..."`. Localizado por **padrão**
+    (`/^Item requisitado\s*\/\s*Quantidade requisitada/i`), não por nome exato, porque o título tem
+    texto de instrução que pode ser reformulado sem mudar de sentido.
+  - `Quantidade solicitada` — às vezes preenchida, às vezes não (a quantidade geralmente já vem
+    embutida no texto livre); quando presente, é anexada ao texto exibido no card.
+  - `STATUS` (`ABERTO` / `CONCLUÍDO` / `PARCIALMENTE`) e `REQUISICOES` (ID, ex:
+    `REQ-20260528-095637-2`) — já preenchidos por outra automação; o app só lê e, no fechamento,
+    só escreve em `STATUS`.
+  - ~93 colunas por produto (`Apresuntado (PÇ)`, `Achocolatado (KG)`, etc.) e 2 colunas de pergunta
+    em grade (`Item requisitado [Matéria-prima | AÇAFRAO | KG]` etc.) — **fora de escopo**, vazias
+    em 100% das respostas reais observadas; o app não lê nem grava nelas.
+- **`BASE_REQUISICAO_MP_RECHEIOS`**, **`BASE_CONSOLIDADA`**, **`BASE_CONTROLE_YUKA`** — abas
+  auxiliares de outro processo manual (catálogo de referência e conferência pedido x recebido).
+  Fora de escopo, o app não toca nelas.
+- **`FecharRequisicao`** — aba criada numa iteração anterior deste projeto (só cabeçalho, sem
+  dados), quando a ideia ainda era uma planilha de requisições própria. **Não é mais usada** — pode
+  ser apagada ou deixada sem uso.
 
-## Planilha real usada (atualização pós-implementação)
+### Mudança manual necessária na planilha
 
-O usuário criou o app na planilha já existente **"BASE - REQUISIÇÃO MP E RECHEIOS"**
-(`1aDbE5qxZdtTlPsJbDJF6V_0QiCsQnv4-9xuGafRIuhw`), não numa planilha em branco. Essa planilha já
-tinha várias abas de um fluxo anterior (Forms + planilhas auxiliares de conferência), então o app
-foi ajustado para conviver com elas em vez de presumir "primeira aba = requisições":
+Adicionar 3 colunas novas ao cabeçalho (linha 1) da aba
+`REQUISIÇÃO DE MATÉRIA-PRIMA E RECHEIOS - MAMMA MIA CONTROL`, com esses nomes exatos:
 
-- **`FecharRequisicao`** (nome dado pelo usuário) — é a aba nova, só com o cabeçalho (linha 1)
-  descrito abaixo, sem dados. É nela que `abrirRequisicao`/`fecharRequisicao`/
-  `listarRequisicoesAbertas` leem e gravam. `obterSheet()` busca por esse nome exato
-  (`getSheetByName`), não mais por posição (`getSheets()[0]`) — a primeira aba da planilha é, na
-  verdade, a resposta antiga do Google Forms, com ~100 colunas (uma por produto) e dados
-  históricos reais; usar `getSheets()[0]` teria feito o app ler/gravar na aba errada.
-- **`BASE_REQUISICAO_MP_RECHEIOS`** — aba **já existente**, com o catálogo real e atual de produtos
-  em 3 colunas: `TIPO`, `ITEM`, `UN_MEDIDA` (112 produtos: 94 de Matéria-prima, 18 de Recheio; sem
-  categoria de Embalagens). É mais completo e mais atual que o `CATALOGO_PRODUTOS` do script
-  original do Forms — por isso o catálogo do app **não fica mais hardcoded em `Code.gs`**; é lido
-  ao vivo dessa aba (`obterCatalogoDaPlanilha()`), formatado como `"ITEM (UNIDADE)"`. Isso também
-  significa que adicionar/renomear um produto na planilha passa a valer no app sem reimplantar
-  nada.
-- **`BASE_CONSOLIDADA`** e **`BASE_CONTROLE_YUKA`** — abas auxiliares de conferência (quantidade
-  pedida x recebida) já existentes, usadas por outro processo manual. Fora de escopo: o app não lê
-  nem escreve nelas.
-
-Cabeçalhos exatos da aba `FecharRequisicao` (linha 1), localizados por nome (não por posição):
-
-`Timestamp`, `ID`, `STATUS`, `Nome do requisitante`, `Unidade solicitante`, `Setor solicitante`,
-`Tipo de item requisitado`, `Itens solicitados`, `Finalidade da requisição`, `Documento`,
-`Entregue por`, `Data de entrega`, `Observações de entrega`.
-
-`STATUS` é `"Solicitado"` (ao abrir) ou `"Entregue"` (ao fechar).
-
-`Setor solicitante` e `Tipo de item requisitado` também foram ajustados para bater com o uso real
-observado na aba antiga do Forms, em vez dos setores copiados da tela de OS (que são de
-manutenção, não de requisição de estoque):
-- Setores: `Estoque`, `Produção`, `Expedição`, `Cocção`, `CD`, `Outro`.
-- Tipos: os valores de `TIPO` que existirem em `BASE_REQUISICAO_MP_RECHEIOS` (hoje `Matéria-prima`
-  e `Recheio`) mais `Outro`, calculados dinamicamente — não fixos no código.
+- `Entregue por`
+- `Data de entrega`
+- `Observações de entrega`
 
 ## Componentes
 
 ### `Code.gs`
 
-- `obterCatalogoDaPlanilha()` — lê a aba `BASE_REQUISICAO_MP_RECHEIOS` (colunas `TIPO`, `ITEM`,
-  `UN_MEDIDA`, localizadas por cabeçalho) e devolve os produtos agrupados por tipo, já formatados
-  como `"ITEM (UNIDADE)"`. Substitui o catálogo fixo que estava planejado originalmente — ver
-  "Planilha real usada" acima.
-- `obterDadosAberturaRequisicao()` — chamado pelo cliente via `google.script.run` na tela de
-  abertura; devolve `{ catalogo, opcoesUnidade, opcoesSetor, opcoesTipoItem }` num único payload.
-- `getColumnIndexByHeader` / `obterMapaColunas` — mesmo padrão defensivo do `manutencao-appsscript`.
-- `gerarIDRequisicao()` — mesma lógica já existente (contador diário em `PropertiesService`,
-  protegido por `LockService`), formato `RQ-AAAAMMDD-NNN`.
-- `criarDocumentoRequisicao(dados, idRequisicao, linhasItens)` — mesmo documento (logo, dados do
-  solicitante, lista de itens, finalidade, status), adaptado para receber os itens já formatados.
-- `enviarTelegram(mensagem)` — igual ao script original.
-- `abrirRequisicao(dados)` — novo: valida campos obrigatórios e que ao menos 1 item tenha
-  quantidade > 0; grava a linha (`STATUS = "Solicitado"`); gera o Doc; avisa no Telegram; devolve
-  `{ ok: true, id }`. Falha ao gerar Doc ou avisar no Telegram é isolada (log + aviso de erro no
-  Telegram quando possível), sem desfazer a requisição já gravada — mesmo padrão do `onFormSubmit`
-  de manutenção.
-- `listarRequisicoesAbertas()` — devolve requisições com `STATUS !== "Entregue"`, mais recente
-  primeiro, para a tela de fechamento.
-- `fecharRequisicao(id, entreguePor, observacoes)` — localiza a linha pelo `ID`; se já estiver
-  `"Entregue"`, lança erro ("Essa requisição já foi entregue por outra pessoa."); senão grava
-  `STATUS = "Entregue"`, `Entregue por`, `Data de entrega` (hora do servidor) e a observação
-  opcional; avisa no Telegram (falha isolada, não desfaz a baixa).
-- `doGet(e)` — mesmo esquema de `manutencao-appsscript`: `?tela=abrir` → `AbrirRequisicao.html`,
-  `?tela=fechar` → `FecharRequisicao.html`, sem parâmetro → `Menu.html`.
+- `getColumnIndexByHeader` / `getColumnIndexByPattern` / `obterMapaColunas` — mesmo padrão
+  defensivo do `manutencao-appsscript` (nunca grava na coluna errada silenciosamente); a segunda
+  função existe só pra achar a coluna de itens em texto livre por padrão, não por nome exato.
+- `obterSheet()` — busca a aba pelo **nome exato**
+  (`REQUISIÇÃO DE MATÉRIA-PRIMA E RECHEIOS - MAMMA MIA CONTROL`), nunca por posição
+  (`getSheets()[0]`) — importante porque essa aba É a primeira aba hoje, mas depender de posição
+  quebraria silenciosamente se alguém reordenar as abas no futuro.
+- `listarRequisicoesAbertas()` — devolve requisições com `STATUS !== "CONCLUÍDO"` (cobre `ABERTO` e
+  `PARCIALMENTE`), mais recente primeiro; cada item traz id, requisitante, unidade, setor, tipo,
+  itens (texto livre + quantidade, se houver), prioridade, finalidade, observações e status atual.
+- `fecharRequisicao(id, statusFinal, entreguePor, observacoesEntrega)` — `statusFinal` é
+  `"CONCLUÍDO"` ou `"PARCIALMENTE"` (os dois status já usados manualmente hoje); localiza a linha
+  pelo `REQUISICOES`; se já estiver `CONCLUÍDO`, lança erro ("já foi concluída por outra pessoa");
+  senão grava `STATUS`, `Entregue por`, `Data de entrega` (hora do servidor) e a observação
+  opcional; avisa no Telegram (falha isolada em `try/catch`, não desfaz a baixa já gravada).
+- `enviarTelegram(mensagem)` — igual aos outros apps da Mamma Mia.
+- `doGet(e)` — `?tela=fechar` → `FecharRequisicao.html`; sem parâmetro → `Menu.html`. Não existe
+  mais `?tela=abrir` (o card de abrir no menu aponta direto pro link do Forms).
 
 ### `Menu.html`
 
-Clone visual de `manutencao-appsscript/Menu.html` (mesma paleta `--bg`/`--card-bg`/`--gold`/
-`--green`), trocando texto/ícones para "📦 Requisição MP e Recheios" com os cards **Abrir
-Requisição** / **Fechar Requisição**. Links relativos (`?tela=abrir`, `?tela=fechar`) em vez de URL
-fixa — não depende de saber o link de implantação de antemão.
-
-### `AbrirRequisicao.html`
-
-Mesma base visual/CSS de `AbrirOS.html`. Campos do cabeçalho da requisição (Nome do requisitante,
-Unidade solicitante, Setor solicitante — opções `Estoque`/`Produção`/`Expedição`/`Cocção`/`CD`/
-`Outro`, vindas do uso real da aba antiga do Forms, com fallback "Outro" —, Tipo de item
-requisitado, Finalidade). Catálogo, opções de setor e de tipo chegam num só payload de
-`obterDadosAberturaRequisicao()`, chamado ao carregar a tela. Abaixo, o catálogo agrupado por
-categoria (lido da planilha) com um campo numérico de quantidade por produto e um filtro de texto
-no topo (112+ produtos não cabem numa lista sem busca). Só os produtos com quantidade > 0 viram
-itens da requisição. Validação no cliente: campos obrigatórios preenchidos e pelo menos 1 item
-selecionado, antes de chamar `google.script.run.abrirRequisicao(dados)`.
+Clone visual de `manutencao-appsscript/Menu.html`. O card **Abrir Requisição** é um link comum
+(`<a href="...">`) direto pro Google Forms já existente
+(`https://docs.google.com/forms/d/e/1FAIpQLSeEPlg0wMPk-zwtOPa5p8fnl3_J0wwjWSGPRGpZNw-1nscWbw/viewform`).
+O card **Fechar Requisição** aponta pro `?tela=fechar` deste mesmo Web App.
 
 ### `FecharRequisicao.html`
 
 Mesma base visual/lógica de `Index.html` (fechamento de OS): lista as requisições em aberto
-(`listarRequisicoesAbertas()`), toque abre o formulário de baixa (campo "Entregue por" + observação
-opcional), confirma chamando `fecharRequisicao(id, entreguePor, observacoes)`.
+(`listarRequisicoesAbertas()`) em cards com um badge colorido por prioridade (Urgente/Crítica em
+vermelho, Alta em laranja, Média em amarelo, Baixa em verde). Ao tocar numa requisição, abre um
+formulário com:
+- Rádio "Entregue por completo" / "Entregue parcialmente" (define o `STATUS` final).
+- Campo obrigatório "Entregue por".
+- Campo opcional de observações.
+
+Confirma chamando `fecharRequisicao(id, statusFinal, entreguePor, observacoes)`.
+
+## Tratamento de erro
+
+- Aba ou coluna não encontrada → erro claro do `getColumnIndexByHeader`/`getColumnIndexByPattern`,
+  propagado pro `google.script.run` e mostrado na tela (não grava nada na coluna errada).
+- Corrida entre duas pessoas fechando a mesma requisição → `fecharRequisicao` reconfere o `STATUS`
+  antes de gravar; quem chegar depois recebe aviso e não sobrescreve.
+- Falha ao avisar no Telegram → não impede a baixa (a planilha é a fonte da verdade); só fica
+  registrada no Log do Apps Script.
 
 ## Fora de escopo
 
+- Reescrever a abertura da requisição — continua sendo o Google Forms, como já é hoje.
+- Reconciliar o catálogo de ~75 colunas por produto do Forms, ou os itens em formato de grade —
+  mortos na prática; ninguém os usa.
 - Controle de estoque/baixa automática de quantidade em almoxarifado — a baixa aqui é só do
-  *status da requisição* (entregue/não entregue), não um sistema de inventário.
+  *status da requisição*, não um sistema de inventário (isso já existe, manual, nas abas
+  `BASE_CONSOLIDADA`/`BASE_CONTROLE_YUKA`).
 - Foto/assinatura obrigatória no fechamento — diferente da OS (onde a foto prova o reparo físico),
-  aqui a baixa é uma confirmação de entrega; não há problema físico a documentar.
-- Migrar respostas antigas do Google Forms para a planilha nova — a planilha nova começa vazia; o
-  Forms antigo pode continuar existindo em paralelo até a equipe migrar de fato.
-- Trello — a requisição nunca teve card de Trello; não é adicionado aqui.
+  aqui a baixa é uma confirmação de entrega de itens.
+- Migrar ou apagar a aba `FecharRequisicao` (da iteração anterior) — fica como está, sem uso, até o
+  usuário decidir apagá-la.
 
 ## Passos de implantação (feitos pelo usuário, com o código já pronto)
 
-1. ✅ Já feito: aba `FecharRequisicao` criada na planilha "BASE - REQUISIÇÃO MP E RECHEIOS", com os
-   13 cabeçalhos exatos na linha 1. A aba `BASE_REQUISICAO_MP_RECHEIOS` (catálogo) já existia.
-2. Nessa MESMA planilha: Extensões → Apps Script (isso cria um script vinculado a ela — importante,
-   já que `obterSheet()`/`obterCatalogoDaPlanilha()` usam `SpreadsheetApp.getActiveSpreadsheet()`).
-   Colar `Code.gs`, `Menu.html`, `AbrirRequisicao.html`, `FecharRequisicao.html`.
+1. Na aba `REQUISIÇÃO DE MATÉRIA-PRIMA E RECHEIOS - MAMMA MIA CONTROL`, adicionar as 3 colunas
+   novas no cabeçalho: `Entregue por`, `Data de entrega`, `Observações de entrega`.
+2. Nessa MESMA planilha: Extensões → Apps Script → colar `Code.gs`, `Menu.html`,
+   `FecharRequisicao.html` (substituindo qualquer versão anterior desses arquivos).
 3. Configurar `TELEGRAM_TOKEN` e `TELEGRAM_CHAT_ID` em Configurações do projeto → Propriedades do
-   script (mesmos valores já usados nos outros bots da Mamma Mia, ou um chat novo se quiser separar
-   o aviso de requisição do de manutenção).
-4. Implantar → Nova implantação → App da Web (Executar como: Eu; Quem pode acessar: Qualquer
-   pessoa).
-5. Compartilhar o link com quem solicita (Abrir) e com o almoxarifado/cozinha central (Fechar).
+   script.
+4. Implantar → Nova implantação (ou Gerenciar implantações → Nova versão, se já existir uma) → App
+   da Web (Executar como: Eu; Quem pode acessar: Qualquer pessoa).
+5. Compartilhar o link com quem dá baixa nas requisições (almoxarifado/cozinha central).
