@@ -48,6 +48,35 @@
     .opcao-abrir { border-left: 4px solid var(--gold); }
     .opcao-fechar { border-left: 4px solid var(--green); }
 
+    .resumo-os {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      margin-bottom: 1.1rem;
+    }
+    .resumo-item {
+      flex: 1 1 auto;
+      min-width: 6.2rem;
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 0.55rem 0.7rem;
+      text-align: center;
+    }
+    .resumo-item .resumo-numero { font-size: 1.3rem; font-weight: 800; line-height: 1.1; }
+    .resumo-item .resumo-rotulo { font-size: 0.7rem; color: var(--text-muted); font-weight: 600; }
+    .resumo-item.resumo-critica .resumo-numero { color: var(--red); }
+    .resumo-item.resumo-alta .resumo-numero { color: #c07a00; }
+    .resumo-item.resumo-media .resumo-numero { color: #a8901f; }
+    .resumo-item.resumo-baixa .resumo-numero { color: var(--green); }
+    .resumo-carregando, .resumo-vazio, .resumo-erro {
+      font-size: 0.82rem;
+      color: var(--text-muted);
+      text-align: center;
+      width: 100%;
+      padding: 0.4rem 0;
+    }
+
     .dica {
       margin-top: 1.4rem;
       font-size: 0.78rem;
@@ -64,6 +93,10 @@
   </header>
 
   <main>
+    <div class="resumo-os" id="resumo-os">
+      <div class="resumo-carregando">Carregando OS em aberto…</div>
+    </div>
+
     <a class="opcao opcao-abrir" href="https://script.google.com/macros/s/AKfycbxN_cFnGJpZgwVaCAegqB0HwrBsw_wKQd56wXyeq3RK5LZbumHrFaudxu9VjQMPBuOauQ/exec?tela=abrir">
       <div class="opcao-icone">📋</div>
       <div class="opcao-titulo">Abrir uma OS</div>
@@ -78,5 +111,46 @@
 
     <p class="dica">Dica: salve essa página na tela inicial do celular pra abrir rápido da próxima vez.</p>
   </main>
+
+  <script>
+    // Resuminho de OS em aberto por criticidade — reaproveita listarOSAbertas(),
+    // já usada pela tela de fechamento, então não precisa de nenhuma função
+    // nova no backend. Se falhar, some o card em vez de travar o menu — os
+    // 2 botões continuam funcionando normalmente.
+    function contarPorPrioridade(lista) {
+      var contagem = { "Crítica": 0, "Alta": 0, "Média": 0, "Baixa": 0 };
+      lista.forEach(function (os) {
+        if (contagem.hasOwnProperty(os.prioridade)) contagem[os.prioridade]++;
+      });
+      return contagem;
+    }
+
+    function mostrarResumoOS(lista) {
+      var alvo = document.getElementById('resumo-os');
+      if (!alvo) return;
+
+      if (!lista || lista.length === 0) {
+        alvo.innerHTML = '<div class="resumo-vazio">✅ Nenhuma OS em aberto no momento.</div>';
+        return;
+      }
+
+      var contagem = contarPorPrioridade(lista);
+      alvo.innerHTML =
+        '<div class="resumo-item resumo-critica"><div class="resumo-numero">' + contagem["Crítica"] + '</div><div class="resumo-rotulo">🔴 Críticas</div></div>' +
+        '<div class="resumo-item resumo-alta"><div class="resumo-numero">' + contagem["Alta"] + '</div><div class="resumo-rotulo">🟠 Altas</div></div>' +
+        '<div class="resumo-item resumo-media"><div class="resumo-numero">' + contagem["Média"] + '</div><div class="resumo-rotulo">🟡 Médias</div></div>' +
+        '<div class="resumo-item resumo-baixa"><div class="resumo-numero">' + contagem["Baixa"] + '</div><div class="resumo-rotulo">🟢 Baixas</div></div>';
+    }
+
+    function ocultarResumoOS() {
+      var alvo = document.getElementById('resumo-os');
+      if (alvo) alvo.innerHTML = '';
+    }
+
+    google.script.run
+      .withSuccessHandler(mostrarResumoOS)
+      .withFailureHandler(ocultarResumoOS)
+      .listarOSAbertas();
+  </script>
 </body>
 </html>
