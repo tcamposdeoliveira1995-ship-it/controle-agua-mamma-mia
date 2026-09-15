@@ -153,6 +153,20 @@ function obterColunasProduto(sheet, cols) {
 }
 
 /**
+ * Formata um valor de data/hora da planilha pro padrão brasileiro.
+ * Devolve "" se o valor estiver vazio ou não for uma data válida —
+ * nunca lança erro (usado só pra exibição).
+ */
+function formatarDataBR(valor) {
+  if (!valor) return "";
+  try {
+    return Utilities.formatDate(new Date(valor), "America/Sao_Paulo", "dd/MM/yyyy HH:mm");
+  } catch (erroData) {
+    return String(valor);
+  }
+}
+
+/**
  * Monta o texto de itens de uma linha: o campo de texto livre (se
  * preenchido), a "Quantidade solicitada" avulsa (se houver) e qualquer
  * coluna por produto com valor diferente de vazio/zero.
@@ -232,6 +246,7 @@ function listarRequisicoesAbertas() {
 
     abertas.push({
       id: id,
+      dataAbertura: formatarDataBR(linha[cols.timestamp - 1]),
       requisitante: linha[cols.requisitante - 1],
       unidade: linha[cols.unidade - 1],
       setor: linha[cols.setor - 1],
@@ -299,7 +314,7 @@ function fecharRequisicao(id, statusFinal, entreguePor, observacoesEntrega) {
       (statusFinal === STATUS_CONCLUIDO ? "✅ REQUISIÇÃO CONCLUÍDA" : "🟡 REQUISIÇÃO ENTREGUE PARCIALMENTE") + "\n\n" +
       "🆔 " + id + "\n" +
       "👤 Entregue por: " + entreguePor + "\n" +
-      "🕒 " + Utilities.formatDate(agora, "America/Sao_Paulo", "dd/MM/yyyy HH:mm") +
+      "🕒 " + formatarDataBR(agora) +
       (observacoesEntrega ? "\n📝 Observações: " + observacoesEntrega : "");
 
     enviarTelegram(mensagem);
@@ -335,18 +350,9 @@ function listarRequisicoesFechadas() {
     var status = (linha[cols.status - 1] || "").toString().trim().toUpperCase();
     if (!id || status !== STATUS_CONCLUIDO) continue;
 
-    var dataEntregaBruta = linha[cols.dataEntrega - 1];
-    var dataEntregaTexto = "";
-    if (dataEntregaBruta) {
-      try {
-        dataEntregaTexto = Utilities.formatDate(new Date(dataEntregaBruta), "America/Sao_Paulo", "dd/MM/yyyy HH:mm");
-      } catch (erroData) {
-        dataEntregaTexto = String(dataEntregaBruta);
-      }
-    }
-
     fechadas.push({
       id: id,
+      dataAbertura: formatarDataBR(linha[cols.timestamp - 1]),
       requisitante: linha[cols.requisitante - 1],
       unidade: linha[cols.unidade - 1],
       setor: linha[cols.setor - 1],
@@ -355,7 +361,7 @@ function listarRequisicoesFechadas() {
       prioridade: (linha[cols.prioridade - 1] || "").toString().trim(),
       finalidade: linha[cols.finalidade - 1],
       entreguePor: (linha[cols.entreguePor - 1] || "").toString().trim(),
-      dataEntrega: dataEntregaTexto,
+      dataEntrega: formatarDataBR(linha[cols.dataEntrega - 1]),
       obsEntrega: linha[cols.obsEntrega - 1],
     });
   }

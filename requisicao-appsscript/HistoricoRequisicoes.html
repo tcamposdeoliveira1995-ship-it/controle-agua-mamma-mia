@@ -42,7 +42,7 @@
       font-size: 0.95rem;
     }
 
-    input[type="search"] {
+    input[type="search"], select#campo-filtro-unidade {
       width: 100%;
       font-size: 1rem;
       padding: 0.7rem 0.8rem;
@@ -50,7 +50,7 @@
       border: 1px solid var(--border);
       background: #fff;
       color: var(--text);
-      margin-bottom: 0.9rem;
+      margin-bottom: 0.6rem;
     }
     .contador { font-size: 0.78rem; color: var(--text-muted); margin-bottom: 0.6rem; }
 
@@ -74,6 +74,7 @@
       background: var(--green);
     }
     .req-card-setor { font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0.3rem; }
+    .req-card-data { font-size: 0.75rem; color: var(--text-muted); margin-bottom: 0.3rem; }
     .req-card-itens { font-size: 0.82rem; color: var(--text); line-height: 1.4; white-space: pre-line; }
     .req-card-entrega {
       font-size: 0.78rem;
@@ -119,6 +120,20 @@
       return div.innerHTML;
     }
 
+    function unidadesDisponiveis() {
+      var vistas = {};
+      var lista = [];
+      TODAS.forEach(function (req) {
+        var unidade = (req.unidade || '').toString().trim();
+        if (unidade && !vistas[unidade]) {
+          vistas[unidade] = true;
+          lista.push(unidade);
+        }
+      });
+      lista.sort();
+      return lista;
+    }
+
     function renderizar() {
       var app = document.getElementById('app');
 
@@ -127,7 +142,12 @@
         return;
       }
 
+      var opcoesUnidade = unidadesDisponiveis()
+        .map(function (u) { return '<option value="' + escaparHtml(u) + '">' + escaparHtml(u) + '</option>'; })
+        .join('');
+
       var html =
+        '<select id="campo-filtro-unidade"><option value="">Todas as unidades</option>' + opcoesUnidade + '</select>' +
         '<input type="search" id="campo-busca" placeholder="🔎 Buscar por ID, requisitante, setor ou item...">' +
         '<div class="contador" id="contador">' + TODAS.length + ' requisição(ões) concluída(s)</div>' +
         '<div id="lista"></div>';
@@ -135,18 +155,25 @@
 
       renderizarLista(TODAS);
 
-      document.getElementById('campo-busca').addEventListener('input', function () {
-        var termo = this.value.trim().toLowerCase();
-        if (!termo) { renderizarLista(TODAS); return; }
+      document.getElementById('campo-filtro-unidade').addEventListener('change', aplicarFiltros);
+      document.getElementById('campo-busca').addEventListener('input', aplicarFiltros);
+    }
 
-        var filtradas = TODAS.filter(function (req) {
-          var alvo = [req.id, req.requisitante, req.unidade, req.setor, req.tipo, req.itens, req.entreguePor]
-            .join(' ')
-            .toLowerCase();
-          return alvo.indexOf(termo) !== -1;
-        });
-        renderizarLista(filtradas);
+    function aplicarFiltros() {
+      var unidadeEscolhida = document.getElementById('campo-filtro-unidade').value;
+      var termo = document.getElementById('campo-busca').value.trim().toLowerCase();
+
+      var filtradas = TODAS.filter(function (req) {
+        if (unidadeEscolhida && (req.unidade || '').toString().trim() !== unidadeEscolhida) return false;
+        if (!termo) return true;
+
+        var alvo = [req.id, req.requisitante, req.unidade, req.setor, req.tipo, req.itens, req.entreguePor]
+          .join(' ')
+          .toLowerCase();
+        return alvo.indexOf(termo) !== -1;
       });
+
+      renderizarLista(filtradas);
     }
 
     function renderizarLista(lista) {
@@ -166,6 +193,7 @@
               '<span class="req-card-id">' + escaparHtml(req.id) + '</span>' +
               '<span class="badge">CONCLUÍDA</span>' +
             '</div>' +
+            (req.dataAbertura ? '<div class="req-card-data">🕒 Aberta em ' + escaparHtml(req.dataAbertura) + '</div>' : '') +
             '<div class="req-card-setor">' + escaparHtml(req.requisitante || '-') + ' · ' + escaparHtml(req.unidade || '-') + ' · ' + escaparHtml(req.setor || '-') + '</div>' +
             '<div class="req-card-itens">' + escaparHtml(req.itens || '') + '</div>' +
             (req.entreguePor

@@ -68,8 +68,21 @@
     .badge-media { background: #c9b25a; }
     .badge-baixa { background: var(--green); }
     .req-card-setor { font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0.3rem; }
+    .req-card-data { font-size: 0.75rem; color: var(--text-muted); margin-bottom: 0.3rem; }
     .req-card-itens { font-size: 0.82rem; color: var(--text); line-height: 1.4; white-space: pre-line; }
     .req-card-finalidade { font-size: 0.78rem; color: var(--text-muted); margin-top: 0.35rem; font-style: italic; }
+
+    select#campo-filtro-unidade {
+      width: 100%;
+      font-size: 1rem;
+      padding: 0.7rem 0.8rem;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: #fff;
+      color: var(--text);
+      margin-bottom: 0.6rem;
+    }
+    .contador { font-size: 0.78rem; color: var(--text-muted); margin-bottom: 0.6rem; }
 
     .opcoes-radio { display: flex; flex-direction: column; gap: 0.5rem; }
     .opcao-radio {
@@ -144,10 +157,14 @@
 
   <script>
     var requisicaoSelecionada = null;
+    var TODAS_ABERTAS = [];
 
     function iniciar() {
       google.script.run
-        .withSuccessHandler(renderizarLista)
+        .withSuccessHandler(function (requisicoesAbertas) {
+          TODAS_ABERTAS = requisicoesAbertas || [];
+          renderizarListaComFiltro();
+        })
         .withFailureHandler(mostrarErroFatal)
         .listarRequisicoesAbertas();
     }
@@ -174,11 +191,56 @@
       }
     }
 
-    function renderizarLista(requisicoesAbertas) {
+    function unidadesDisponiveis() {
+      var vistas = {};
+      var lista = [];
+      TODAS_ABERTAS.forEach(function (req) {
+        var unidade = (req.unidade || '').toString().trim();
+        if (unidade && !vistas[unidade]) {
+          vistas[unidade] = true;
+          lista.push(unidade);
+        }
+      });
+      lista.sort();
+      return lista;
+    }
+
+    function renderizarListaComFiltro() {
       var app = document.getElementById('app');
 
-      if (!requisicoesAbertas || requisicoesAbertas.length === 0) {
+      if (TODAS_ABERTAS.length === 0) {
         app.innerHTML = '<div class="estado-vazio">✅ Nenhuma requisição em aberto no momento.</div>';
+        return;
+      }
+
+      var opcoesUnidade = unidadesDisponiveis()
+        .map(function (u) { return '<option value="' + escaparHtml(u) + '">' + escaparHtml(u) + '</option>'; })
+        .join('');
+
+      app.innerHTML =
+        '<select id="campo-filtro-unidade"><option value="">Todas as unidades</option>' + opcoesUnidade + '</select>' +
+        '<div class="contador" id="contador"></div>' +
+        '<div id="lista"></div>';
+
+      document.getElementById('campo-filtro-unidade').addEventListener('change', aplicarFiltro);
+      aplicarFiltro();
+    }
+
+    function aplicarFiltro() {
+      var unidadeEscolhida = document.getElementById('campo-filtro-unidade').value;
+      var filtradas = !unidadeEscolhida
+        ? TODAS_ABERTAS
+        : TODAS_ABERTAS.filter(function (req) { return (req.unidade || '').toString().trim() === unidadeEscolhida; });
+
+      renderizarLista(filtradas);
+    }
+
+    function renderizarLista(requisicoesAbertas) {
+      var lista = document.getElementById('lista');
+      document.getElementById('contador').textContent = requisicoesAbertas.length + ' requisição(ões) em aberto';
+
+      if (requisicoesAbertas.length === 0) {
+        lista.innerHTML = '<div class="estado-vazio">Nenhuma requisição bate com o filtro.</div>';
         return;
       }
 
@@ -190,14 +252,15 @@
               '<span class="req-card-id">' + escaparHtml(req.id) + '</span>' +
               '<span class="badge ' + classeBadge(req.prioridade) + '">' + escaparHtml(req.prioridade || req.status || '-') + '</span>' +
             '</div>' +
+            (req.dataAbertura ? '<div class="req-card-data">🕒 ' + escaparHtml(req.dataAbertura) + '</div>' : '') +
             '<div class="req-card-setor">' + escaparHtml(req.requisitante || '-') + ' · ' + escaparHtml(req.unidade || '-') + ' · ' + escaparHtml(req.setor || '-') + '</div>' +
             '<div class="req-card-itens">' + escaparHtml(req.itens || '') + '</div>' +
             (req.finalidade ? '<div class="req-card-finalidade">🎯 ' + escaparHtml(req.finalidade) + '</div>' : '') +
           '</div>';
       });
-      app.innerHTML = html;
+      lista.innerHTML = html;
 
-      Array.prototype.forEach.call(app.querySelectorAll('.req-card'), function (card) {
+      Array.prototype.forEach.call(lista.querySelectorAll('.req-card'), function (card) {
         card.addEventListener('click', function () {
           requisicaoSelecionada = requisicoesAbertas[Number(card.getAttribute('data-idx'))];
           renderizarFormulario();
@@ -215,6 +278,7 @@
             '<span class="req-card-id">' + escaparHtml(requisicaoSelecionada.id) + '</span>' +
             '<span class="badge ' + classeBadge(requisicaoSelecionada.prioridade) + '">' + escaparHtml(requisicaoSelecionada.prioridade || requisicaoSelecionada.status || '-') + '</span>' +
           '</div>' +
+          (requisicaoSelecionada.dataAbertura ? '<div class="req-card-data">🕒 ' + escaparHtml(requisicaoSelecionada.dataAbertura) + '</div>' : '') +
           '<div class="req-card-setor">' + escaparHtml(requisicaoSelecionada.requisitante || '-') + ' · ' + escaparHtml(requisicaoSelecionada.unidade || '-') + ' · ' + escaparHtml(requisicaoSelecionada.setor || '-') + '</div>' +
           '<div class="req-card-itens">' + escaparHtml(requisicaoSelecionada.itens || '') + '</div>' +
           (requisicaoSelecionada.finalidade ? '<div class="req-card-finalidade">🎯 ' + escaparHtml(requisicaoSelecionada.finalidade) + '</div>' : '') +
