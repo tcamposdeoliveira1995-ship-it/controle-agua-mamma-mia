@@ -1,9 +1,12 @@
 /**
- * FECHAR REQUISIÇÃO DE MATÉRIA-PRIMA E RECHEIOS — Mamma Mia
+ * REQUISIÇÃO DE MATÉRIA-PRIMA E RECHEIOS — Mamma Mia
  * ---------------------------------------------------------------------
- * Web App em Apps Script com UMA função: dar baixa numa requisição que
- * já foi aberta pelo Google Forms (a abertura continua sendo feita pelo
- * Forms, sem mudança — só o fechamento ganha uma tela própria).
+ * Abertura pelo Google Forms de sempre (sem mudança de UX pra quem
+ * pede) + fechamento próprio (Fechar/Histórico). Este arquivo cuida
+ * das DUAS pontas porque o acionador "Ao enviar o formulário" (já
+ * configurado em Acionadores ⏰) chama uma função deste mesmo projeto
+ * (enviarRequisicaoTelegram) — não dá pra ter isso num projeto e o
+ * fechamento em outro.
  *
  * Como instalar:
  * 1) Na planilha "BASE - REQUISIÇÃO MP E RECHEIOS", confirme a aba
@@ -14,20 +17,24 @@
  *    com esses nomes exatos: "Entregue por", "Data de entrega",
  *    "Observações de entrega".
  * 3) Nessa MESMA planilha: Extensões > Apps Script > cole este arquivo
- *    e os 2 HTML ao lado (Menu.html, FecharRequisicao.html). Não é
- *    necessário mais o AbrirRequisicao.html nem a aba "FecharRequisicao"
- *    criada numa etapa anterior — pode apagar os dois, ou deixar sem
- *    uso, como preferir.
- * 4) Em Menu.html, troque a constante URL_FORMULARIO_ABRIR pelo link
- *    real do Google Forms de abertura, se for diferente do que já está.
- * 5) Configurações do projeto > Propriedades do script > adicione
+ *    e os 3 HTML ao lado (Menu.html, FecharRequisicao.html,
+ *    HistoricoRequisicoes.html).
+ * 4) Confirme em Acionadores ⏰ que existe um acionador "Do formulário
+ *    > Ao enviar o formulário" apontando pra "enviarRequisicaoTelegram"
+ *    (se não existir mais, crie um novo apontando pra essa função).
+ * 5) Rode a função "corrigirRequisicoesSemId" UMA VEZ manualmente
+ *    (selecione ela no topo do editor e clique em Executar) — ela
+ *    preenche ID + STATUS nas respostas que chegaram enquanto o
+ *    acionador estava quebrado, sem isso elas ficam invisíveis pro
+ *    Fechar/Histórico.
+ * 6) Configurações do projeto > Propriedades do script > adicione
  *    TELEGRAM_TOKEN e TELEGRAM_CHAT_ID.
- * 6) Implantar > Nova implantação > App da Web (Executar como: Eu;
- *    Quem pode acessar: Qualquer pessoa).
+ * 7) Implantar > Gerenciar implantações > ✏️ > Nova versão > Implantar.
  */
 
 var NOME_ABA_REQUISICOES = "REQUISIÇÃO DE MATÉRIA-PRIMA E RECHEIOS - MAMMA MIA CONTROL";
 
+var STATUS_ABERTO = "ABERTO";
 var STATUS_CONCLUIDO = "CONCLUÍDO";
 var STATUS_PARCIAL = "PARCIALMENTE";
 var STATUS_CANCELADO = "CANCELADO";
@@ -375,6 +382,152 @@ function listarRequisicoesFechadas() {
   fechadas.reverse();
 
   return fechadas;
+}
+
+
+/****************************************************
+ * ABERTURA — ACIONADOR "AO ENVIAR O FORMULÁRIO"
+ * ---------------------------------------------------------------------
+ * O Google Forms já grava a resposta direto na planilha (isso não
+ * depende de código); a função abaixo só roda DEPOIS disso, via um
+ * acionador instalável "Do formulário > Ao enviar o formulário"
+ * apontando pra "enviarRequisicaoTelegram" (configurado em Acionadores
+ * ⏰ no editor do Apps Script — não precisa mexer nisso de novo, só
+ * garantir que a função com esse nome exista, que é o que estava
+ * faltando). Ela dá ID + STATUS pra linha nova e avisa no Telegram.
+ ****************************************************/
+
+/**
+ * Gera o próximo ID sequencial do dia, formato REQ-AAAAMMDD-HHmmss-N
+ * (mesmo formato já usado nas requisições existentes na planilha).
+ * Protegido por LockService pra duas respostas quase simultâneas nunca
+ * saírem com o mesmo número.
+ */
+function gerarIDRequisicao() {
+  var lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+
+  try {
+    var propriedades = PropertiesService.getScriptProperties();
+    var agora = new Date();
+    var dataStr = Utilities.formatDate(agora, "America/Sao_Paulo", "yyyyMMdd");
+    var horaStr = Utilities.formatDate(agora, "America/Sao_Paulo", "HHmmss");
+
+    var chaveData = "DATA_CONTADOR_REQUISICAO";
+    var chaveContador = "CONTADOR_REQUISICAO";
+
+    var dataSalva = propriedades.getProperty(chaveData);
+    var contador = Number(propriedades.getProperty(chaveContador) || 0);
+
+    if (dataSalva !== dataStr) {
+      contador = 1;
+      propriedades.setProperty(chaveData, dataStr);
+    } else {
+      contador++;
+    }
+    propriedades.setProperty(chaveContador, String(contador));
+
+    return "REQ-" + dataStr + "-" + horaStr + "-" + contador;
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+/**
+ * Alvo do acionador "Ao enviar o formulário". Relê a última linha da
+ * planilha (a que o próprio Forms acabou de gravar), dá ID + STATUS =
+ * ABERTO se ainda não tiver, e avisa no Telegram. Protegido contra o
+ * Forms disparando o mesmo envio duas vezes (comportamento conhecido
+ * do Google, não é bug seu) via cache + lock, pelo ID da resposta.
+ */
+function enviarRequisicaoTelegram(e) {
+  var idResposta = e && e.response ? e.response.getId() : null;
+
+  if (idResposta) {
+    var cache = CacheService.getScriptCache();
+    var chaveResposta = "req_notif_resposta_" + idResposta;
+    var lock = LockService.getScriptLock();
+    lock.waitLock(30000);
+
+    var jaProcessada;
+    try {
+      jaProcessada = !!cache.get(chaveResposta);
+      if (!jaProcessada) cache.put(chaveResposta, "1", 21600); // 6 horas
+    } finally {
+      lock.releaseLock();
+    }
+
+    if (jaProcessada) {
+      Logger.log("Resposta " + idResposta + " já processada — ignorando disparo duplicado do Forms.");
+      return;
+    }
+  }
+
+  var sheet = obterSheet();
+  var cols = obterMapaColunas(sheet);
+  var colunasProduto = obterColunasProduto(sheet, cols);
+  var linhaNova = sheet.getLastRow();
+  var dados = sheet.getRange(linhaNova, 1, 1, sheet.getLastColumn()).getValues()[0];
+
+  var idExistente = (dados[cols.id - 1] || "").toString().trim();
+  if (!idExistente) {
+    var novoId = gerarIDRequisicao();
+    sheet.getRange(linhaNova, cols.id).setValue(novoId);
+    sheet.getRange(linhaNova, cols.status).setValue(STATUS_ABERTO);
+    dados[cols.id - 1] = novoId;
+    dados[cols.status - 1] = STATUS_ABERTO;
+  }
+
+  try {
+    var mensagem =
+      "📦 NOVA REQUISIÇÃO OPERACIONAL\n\n" +
+      "🆔 " + dados[cols.id - 1] + "\n\n" +
+      "👤 Requisitante: " + (dados[cols.requisitante - 1] || "") + "\n" +
+      "🏭 Unidade solicitante: " + (dados[cols.unidade - 1] || "") + "\n" +
+      "📍 Setor: " + (dados[cols.setor - 1] || "") + "\n\n" +
+      "📋 Tipo: " + (dados[cols.tipo - 1] || "") + "\n\n" +
+      "📦 Itens:\n" + (montarItensTexto(dados, cols, colunasProduto) || "Nenhum item informado.") + "\n\n" +
+      "🎯 Finalidade: " + (dados[cols.finalidade - 1] || "") + "\n\n" +
+      "🤖 Mamma Mia Operações";
+
+    enviarTelegram(mensagem);
+  } catch (erroTelegram) {
+    Logger.log("Falha ao avisar no Telegram sobre a nova requisição " + dados[cols.id - 1] + ": " + erroTelegram);
+  }
+}
+
+/**
+ * CONSERTO PONTUAL — rode isto UMA VEZ manualmente (selecione a função
+ * no editor do Apps Script e clique em Executar), não é chamada por
+ * ninguém automaticamente. Preenche ID + STATUS = ABERTO em qualquer
+ * linha que já tenha uma resposta real (tem "Nome do requisitante")
+ * mas ficou sem ID — foi o caso das respostas recebidas enquanto o
+ * acionador "Ao enviar o formulário" estava apontando pra uma função
+ * que não existia mais no projeto. Não mexe em linhas que já têm ID.
+ */
+function corrigirRequisicoesSemId() {
+  var sheet = obterSheet();
+  var cols = obterMapaColunas(sheet);
+  var dados = sheet.getDataRange().getValues();
+
+  var corrigidas = 0;
+
+  for (var i = 1; i < dados.length; i++) {
+    var linha = dados[i];
+    var idAtual = (linha[cols.id - 1] || "").toString().trim();
+    var requisitante = (linha[cols.requisitante - 1] || "").toString().trim();
+
+    if (idAtual || !requisitante) continue;
+
+    var linhaPlanilha = i + 1; // +1 porque getRange é 1-based
+    var novoId = gerarIDRequisicao();
+    sheet.getRange(linhaPlanilha, cols.id).setValue(novoId);
+    sheet.getRange(linhaPlanilha, cols.status).setValue(STATUS_ABERTO);
+    corrigidas++;
+  }
+
+  Logger.log(corrigidas + " requisição(ões) corrigida(s) (ID + STATUS = ABERTO).");
+  return corrigidas;
 }
 
 

@@ -38,7 +38,24 @@ mudaram isso depois de ver a planilha real do usuário
 Isso reduz o escopo pra **só a tela de Fechar Requisição** (+ um Histórico de consulta) — as peças
 que realmente não existiam.
 
-3. **Descoberta tardia: já existia uma terceira porta de entrada pro mesmo `STATUS`.** O painel
+3. **Regressão grave: `enviarRequisicaoTelegram` foi apagada, quebrando a abertura de verdade.** O
+   acionador instalável "Do formulário > Ao enviar o formulário" (⏰ Acionadores, já configurado
+   antes deste projeto) chama uma função chamada `enviarRequisicaoTelegram` — que é justamente a
+   função que gera o ID (`REQUISICOES`) e `STATUS = ABERTO` de cada requisição nova, além de avisar
+   no Telegram. O script pasado pro Claude no início desta conversa (uma versão de rascunho, com
+   formato de ID `RQ-AAAAMMDD-NNN`) **não é o que estava rodando de verdade** (o formato real é
+   `REQ-AAAAMMDD-HHmmss-N`) — e quando o `Code.gs` inteiro foi substituído pelo código deste
+   projeto (que só cobria Fechar/Histórico), essa função foi apagada junto, sem ninguém perceber
+   até o acionador começar a falhar (`Script function not found: enviarRequisicaoTelegram`, 41,67%
+   de taxa de erro nas Execuções). Resultado: toda resposta do Forms desde 11/09/2026 caiu na
+   planilha sem ID nem STATUS — invisível pro Fechar/Histórico, e sem aviso no Telegram.
+   **Corrigido:** `enviarRequisicaoTelegram(e)` e `gerarIDRequisicao()` voltaram a existir neste
+   mesmo `Code.gs` (formato de ID igual ao real, `REQ-AAAAMMDD-HHmmss-N`), com a mesma proteção
+   contra disparo duplicado do Forms que o script original tinha (cache + lock pelo ID da
+   resposta). `corrigirRequisicoesSemId()` foi adicionada como conserto pontual, pra rodar uma vez
+   manualmente e preencher ID/STATUS das respostas que ficaram órfãs enquanto o acionador estava
+   quebrado.
+4. **Já existia uma terceira porta de entrada pro mesmo `STATUS`.** O painel
    `controle-agua-mamma-mia` (site de água) tem uma seção "Central" (`src/main.js`,
    `atualizarStatusCentral`) com botões **EM SEPARAÇÃO** / **CONCLUÍDO** / **CANCELADO** que já
    chamavam **este mesmo Web App** via `GET .../exec?rq=<ID>&status=<STATUS>`, esperando um JSON
