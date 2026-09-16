@@ -72,7 +72,7 @@
     .req-card-itens { font-size: 0.82rem; color: var(--text); line-height: 1.4; white-space: pre-line; }
     .req-card-finalidade { font-size: 0.78rem; color: var(--text-muted); margin-top: 0.35rem; font-style: italic; }
 
-    select#campo-filtro-unidade {
+    select#campo-filtro-unidade, input[type="date"] {
       width: 100%;
       font-size: 1rem;
       padding: 0.7rem 0.8rem;
@@ -82,6 +82,9 @@
       color: var(--text);
       margin-bottom: 0.6rem;
     }
+    .filtro-periodo { display: flex; gap: 0.6rem; }
+    .filtro-periodo > div { flex: 1; }
+    .filtro-periodo label { display: block; font-size: 0.72rem; color: var(--text-muted); margin-bottom: 0.25rem; }
     .contador { font-size: 0.78rem; color: var(--text-muted); margin-bottom: 0.6rem; }
 
     .opcoes-radio { display: flex; flex-direction: column; gap: 0.5rem; }
@@ -219,18 +222,33 @@
 
       app.innerHTML =
         '<select id="campo-filtro-unidade"><option value="">Todas as unidades</option>' + opcoesUnidade + '</select>' +
+        '<div class="filtro-periodo">' +
+          '<div><label for="campo-data-inicial">De</label><input type="date" id="campo-data-inicial"></div>' +
+          '<div><label for="campo-data-final">Até</label><input type="date" id="campo-data-final"></div>' +
+        '</div>' +
         '<div class="contador" id="contador"></div>' +
         '<div id="lista"></div>';
 
       document.getElementById('campo-filtro-unidade').addEventListener('change', aplicarFiltro);
+      document.getElementById('campo-data-inicial').addEventListener('change', aplicarFiltro);
+      document.getElementById('campo-data-final').addEventListener('change', aplicarFiltro);
       aplicarFiltro();
     }
 
     function aplicarFiltro() {
       var unidadeEscolhida = document.getElementById('campo-filtro-unidade').value;
-      var filtradas = !unidadeEscolhida
-        ? TODAS_ABERTAS
-        : TODAS_ABERTAS.filter(function (req) { return (req.unidade || '').toString().trim() === unidadeEscolhida; });
+      var dataInicial = document.getElementById('campo-data-inicial').value; // "aaaa-mm-dd" ou ""
+      var dataFinal = document.getElementById('campo-data-final').value;
+
+      var inicioMs = dataInicial ? new Date(dataInicial + 'T00:00:00').getTime() : null;
+      var fimMs = dataFinal ? new Date(dataFinal + 'T23:59:59').getTime() : null;
+
+      var filtradas = TODAS_ABERTAS.filter(function (req) {
+        if (unidadeEscolhida && (req.unidade || '').toString().trim() !== unidadeEscolhida) return false;
+        if (inicioMs !== null && (!req.dataAberturaMs || req.dataAberturaMs < inicioMs)) return false;
+        if (fimMs !== null && (!req.dataAberturaMs || req.dataAberturaMs > fimMs)) return false;
+        return true;
+      });
 
       renderizarLista(filtradas);
     }

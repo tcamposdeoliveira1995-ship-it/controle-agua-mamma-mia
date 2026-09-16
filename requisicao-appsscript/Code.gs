@@ -175,6 +175,18 @@ function formatarDataBR(valor) {
 }
 
 /**
+ * Converte um valor de data da planilha pra milissegundos desde a
+ * época (epoch) — mais simples de mandar pro cliente e comparar num
+ * filtro de período do que reanalisar a string formatada em BR.
+ * Devolve 0 se o valor estiver vazio ou não for uma data válida.
+ */
+function paraEpocaMs(valor) {
+  if (!valor) return 0;
+  var data = new Date(valor);
+  return isNaN(data.getTime()) ? 0 : data.getTime();
+}
+
+/**
  * Monta o texto de itens de uma linha: o campo de texto livre (se
  * preenchido), a "Quantidade solicitada" avulsa (se houver) e qualquer
  * coluna por produto com valor diferente de vazio/zero.
@@ -259,6 +271,7 @@ function listarRequisicoesAbertas() {
     abertas.push({
       id: id,
       dataAbertura: formatarDataBR(linha[cols.timestamp - 1]),
+      dataAberturaMs: paraEpocaMs(linha[cols.timestamp - 1]),
       requisitante: linha[cols.requisitante - 1],
       unidade: linha[cols.unidade - 1],
       setor: linha[cols.setor - 1],
@@ -365,6 +378,7 @@ function listarRequisicoesFechadas() {
     fechadas.push({
       id: id,
       dataAbertura: formatarDataBR(linha[cols.timestamp - 1]),
+      dataAberturaMs: paraEpocaMs(linha[cols.timestamp - 1]),
       requisitante: linha[cols.requisitante - 1],
       unidade: linha[cols.unidade - 1],
       setor: linha[cols.setor - 1],
