@@ -546,6 +546,100 @@ function corrigirRequisicoesSemId() {
 
 
 /****************************************************
+ * CHAT INTERNO DA EQUIPE
+ * ---------------------------------------------------------------------
+ * Sala única (não por unidade) — qualquer estoquista vê e manda
+ * mensagem pra todo mundo. Guardado numa aba própria da MESMA
+ * planilha ("Chat"), não é tempo real de verdade (Apps Script não tem
+ * esse mecanismo): a tela de chat confere mensagens novas a cada
+ * poucos segundos (polling), então pode levar alguns segundos pra uma
+ * mensagem aparecer pra quem está do outro lado.
+ *
+ * Mudança manual necessária na planilha: crie uma aba chamada
+ * exatamente "Chat" com estes cabeçalhos na linha 1: Timestamp, Nome,
+ * Mensagem.
+ ****************************************************/
+
+var NOME_ABA_CHAT = "Chat";
+var LIMITE_MENSAGENS_CHAT = 200; // não carrega o histórico inteiro pra sempre, só as últimas N
+
+function obterAbaChat() {
+  var aba = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(NOME_ABA_CHAT);
+  if (!aba) {
+    throw new Error('Aba "' + NOME_ABA_CHAT + '" não foi encontrada na planilha. Crie uma aba com esse nome e os cabeçalhos: Timestamp, Nome, Mensagem.');
+  }
+  return aba;
+}
+
+/**
+ * Devolve as últimas LIMITE_MENSAGENS_CHAT mensagens, mais antiga
+ * primeiro (ordem natural de leitura de cima pra baixo). Cada mensagem
+ * traz um "id" (o próprio número da linha na planilha) pro cliente
+ * saber quais já viu, sem precisar comparar texto.
+ */
+function listarMensagensChat() {
+  var aba = obterAbaChat();
+  var colTimestamp = getColumnIndexByHeader(aba, "Timestamp");
+  var colNome = getColumnIndexByHeader(aba, "Nome");
+  var colMensagem = getColumnIndexByHeader(aba, "Mensagem");
+
+  var ultimaLinha = aba.getLastRow();
+  if (ultimaLinha < 2) return [];
+
+  var primeiraLinha = Math.max(2, ultimaLinha - LIMITE_MENSAGENS_CHAT + 1);
+  var valores = aba.getRange(primeiraLinha, 1, ultimaLinha - primeiraLinha + 1, aba.getLastColumn()).getValues();
+
+  var mensagens = [];
+  valores.forEach(function (linha, indice) {
+    var texto = (linha[colMensagem - 1] || "").toString().trim();
+    if (!texto) return;
+
+    mensagens.push({
+      id: primeiraLinha + indice,
+      nome: (linha[colNome - 1] || "").toString().trim() || "Anônimo",
+      mensagem: texto,
+      dataHora: formatarDataBR(linha[colTimestamp - 1]),
+    });
+  });
+
+  return mensagens;
+}
+
+/**
+ * Adiciona uma mensagem nova ao chat. Protegido por LockService só pra
+ * duas mensagens mandadas quase no mesmo instante não se atravessarem
+ * na hora de gravar a linha.
+ */
+function enviarMensagemChat(nome, mensagem) {
+  nome = (nome || "").toString().trim();
+  mensagem = (mensagem || "").toString().trim();
+
+  if (!nome) throw new Error("Informe seu nome antes de enviar.");
+  if (!mensagem) throw new Error("Escreva uma mensagem antes de enviar.");
+
+  var lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+
+  try {
+    var aba = obterAbaChat();
+    var colTimestamp = getColumnIndexByHeader(aba, "Timestamp");
+    var colNome = getColumnIndexByHeader(aba, "Nome");
+    var colMensagem = getColumnIndexByHeader(aba, "Mensagem");
+
+    var linha = new Array(aba.getLastColumn()).fill("");
+    linha[colTimestamp - 1] = new Date();
+    linha[colNome - 1] = nome;
+    linha[colMensagem - 1] = mensagem;
+
+    aba.appendRow(linha);
+    return { ok: true };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+
+/****************************************************
  * COMPATIBILIDADE COM O PAINEL DE ÁGUA (site
  * controle-agua-mamma-mia, seção "Central" de MP e
  * Recheios): o botão de lá (EM SEPARAÇÃO/CONCLUÍDO/
@@ -596,10 +690,11 @@ function atualizarStatusPorQuery(rq, statusNovo) {
 
 /****************************************************
  * ROTEAMENTO DO WEB APP
- * ".../exec" → Menu.html (3 cards: Abrir, que aponta
- * pro Google Forms; Fechar; Histórico).
+ * ".../exec" → Menu.html (4 cards: Abrir, que aponta
+ * pro Google Forms; Fechar; Histórico; Chat).
  * ".../exec?tela=fechar" → FecharRequisicao.html.
  * ".../exec?tela=historico" → HistoricoRequisicoes.html.
+ * ".../exec?tela=chat" → ChatInterno.html.
  * ".../exec?rq=<ID>&status=<STATUS>" → JSON, ver
  * `atualizarStatusPorQuery` acima (usado pelo painel de
  * água, não pelas telas HTML deste projeto).
@@ -625,6 +720,13 @@ function doGet(e) {
     return HtmlService
       .createHtmlOutputFromFile("HistoricoRequisicoes")
       .setTitle("Histórico de Requisições — Mamma Mia")
+      .addMetaTag("viewport", "width=device-width, initial-scale=1");
+  }
+
+  if (tela === "chat") {
+    return HtmlService
+      .createHtmlOutputFromFile("ChatInterno")
+      .setTitle("Chat da Equipe — Mamma Mia")
       .addMetaTag("viewport", "width=device-width, initial-scale=1");
   }
 

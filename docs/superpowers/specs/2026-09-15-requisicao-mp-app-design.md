@@ -220,3 +220,36 @@ ficam em branco pras requisições concluídas antes deste app existir, o que é
 4. Implantar → Nova implantação (ou Gerenciar implantações → Nova versão, se já existir uma) → App
    da Web (Executar como: Eu; Quem pode acessar: Qualquer pessoa).
 5. Compartilhar o link com quem dá baixa nas requisições (almoxarifado/cozinha central).
+6. Pra usar o Chat da Equipe (ver seção abaixo), criar uma aba nova chamada exatamente `Chat` com
+   os cabeçalhos `Timestamp`, `Nome`, `Mensagem` na linha 1.
+
+## Adições posteriores (17/09/2026)
+
+### Sino de notificação no Menu
+
+O `Menu.html` chama `listarRequisicoesAbertas()` ao carregar e confere de novo a cada 60s
+(`setInterval`), mostrando um 🔔 com contador de pendentes no cabeçalho — ao tocar, abre um painel
+com a contagem por unidade e a data/hora da requisição pendente mais recente. Além disso:
+
+- **Alerta sonoro real**: um botão "Ativar alerta sonoro" desbloqueia um `AudioContext` (Web Audio
+  API) com um clique do usuário — navegadores bloqueiam áudio automático sem isso — e toca um bipe
+  de teste. A cada checagem periódica, se aparecer alguma requisição com `id` que não estava na
+  checagem anterior (comparado via uma lista de IDs guardada no `localStorage` do navegador), toca
+  o bipe de novo e, se o navegador tiver dado permissão, dispara uma notificação do sistema
+  operacional (`Notification`) — essa aparece mesmo com a aba minimizada, mas só enquanto o
+  **navegador continuar aberto** (não existe, no Apps Script, um jeito de notificar com o navegador
+  fechado — isso exigiria um servidor de push próprio).
+- Enquanto a notificação não for "lida" (clicar no sino), o título da aba do navegador ganha um
+  prefixo `🔴 (N)`, visível mesmo se a aba estiver em segundo plano.
+- Pensado pra alguém deixar essa página aberta o dia todo (ex: um PC do almoxarifado).
+
+### Chat da Equipe (`ChatInterno.html`)
+
+Sala única de chat (não separada por unidade), guardada numa aba própria da mesma planilha
+(`Chat`, colunas `Timestamp`/`Nome`/`Mensagem`). Não é chat em tempo real de verdade — a tela
+confere mensagens novas a cada 8s (`listarMensagensChat()`, últimas 200 mensagens); enviar
+(`enviarMensagemChat(nome, mensagem)`) grava a linha e recarrega na hora, sem esperar o próximo
+ciclo. O nome de quem está usando fica salvo no `localStorage` do navegador (perguntado só na
+primeira vez que aquele navegador/aparelho abre o chat) — não tem login, então é só um identificador
+por aparelho, não por pessoa (se dividirem o mesmo tablet, aparece o nome de quem configurou por
+último). Card novo "💬 Chat da Equipe" adicionado ao Menu.

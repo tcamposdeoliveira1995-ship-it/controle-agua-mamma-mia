@@ -131,6 +131,7 @@
     .opcao-abrir { border-left: 4px solid var(--gold); }
     .opcao-fechar { border-left: 4px solid var(--green); }
     .opcao-historico { border-left: 4px solid var(--text-muted); }
+    .opcao-chat { border-left: 4px solid #8fa3b9; }
 
     .dica {
       margin-top: 1.4rem;
@@ -139,6 +140,22 @@
       text-align: center;
       line-height: 1.5;
     }
+
+    .btn-alertas {
+      display: block;
+      width: 100%;
+      padding: 0.7rem;
+      margin-bottom: 1rem;
+      border-radius: 10px;
+      border: 1px dashed var(--border);
+      background: var(--card-bg);
+      color: var(--text-muted);
+      font-size: 0.85rem;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .btn-alertas:disabled { opacity: 0.7; cursor: default; }
+    .btn-alertas.oculto { display: none; }
   </style>
 </head>
 <body>
@@ -160,6 +177,8 @@
   </header>
 
   <main>
+    <button class="btn-alertas" id="btn-ativar-alertas" type="button">🔕 Ativar alerta sonoro de nova requisição</button>
+
     <a class="opcao opcao-abrir" href="https://docs.google.com/forms/d/e/1FAIpQLSeEPlg0wMPk-zwtOPa5p8fnl3_J0wwjWSGPRGpZNw-1nscWbw/viewform">
       <div class="opcao-icone">📋</div>
       <div class="opcao-titulo">Abrir Requisição</div>
@@ -178,19 +197,128 @@
       <div class="opcao-desc">Ver requisições já concluídas.</div>
     </a>
 
+    <a class="opcao opcao-chat" href="https://script.google.com/macros/s/AKfycby-80t2GWkm9ZFjgEh93mkCzUHBJpKKFXFSvqvT9Scx3SbhC94iUxG_hN55BsyNrEaEGA/exec?tela=chat">
+      <div class="opcao-icone">💬</div>
+      <div class="opcao-titulo">Chat da Equipe</div>
+      <div class="opcao-desc">Converse com o time sobre as requisições.</div>
+    </a>
+
     <p class="dica">Dica: salve essa página na tela inicial do celular pra abrir rápido da próxima vez.</p>
   </main>
 
   <script>
+    var INTERVALO_VERIFICACAO_MS = 60000; // confere de 1 em 1 minuto
+    var CHAVE_IDS_VISTOS = 'req_ids_vistos';
+    var CHAVE_ALERTA_SONORO_ATIVO = 'req_alerta_sonoro_ativo';
+    var TITULO_ORIGINAL = document.title;
+    var audioCtx = null;
+
     function escaparHtml(texto) {
       var div = document.createElement('div');
       div.textContent = texto == null ? '' : String(texto);
       return div.innerHTML;
     }
 
+    /**
+     * Toca um bipe curto via Web Audio API — não depende de nenhum
+     * arquivo de áudio, mas só funciona depois de o usuário ter clicado
+     * em algo na página (é assim que os navegadores liberam áudio
+     * automático), por isso o botão "Ativar alerta sonoro" existe.
+     */
+    function tocarBipe() {
+      if (!audioCtx) return;
+      try {
+        var osc = audioCtx.createOscillator();
+        var ganho = audioCtx.createGain();
+        osc.connect(ganho);
+        ganho.connect(audioCtx.destination);
+        osc.frequency.value = 880;
+        ganho.gain.setValueAtTime(0.25, audioCtx.currentTime);
+        osc.start();
+        osc.stop(audioCtx.currentTime + 0.3);
+      } catch (erro) { console.error(erro); }
+    }
+
+    /**
+     * Chamado pelo clique no botão "Ativar alerta sonoro". Desbloqueia
+     * o áudio (toca um bipe de teste) e, se o navegador suportar,
+     * também pede permissão pra notificação do sistema operacional —
+     * essa aparece mesmo com a aba minimizada, mas só enquanto o
+     * navegador continuar aberto (não funciona com o navegador fechado).
+     */
+    function ativarAlertas() {
+      try {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        tocarBipe();
+      } catch (erro) { console.error(erro); }
+
+      if ('Notification' in window && Notification.permission === 'default') {
+        Notification.requestPermission();
+      }
+
+      localStorage.setItem(CHAVE_ALERTA_SONORO_ATIVO, '1');
+      atualizarBotaoAlertas();
+    }
+
+    function atualizarBotaoAlertas() {
+      var botao = document.getElementById('btn-ativar-alertas');
+      var ativado = localStorage.getItem(CHAVE_ALERTA_SONORO_ATIVO) === '1' && audioCtx;
+      if (ativado) {
+        botao.textContent = '🔔 Alerta sonoro ativado';
+        botao.disabled = true;
+      } else {
+        botao.textContent = '🔕 Ativar alerta sonoro de nova requisição';
+        botao.disabled = false;
+      }
+    }
+
+    /**
+     * Compara a lista atual de requisições pendentes com a última vez
+     * que conferimos (guardada no localStorage do navegador). Qualquer
+     * ID que não estava na lista anterior é "nova" e dispara o alerta.
+     * Na primeríssima checagem (localStorage ainda vazio) não avisa de
+     * nada — senão toda requisição já pendente hoje "notificaria" na
+     * primeira vez que a página abrisse.
+     */
+    function verificarENotificarNovas(requisicoesAbertas) {
+      var idsAtuais = requisicoesAbertas.map(function (r) { return r.id; });
+      var jsonAnterior = localStorage.getItem(CHAVE_IDS_VISTOS);
+      var primeiraChecagem = jsonAnterior === null;
+
+      var idsVistos = [];
+      try { idsVistos = JSON.parse(jsonAnterior || '[]'); } catch (erro) { idsVistos = []; }
+
+      var novas = requisicoesAbertas.filter(function (r) {
+        return idsVistos.indexOf(r.id) === -1;
+      });
+
+      if (!primeiraChecagem && novas.length > 0) {
+        tocarBipe();
+
+        document.title = '🔴 (' + novas.length + ') ' + TITULO_ORIGINAL;
+
+        if ('Notification' in window && Notification.permission === 'granted') {
+          novas.forEach(function (req) {
+            try {
+              new Notification('📦 Nova requisição — ' + (req.unidade || '-'), {
+                body: (req.requisitante || '-') + ' · ' + (req.setor || '-') + '\n' + (req.itens || ''),
+                tag: 'req-' + req.id, // evita repetir a mesma notificação se checar de novo antes de ser vista
+              });
+            } catch (erroNotificacao) { console.error(erroNotificacao); }
+          });
+        }
+      }
+
+      localStorage.setItem(CHAVE_IDS_VISTOS, JSON.stringify(idsAtuais));
+    }
+
     function carregarNotificacoes() {
       google.script.run
-        .withSuccessHandler(renderizarSino)
+        .withSuccessHandler(function (requisicoesAbertas) {
+          requisicoesAbertas = requisicoesAbertas || [];
+          renderizarSino(requisicoesAbertas);
+          verificarENotificarNovas(requisicoesAbertas);
+        })
         .withFailureHandler(function (erro) {
           console.error(erro);
         })
@@ -240,12 +368,20 @@
     document.getElementById('btn-sino').addEventListener('click', function (evento) {
       evento.stopPropagation();
       document.getElementById('sino-painel').classList.toggle('aberto');
+      document.title = TITULO_ORIGINAL; // olhou o sino, "lê" o aviso — some o 🔴 do título da aba
     });
     document.addEventListener('click', function () {
       document.getElementById('sino-painel').classList.remove('aberto');
     });
 
+    document.getElementById('btn-ativar-alertas').addEventListener('click', ativarAlertas);
+
+    if (!('Notification' in window) && !('AudioContext' in window) && !('webkitAudioContext' in window)) {
+      document.getElementById('btn-ativar-alertas').classList.add('oculto');
+    }
+
     carregarNotificacoes();
+    setInterval(carregarNotificacoes, INTERVALO_VERIFICACAO_MS);
   </script>
 </body>
 </html>
