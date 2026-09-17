@@ -231,14 +231,24 @@ O `Menu.html` chama `listarRequisicoesAbertas()` ao carregar e confere de novo a
 (`setInterval`), mostrando um 🔔 com contador de pendentes no cabeçalho — ao tocar, abre um painel
 com a contagem por unidade e a data/hora da requisição pendente mais recente. Além disso:
 
-- **Alerta sonoro real**: um botão "Ativar alerta sonoro" desbloqueia um `AudioContext` (Web Audio
-  API) com um clique do usuário — navegadores bloqueiam áudio automático sem isso — e toca um bipe
-  de teste. A cada checagem periódica, se aparecer alguma requisição com `id` que não estava na
-  checagem anterior (comparado via uma lista de IDs guardada no `localStorage` do navegador), toca
-  o bipe de novo e, se o navegador tiver dado permissão, dispara uma notificação do sistema
-  operacional (`Notification`) — essa aparece mesmo com a aba minimizada, mas só enquanto o
-  **navegador continuar aberto** (não existe, no Apps Script, um jeito de notificar com o navegador
-  fechado — isso exigiria um servidor de push próprio).
+- **Alerta sonoro real**: em vez de exigir um clique manual num botão dedicado (o que forçava a
+  pessoa a reativar toda vez que a página recarregava — removido em 17/09/2026), o `AudioContext`
+  (Web Audio API) é desbloqueado silenciosamente na primeira interação do usuário com a página
+  (`click`/`touchstart`/`keydown`, o que vier primeiro), já que navegadores só liberam áudio
+  automático depois de algum gesto do usuário — e como a pessoa sempre acaba clicando em algo,
+  não precisa de um botão só pra isso. Esse mesmo gesto também dispara o pedido de permissão de
+  notificação do sistema operacional (`Notification.requestPermission()`), se o navegador ainda
+  não tiver decidido. A cada checagem periódica, se aparecer alguma requisição com `id` que não
+  estava na checagem anterior (comparado via uma lista de IDs guardada no `localStorage` do
+  navegador), toca um bipe e, se o navegador tiver dado permissão, dispara uma notificação do
+  sistema operacional — essa aparece mesmo com a aba minimizada, mas só enquanto o **navegador
+  continuar aberto** (não existe, no Apps Script, um jeito de notificar com o navegador fechado —
+  isso exigiria um servidor de push próprio).
+- **Toast visual**: além do som/notificação do SO (que dependem de permissão e podem não
+  funcionar), uma mensagem desliza do topo da própria página (`#toast-alerta`) mostrando a unidade
+  e o requisitante da nova requisição (ou um resumo, se chegar mais de uma de uma vez). Não depende
+  de nenhuma permissão do navegador — sempre aparece — e some sozinha depois de 7s ou ao ser
+  clicada.
 - Enquanto a notificação não for "lida" (clicar no sino), o título da aba do navegador ganha um
   prefixo `🔴 (N)`, visível mesmo se a aba estiver em segundo plano.
 - Pensado pra alguém deixar essa página aberta o dia todo (ex: um PC do almoxarifado).
