@@ -3326,6 +3326,12 @@ async function carregarRefeicoes() {
           }).join('')
         : '';
 
+      // Cartão nu (sem o blur/sombra de .panel-card, que já vem do card
+      // pai que envolve #refeicoes-conteudo — dois blurs empilhados
+      // ficariam pesados) só pra dar contorno visual a cada metade do
+      // grid abaixo.
+      const estiloCartaoAninhado = 'background:var(--card-bg);border:1px solid var(--card-border);border-radius:var(--border-radius-lg);padding:1.25rem;';
+
       conteudo.innerHTML = `
         <div class="dashboard-grid" style="margin-bottom:1rem;">
           <div class="kpi-card"><div class="kpi-label">👥 TOTAL DO DIA</div><div class="kpi-value">${doDia.length}</div></div>
@@ -3334,12 +3340,36 @@ async function carregarRefeicoes() {
           ? `<div class="dashboard-grid">${cardsHorarios}</div>`
           : (doDia.length === 0 ? '<p style="color:var(--text-muted);">Nenhum almoço registrado nesse dia.</p>' : '')}
 
-        <div class="panel-header" style="margin-top:1.8rem;"><h3>👥 Lista de Presença</h3></div>
-        <div class="table-responsive">
-          <table class="modern-table">
-            <thead><tr><th>Nome</th></tr></thead>
-            <tbody>${linhasPresencaHtml}</tbody>
-          </table>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:1rem;margin-top:1.8rem;">
+          <div style="${estiloCartaoAninhado}">
+            <div class="panel-header"><h3>👥 Lista de Presença</h3></div>
+            <div class="table-responsive">
+              <table class="modern-table">
+                <thead><tr><th>Nome</th></tr></thead>
+                <tbody>${linhasPresencaHtml}</tbody>
+              </table>
+            </div>
+          </div>
+
+          <div style="${estiloCartaoAninhado}">
+            <div class="panel-header">
+              <h3>📦 Previsão de Compra</h3>
+              <button id="previsao-btn-pdf" class="btn btn-secondary" type="button" style="font-size:0.78rem;padding:0.35rem 0.7rem;">📄 PDF</button>
+            </div>
+            <div style="display:flex;gap:0.5rem;margin-bottom:0.75rem;">
+              <button id="previsao-semana" class="btn ${previsaoDiasAlvo === 7 ? 'btn-primary' : 'btn-secondary'}" type="button" style="font-size:0.8rem;padding:0.4rem 0.9rem;">Semana</button>
+              <button id="previsao-quinzena" class="btn ${previsaoDiasAlvo === 15 ? 'btn-primary' : 'btn-secondary'}" type="button" style="font-size:0.8rem;padding:0.4rem 0.9rem;">Quinzena</button>
+              <button id="previsao-mes" class="btn ${previsaoDiasAlvo === 30 ? 'btn-primary' : 'btn-secondary'}" type="button" style="font-size:0.8rem;padding:0.4rem 0.9rem;">Mês</button>
+            </div>
+            ${previsaoItens.length
+              ? `<div class="table-responsive">
+                  <table class="modern-table">
+                    <thead><tr><th>Ingrediente</th><th>Previsão (${rotuloPeriodo})</th><th>Média/dia</th><th>Base</th></tr></thead>
+                    <tbody>${linhasPrevisaoHtml}</tbody>
+                  </table>
+                </div>`
+              : '<p style="color:var(--text-muted);">Ainda não há dados suficientes pra prever.</p>'}
+          </div>
         </div>
 
         <div class="panel-header" style="margin-top:1.8rem;"><h3>📋 Ausências (faltas e férias)</h3></div>
@@ -3357,24 +3387,6 @@ async function carregarRefeicoes() {
             <tbody>${linhasProducaoHtml}</tbody>
           </table>
         </div>
-
-        <div class="panel-header" style="margin-top:1.8rem;">
-          <h3>📦 Previsão de Compra</h3>
-          <button id="previsao-btn-pdf" class="btn btn-secondary" type="button" style="font-size:0.78rem;padding:0.35rem 0.7rem;">📄 PDF</button>
-        </div>
-        <div style="display:flex;gap:0.5rem;margin-bottom:0.75rem;">
-          <button id="previsao-semana" class="btn ${previsaoDiasAlvo === 7 ? 'btn-primary' : 'btn-secondary'}" type="button" style="font-size:0.8rem;padding:0.4rem 0.9rem;">Semana</button>
-          <button id="previsao-quinzena" class="btn ${previsaoDiasAlvo === 15 ? 'btn-primary' : 'btn-secondary'}" type="button" style="font-size:0.8rem;padding:0.4rem 0.9rem;">Quinzena</button>
-          <button id="previsao-mes" class="btn ${previsaoDiasAlvo === 30 ? 'btn-primary' : 'btn-secondary'}" type="button" style="font-size:0.8rem;padding:0.4rem 0.9rem;">Mês</button>
-        </div>
-        ${previsaoItens.length
-          ? `<div class="table-responsive">
-              <table class="modern-table">
-                <thead><tr><th>Ingrediente</th><th>Previsão (${rotuloPeriodo})</th><th>Média/dia</th><th>Base</th></tr></thead>
-                <tbody>${linhasPrevisaoHtml}</tbody>
-              </table>
-            </div>`
-          : '<p style="color:var(--text-muted);">Ainda não há dados suficientes pra prever.</p>'}
       `;
 
       // Guardado pro botão de PDF ler no momento do clique — assim o PDF
