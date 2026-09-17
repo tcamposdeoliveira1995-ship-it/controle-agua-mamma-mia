@@ -25,10 +25,93 @@
       background: var(--text);
       color: #fff;
       padding: 1rem 1.1rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 0.8rem;
+      position: relative;
     }
     header h1 { font-size: 1.05rem; margin: 0; font-weight: 700; }
     header p { margin: 0.15rem 0 0; font-size: 0.78rem; color: #d8d2c6; }
     main { padding: 1.2rem; max-width: 480px; margin: 0 auto; }
+
+    .sino-container { position: relative; flex-shrink: 0; }
+    .sino-btn {
+      background: rgba(255,255,255,0.12);
+      border: none;
+      border-radius: 50%;
+      width: 2.4rem;
+      height: 2.4rem;
+      font-size: 1.15rem;
+      cursor: pointer;
+      position: relative;
+      color: #fff;
+    }
+    .sino-badge {
+      position: absolute;
+      top: -0.25rem;
+      right: -0.25rem;
+      background: var(--gold);
+      color: #fff;
+      font-size: 0.68rem;
+      font-weight: 700;
+      min-width: 1.15rem;
+      height: 1.15rem;
+      border-radius: 999px;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 0 0.25rem;
+      border: 2px solid var(--text);
+    }
+    .sino-badge.visivel { display: flex; }
+    .sino-painel {
+      display: none;
+      position: absolute;
+      top: 2.8rem;
+      right: 0;
+      background: var(--card-bg);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.18);
+      width: 240px;
+      max-width: 80vw;
+      z-index: 10;
+      overflow: hidden;
+    }
+    .sino-painel.aberto { display: block; }
+    .sino-painel-titulo {
+      font-size: 0.78rem;
+      font-weight: 700;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+      padding: 0.7rem 0.9rem 0.4rem;
+    }
+    .sino-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0.55rem 0.9rem;
+      border-top: 1px solid var(--border);
+      font-size: 0.85rem;
+    }
+    .sino-item-unidade { font-weight: 700; }
+    .sino-item-count {
+      background: var(--gold);
+      color: #fff;
+      font-size: 0.72rem;
+      font-weight: 700;
+      padding: 0.1rem 0.5rem;
+      border-radius: 999px;
+    }
+    .sino-vazio { padding: 0.8rem 0.9rem; font-size: 0.82rem; color: var(--text-muted); }
+    .sino-ultima {
+      font-size: 0.78rem;
+      color: var(--text-muted);
+      padding: 0 0.9rem 0.6rem;
+    }
 
     .opcao {
       display: block;
@@ -60,8 +143,20 @@
 </head>
 <body>
   <header>
-    <h1>📦 Requisição MP e Recheios</h1>
-    <p>O que você precisa fazer?</p>
+    <div>
+      <h1>📦 Requisição MP e Recheios</h1>
+      <p>O que você precisa fazer?</p>
+    </div>
+    <div class="sino-container">
+      <button class="sino-btn" id="btn-sino" aria-label="Notificações" type="button">
+        🔔<span class="sino-badge" id="sino-badge"></span>
+      </button>
+      <div class="sino-painel" id="sino-painel">
+        <div class="sino-painel-titulo">🔔 Nova requisição</div>
+        <div class="sino-ultima" id="sino-ultima"></div>
+        <div id="sino-lista"></div>
+      </div>
+    </div>
   </header>
 
   <main>
@@ -85,5 +180,72 @@
 
     <p class="dica">Dica: salve essa página na tela inicial do celular pra abrir rápido da próxima vez.</p>
   </main>
+
+  <script>
+    function escaparHtml(texto) {
+      var div = document.createElement('div');
+      div.textContent = texto == null ? '' : String(texto);
+      return div.innerHTML;
+    }
+
+    function carregarNotificacoes() {
+      google.script.run
+        .withSuccessHandler(renderizarSino)
+        .withFailureHandler(function (erro) {
+          console.error(erro);
+        })
+        .listarRequisicoesAbertas();
+    }
+
+    function renderizarSino(requisicoesAbertas) {
+      requisicoesAbertas = requisicoesAbertas || [];
+
+      var porUnidade = {};
+      requisicoesAbertas.forEach(function (req) {
+        var unidade = (req.unidade || 'Sem unidade').toString().trim() || 'Sem unidade';
+        porUnidade[unidade] = (porUnidade[unidade] || 0) + 1;
+      });
+
+      var unidades = Object.keys(porUnidade).sort();
+      var total = requisicoesAbertas.length;
+
+      var badge = document.getElementById('sino-badge');
+      badge.textContent = total > 99 ? '99+' : String(total);
+      badge.classList.toggle('visivel', total > 0);
+
+      var maisRecente = requisicoesAbertas.reduce(function (atual, req) {
+        if (!atual) return req;
+        return (req.dataAberturaMs || 0) > (atual.dataAberturaMs || 0) ? req : atual;
+      }, null);
+
+      var ultima = document.getElementById('sino-ultima');
+      ultima.textContent = maisRecente && maisRecente.dataAbertura
+        ? 'Última requisição recebida em ' + maisRecente.dataAbertura
+        : '';
+
+      var lista = document.getElementById('sino-lista');
+      if (unidades.length === 0) {
+        lista.innerHTML = '<div class="sino-vazio">Nenhuma requisição nova.</div>';
+        return;
+      }
+
+      lista.innerHTML = unidades.map(function (unidade) {
+        return '<div class="sino-item">' +
+          '<span class="sino-item-unidade">' + escaparHtml(unidade) + '</span>' +
+          '<span class="sino-item-count">' + porUnidade[unidade] + '</span>' +
+        '</div>';
+      }).join('');
+    }
+
+    document.getElementById('btn-sino').addEventListener('click', function (evento) {
+      evento.stopPropagation();
+      document.getElementById('sino-painel').classList.toggle('aberto');
+    });
+    document.addEventListener('click', function () {
+      document.getElementById('sino-painel').classList.remove('aberto');
+    });
+
+    carregarNotificacoes();
+  </script>
 </body>
 </html>
