@@ -147,21 +147,25 @@
       line-height: 1.5;
     }
 
-    .btn-alertas {
-      display: block;
-      width: 100%;
-      padding: 0.7rem;
-      margin-bottom: 1rem;
-      border-radius: 10px;
-      border: 1px dashed var(--border);
-      background: var(--card-bg);
-      color: var(--text-muted);
-      font-size: 0.85rem;
-      font-weight: 600;
+    .toast-alerta {
+      position: fixed;
+      top: -120px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: var(--text);
+      color: #fff;
+      padding: 0.9rem 1.2rem;
+      border-radius: 12px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+      z-index: 100;
+      max-width: 92vw;
+      width: 360px;
       cursor: pointer;
+      transition: top 0.35s ease;
     }
-    .btn-alertas:disabled { opacity: 0.7; cursor: default; }
-    .btn-alertas.oculto { display: none; }
+    .toast-alerta.visivel { top: 14px; }
+    .toast-titulo { font-weight: 700; font-size: 0.92rem; margin-bottom: 0.15rem; }
+    .toast-texto { font-size: 0.82rem; color: #d8d2c6; line-height: 1.35; white-space: pre-line; }
   </style>
 </head>
 <body>
@@ -182,9 +186,12 @@
     </div>
   </header>
 
-  <main>
-    <button class="btn-alertas" id="btn-ativar-alertas" type="button">🔕 Ativar alerta sonoro de nova requisição</button>
+  <div class="toast-alerta" id="toast-alerta">
+    <div class="toast-titulo" id="toast-titulo"></div>
+    <div class="toast-texto" id="toast-texto"></div>
+  </div>
 
+  <main>
     <div class="opcoes-grid">
       <a class="opcao opcao-abrir" href="https://docs.google.com/forms/d/e/1FAIpQLSeEPlg0wMPk-zwtOPa5p8fnl3_J0wwjWSGPRGpZNw-1nscWbw/viewform">
         <div class="opcao-icone">📋</div>
@@ -217,9 +224,9 @@
   <script>
     var INTERVALO_VERIFICACAO_MS = 60000; // confere de 1 em 1 minuto
     var CHAVE_IDS_VISTOS = 'req_ids_vistos';
-    var CHAVE_ALERTA_SONORO_ATIVO = 'req_alerta_sonoro_ativo';
     var TITULO_ORIGINAL = document.title;
     var audioCtx = null;
+    var toastTimeoutId = null;
 
     function escaparHtml(texto) {
       var div = document.createElement('div');
@@ -228,10 +235,10 @@
     }
 
     /**
-     * Toca um bipe curto via Web Audio API — não depende de nenhum
-     * arquivo de áudio, mas só funciona depois de o usuário ter clicado
-     * em algo na página (é assim que os navegadores liberam áudio
-     * automático), por isso o botão "Ativar alerta sonoro" existe.
+     * Toca um bipe curto via Web Audio API. Só funciona depois que o
+     * áudio foi "desbloqueado" (ver desbloquearAudio) — por isso pode
+     * simplesmente não tocar nada em vez de dar erro se ainda não deu
+     * tempo de desbloquear.
      */
     function tocarBipe() {
       if (!audioCtx) return;
@@ -248,37 +255,51 @@
     }
 
     /**
-     * Chamado pelo clique no botão "Ativar alerta sonoro". Desbloqueia
-     * o áudio (toca um bipe de teste) e, se o navegador suportar,
-     * também pede permissão pra notificação do sistema operacional —
-     * essa aparece mesmo com a aba minimizada, mas só enquanto o
-     * navegador continuar aberto (não funciona com o navegador fechado).
+     * Desbloqueia o áudio e pede permissão de notificação do SO na
+     * primeira interação do usuário com a página (clique, toque ou
+     * tecla) — sem precisar de nenhum botão dedicado. O navegador só
+     * libera som automático depois de algum gesto do usuário; como a
+     * pessoa sempre acaba clicando em algo na página, aproveitamos esse
+     * clique em vez de pedir um clique específico pra isso.
      */
-    function ativarAlertas() {
-      try {
-        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-        tocarBipe();
-      } catch (erro) { console.error(erro); }
-
+    function desbloquearAudio() {
+      if (!audioCtx) {
+        try {
+          audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        } catch (erro) { console.error(erro); }
+      }
       if ('Notification' in window && Notification.permission === 'default') {
         Notification.requestPermission();
       }
+      document.removeEventListener('click', desbloquearAudio);
+      document.removeEventListener('touchstart', desbloquearAudio);
+      document.removeEventListener('keydown', desbloquearAudio);
+    }
+    document.addEventListener('click', desbloquearAudio);
+    document.addEventListener('touchstart', desbloquearAudio);
+    document.addEventListener('keydown', desbloquearAudio);
 
-      localStorage.setItem(CHAVE_ALERTA_SONORO_ATIVO, '1');
-      atualizarBotaoAlertas();
+    /**
+     * Mostra o aviso deslizando do topo da tela — funciona sempre,
+     * independente de permissão de notificação ou áudio liberado.
+     * Some sozinho depois de alguns segundos, ou some antes se a pessoa
+     * clicar nele.
+     */
+    function mostrarToast(titulo, texto) {
+      var toast = document.getElementById('toast-alerta');
+      document.getElementById('toast-titulo').textContent = titulo;
+      document.getElementById('toast-texto').textContent = texto;
+      toast.classList.add('visivel');
+
+      if (toastTimeoutId) clearTimeout(toastTimeoutId);
+      toastTimeoutId = setTimeout(function () {
+        toast.classList.remove('visivel');
+      }, 7000);
     }
 
-    function atualizarBotaoAlertas() {
-      var botao = document.getElementById('btn-ativar-alertas');
-      var ativado = localStorage.getItem(CHAVE_ALERTA_SONORO_ATIVO) === '1' && audioCtx;
-      if (ativado) {
-        botao.textContent = '🔔 Alerta sonoro ativado';
-        botao.disabled = true;
-      } else {
-        botao.textContent = '🔕 Ativar alerta sonoro de nova requisição';
-        botao.disabled = false;
-      }
-    }
+    document.getElementById('toast-alerta').addEventListener('click', function () {
+      document.getElementById('toast-alerta').classList.remove('visivel');
+    });
 
     /**
      * Compara a lista atual de requisições pendentes com a última vez
@@ -304,6 +325,15 @@
         tocarBipe();
 
         document.title = '🔴 (' + novas.length + ') ' + TITULO_ORIGINAL;
+
+        var primeira = novas[0];
+        var tituloToast = novas.length === 1
+          ? '📦 Nova requisição — ' + (primeira.unidade || '-')
+          : '📦 ' + novas.length + ' novas requisições';
+        var textoToast = novas.length === 1
+          ? (primeira.requisitante || '-') + ' · ' + (primeira.setor || '-') + (primeira.itens ? '\n' + primeira.itens : '')
+          : novas.map(function (r) { return (r.unidade || '-') + ' · ' + (r.requisitante || '-'); }).join('\n');
+        mostrarToast(tituloToast, textoToast);
 
         if ('Notification' in window && Notification.permission === 'granted') {
           novas.forEach(function (req) {
@@ -381,12 +411,6 @@
     document.addEventListener('click', function () {
       document.getElementById('sino-painel').classList.remove('aberto');
     });
-
-    document.getElementById('btn-ativar-alertas').addEventListener('click', ativarAlertas);
-
-    if (!('Notification' in window) && !('AudioContext' in window) && !('webkitAudioContext' in window)) {
-      document.getElementById('btn-ativar-alertas').classList.add('oculto');
-    }
 
     carregarNotificacoes();
     setInterval(carregarNotificacoes, INTERVALO_VERIFICACAO_MS);
