@@ -2937,6 +2937,12 @@ let ultimoEstadoRefeicoes = null;
 let previsaoDiasAlvo = 7;
 let ultimoEstadoPrevisao = null;
 
+// Lista de Presença recolhida ou não — estado do módulo (não do PDF, que
+// sempre mostra a lista inteira independente disso) porque o card só
+// serve de referência rápida na tela; recolhido por padrão não faz
+// sentido, então começa aberto.
+let presencaRecolhida = false;
+
 // Junta o ingrediente principal (Frango, Farofa — "Qual?" no formulário)
 // com os extras (calabresa, cenoura...) num texto só, pra uma coluna só
 // na tabela/PDF: "Frango · calabresa, cenoura". Módulo-escopo (não
@@ -3342,13 +3348,17 @@ async function carregarRefeicoes() {
 
         <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:1rem;margin-top:1.8rem;">
           <div style="${estiloCartaoAninhado}">
-            <div class="panel-header"><h3>👥 Lista de Presença</h3></div>
+            <div class="panel-header">
+              <h3>👥 Lista de Presença</h3>
+              <button id="presenca-toggle" class="btn btn-secondary" type="button" style="font-size:0.78rem;padding:0.35rem 0.7rem;">${presencaRecolhida ? `▸ Mostrar (${presentesDoDia.length})` : '▾ Recolher'}</button>
+            </div>
+            ${presencaRecolhida ? '' : `
             <div class="table-responsive">
               <table class="modern-table">
                 <thead><tr><th>Nome</th></tr></thead>
                 <tbody>${linhasPresencaHtml}</tbody>
               </table>
-            </div>
+            </div>`}
           </div>
 
           <div style="${estiloCartaoAninhado}">
@@ -3411,6 +3421,7 @@ async function carregarRefeicoes() {
       document.getElementById('previsao-btn-pdf')?.addEventListener('click', () => {
         if (ultimoEstadoPrevisao) previsaoComprarGerarPDF(ultimoEstadoPrevisao);
       });
+      document.getElementById('presenca-toggle')?.addEventListener('click', () => { presencaRecolhida = !presencaRecolhida; renderizar(); });
     }
 
     if (!inputData._refEvt) {
