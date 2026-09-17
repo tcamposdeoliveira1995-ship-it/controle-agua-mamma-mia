@@ -1,7 +1,7 @@
 # Refeições — Previsão de Compra (Semana / Quinzena / Mês)
 
 **Data:** 2026-09-17
-**Status:** Aprovado para implementação
+**Status:** Implementado (ver correção pós-teste no fim do documento)
 
 ## Contexto
 
@@ -21,19 +21,15 @@ granularidades — Semana, Quinzena, Mês.
 - **Prato Principal, Guarnição**: a chave é o campo `ingrediente` da linha de produção (ex.: "Frango"),
   ou o nome da categoria como fallback se `ingrediente` vier vazio — mesma regra de fallback já usada em
   `registrarProducao` (Apps Script) pra achar o rendimento esperado.
-- **Ingredientes extras** (calabresa, cenoura...): cada nome de extra é sua própria chave, à parte do
-  ingrediente principal da categoria onde foi usado.
+- **Ingredientes extras** (calabresa, cenoura...) NÃO entram — ver correção no fim do documento.
 
-Cada linha de produção contribui com **KG cru quando `kgCru > 0`, senão KG produzido** dessa linha. Cada
-linha de ingrediente extra contribui com seu próprio `kg` (já é uma quantidade de uso, sem essa escolha
-cru/produzido).
+Cada linha de produção contribui com **KG cru quando `kgCru > 0`, senão KG produzido** dessa linha.
 
 ## Janela de histórico e cálculo
 
 Janela = últimos 30 dias corridos a partir de hoje. Dentro dela:
 
-- `totalKg[ingrediente]` = soma de todas as contribuições (produção + extras) daquele ingrediente na
-  janela.
+- `totalKg[ingrediente]` = soma de todas as contribuições de produção daquele ingrediente na janela.
 - `diasHistorico` = dias corridos desde a DATA MAIS ANTIGA com algum registro de produção dentro da
   janela até hoje (inclusive), mínimo 1. Isso evita dividir por 30 quando o sistema tem, por exemplo, só
   5 dias de histórico real — nesse caso `diasHistorico = 5`, não 30.
@@ -73,6 +69,26 @@ dado pra prever nada.
   vazio ("Ainda não há dados suficientes pra prever"), sem quebrar o resto da aba Refeições.
 - `diasAlvo` inválido (nunca deve acontecer, os 3 botões são fixos): fallback pra Semana (7).
 
+## Correção pós-teste: ingredientes extras excluídos
+
+Ao testar com dado real, a previsão veio poluída: linhas como "85 SOBRECOXA", "10 TOMATES", "20
+TOMATES", "12 TOMATES" (o mesmo Tomate, 4 vezes) e até "SOBRA DA SEMANA PASSADA"/"SOBRA DE 15/09/2026"
+(sobra reaproveitada, não algo a comprar) apareciam como ingredientes separados.
+
+Causa raiz: o campo onde a cozinheira digita o nome do ingrediente extra
+(`refeitorio-mamma-mia/apps-script/Producao.html`, `.extra-nome`) é um `<input type="text">` livre (com
+`list=` de sugestão, mas sem travar a digitação) — cada pessoa escreve a quantidade junto do nome, de um
+jeito diferente a cada vez, então o mesmo ingrediente real vira várias chaves distintas em
+`CONFIG_RENDIMENTO`. Tentar agrupar isso por código (regex, matching de texto) é frágil — mesma decisão
+já tomada pro caso do Pão de Queijo em kg (ver
+`2026-09-10-perdas-resumo-semanal-design.md`): não adivinhar a partir de texto livre.
+
+**Decisão:** `_previsaoCalcular` usa só as 5 categorias de `PRODUCAO` (Arroz, Feijão, Prato Principal,
+Guarnição, Salada) — ingredientes extras ficam de fora da previsão. Continuam aparecendo normalmente na
+tela do dia (Produção e Sobra, via `textoIngredientes`), que é só exibição e não soma nada entre dias —
+esse uso não é afetado. Incluir extras na previsão fica pra quando (e se) a entrada de dados desse campo
+virar uma lista fechada (dropdown, como já existe na tela de Sobra) em vez de texto livre.
+
 ## Fora de escopo
 
 - Ajuste por presença esperada (headcount) — o painel não tem agenda de presença futura, só histórico;
@@ -81,3 +97,5 @@ dado pra prever nada.
   não "o que falta comprar".
 - Incluir a previsão no PDF de Refeições que já existe (Presença/Ausências/Produção e Sobra) — fica
   intacto; a previsão tem seu PDF próprio.
+- Limpar a entrada de ingredientes extras (trocar texto livre por lista fechada) — ver seção de correção
+  acima; é um trabalho à parte, só vale a pena se/quando quiser reincluir extras na previsão.

@@ -3000,14 +3000,27 @@ function _dataBRParaDate(dataBR) {
 
 // Previsão de compra por ingrediente — ver
 // docs/superpowers/specs/2026-09-17-previsao-compra-refeicoes-design.md.
-// Soma o KG usado (produção: cru quando tiver, senão produzido; extras:
-// o próprio KG registrado) nos últimos 30 dias corridos, divide pelos
-// dias de histórico REALMENTE disponíveis nessa janela (não sempre 30 —
-// um sistema com só 5 dias de uso não pode ser dividido por 30, senão a
-// previsão sai artificialmente baixa) e escala pro período escolhido
-// (diasAlvo: 7 Semana / 15 Quinzena / 30 Mês). Devolve lista ordenada do
-// maior pro menor KG previsto; [] se não há nenhum registro na janela.
-function _previsaoCalcular(producao, ingredientesExtras, diasAlvo) {
+// Soma o KG usado (cru quando tiver, senão produzido) nos últimos 30 dias
+// corridos, divide pelos dias de histórico REALMENTE disponíveis nessa
+// janela (não sempre 30 — um sistema com só 5 dias de uso não pode ser
+// dividido por 30, senão a previsão sai artificialmente baixa) e escala
+// pro período escolhido (diasAlvo: 7 Semana / 15 Quinzena / 30 Mês).
+// Devolve lista ordenada do maior pro menor KG previsto; [] se não há
+// nenhum registro na janela.
+//
+// Só usa as 5 categorias de PRODUCAO (Arroz, Feijão, Prato Principal,
+// Guarnição, Salada) — NÃO entra ingredientesExtras (calabresa, cenoura
+// etc. do "+ ingrediente" da tela de Produção). O campo onde a
+// cozinheira digita o nome do extra é texto livre, então o mesmo
+// ingrediente vira várias linhas diferentes ("10 TOMATES", "20 TOMATES",
+// "12 TOMATES" em vez de um "Tomate" só) e até sobra reaproveitada entra
+// junto ("SOBRA DA SEMANA PASSADA") — dado bom pra mostrar na tela do
+// dia (textoIngredientes), mas ruim pra somar numa previsão. Tentar
+// "adivinhar"/agrupar esse texto por código é frágil (mesma decisão já
+// tomada pro Pão de Queijo em kg — ver spec 2026-09-10-perdas-resumo-
+// semanal-design.md); fica de fora até a entrada de dados virar uma
+// lista fechada.
+function _previsaoCalcular(producao, diasAlvo) {
   const hoje = new Date();
   hoje.setHours(0, 0, 0, 0);
   const inicioJanela = new Date(hoje);
@@ -3015,12 +3028,6 @@ function _previsaoCalcular(producao, ingredientesExtras, diasAlvo) {
 
   const totalKg = {};
   let dataMaisAntiga = null;
-
-  function registrar(chave, kg, dataObj) {
-    if (!chave || !(kg > 0)) return;
-    totalKg[chave] = (totalKg[chave] || 0) + kg;
-    if (!dataMaisAntiga || dataObj < dataMaisAntiga) dataMaisAntiga = dataObj;
-  }
 
   producao.forEach(p => {
     const dataObj = _dataBRParaDate(p.data);
@@ -3032,13 +3039,9 @@ function _previsaoCalcular(producao, ingredientesExtras, diasAlvo) {
     // esperado.
     const chave = p.ingrediente || p.item;
     const kg = p.kgCru > 0 ? p.kgCru : p.kgProduzido;
-    registrar(chave, kg, dataObj);
-  });
-
-  ingredientesExtras.forEach(e => {
-    const dataObj = _dataBRParaDate(e.data);
-    if (!dataObj || dataObj < inicioJanela || dataObj > hoje) return;
-    registrar(e.nome, e.kg, dataObj);
+    if (!chave || !(kg > 0)) return;
+    totalKg[chave] = (totalKg[chave] || 0) + kg;
+    if (!dataMaisAntiga || dataObj < dataMaisAntiga) dataMaisAntiga = dataObj;
   });
 
   if (!dataMaisAntiga) return [];
@@ -3189,12 +3192,6 @@ async function carregarRefeicoes() {
       const idxTipoExtra = cabecalhoConfig.findIndex(c => c === 'TIPO');
       const idxDataExtra = cabecalhoConfig.findIndex(c => c === 'DATA');
       const idxItemExtra = cabecalhoConfig.findIndex(c => c === 'ITEM');
-      // KG também é opcional aqui (só usado pela Previsão de Compra) —
-      // sem essa coluna, os extras continuam aparecendo normalmente na
-      // lista de ingredientes do dia (textoIngredientes não depende de
-      // kg), só ficam de fora da previsão (kg vira 0, _previsaoCalcular
-      // ignora contribuições de 0).
-      const idxKgExtra = cabecalhoConfig.findIndex(c => c === 'KG');
 
       if (idxCategoriaExtra !== -1 && idxTipoExtra !== -1 && idxDataExtra !== -1 && idxItemExtra !== -1) {
         ingredientesExtras = linhasConfigRendimento.slice(1)
@@ -3203,7 +3200,6 @@ async function carregarRefeicoes() {
             nome: (cols[idxCategoriaExtra] || '').trim(),
             data: (cols[idxDataExtra] || '').trim(),
             item: (cols[idxItemExtra] || '').trim(),
-            kg: idxKgExtra === -1 ? 0 : Number((cols[idxKgExtra] || '0').replace(',', '.')) || 0,
           }))
           .filter(e => e.nome);
       }
@@ -3321,7 +3317,7 @@ async function carregarRefeicoes() {
       // Previsão de compra — não depende da data selecionada no filtro
       // (é sobre um período pra frente, não um dia específico); só do
       // botão Semana/Quinzena/Mês (previsaoDiasAlvo, estado do módulo).
-      const previsaoItens = _previsaoCalcular(producao, ingredientesExtras, previsaoDiasAlvo);
+      const previsaoItens = _previsaoCalcular(producao, previsaoDiasAlvo);
       const rotuloPeriodo = { 7: 'Semana', 15: 'Quinzena', 30: 'Mês' }[previsaoDiasAlvo] || 'Semana';
       const linhasPrevisaoHtml = previsaoItens.length
         ? previsaoItens.map(p => {
