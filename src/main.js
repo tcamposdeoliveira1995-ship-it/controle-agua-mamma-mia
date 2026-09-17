@@ -2930,6 +2930,13 @@ function _renderizarHistoricoHigienizacao(registros, countEl, historicoBody) {
 // de gerar (ver refeicoesGerarPDF mais abaixo).
 let ultimoEstadoRefeicoes = null;
 
+// Período selecionado na Previsão de Compra (7 = Semana, 15 = Quinzena,
+// 30 = Mês) e o último resultado calculado — mesmo padrão de
+// ultimoEstadoRefeicoes, lido pelo botão de PDF da seção sem recalcular
+// nada na hora de gerar (ver previsaoComprarGerarPDF mais abaixo).
+let previsaoDiasAlvo = 7;
+let ultimoEstadoPrevisao = null;
+
 // Junta o ingrediente principal (Frango, Farofa — "Qual?" no formulário)
 // com os extras (calabresa, cenoura...) num texto só, pra uma coluna só
 // na tabela/PDF: "Frango · calabresa, cenoura". Módulo-escopo (não
@@ -2978,6 +2985,77 @@ function textoSobra(total, sobraPorUnidade) {
 
   const detalhe = unidades.map((u, i) => `${u}: ${partesNomeadas[i].toFixed(1)}`).join(' · ');
   return `${totalExibido.toFixed(1)} kg (${detalhe})`;
+}
+
+// Converte "dd/mm/aaaa" em Date local — mesma regra de parsing usada em
+// converterDataBRParaOrdenacao (dentro de carregarRefeicoes), repetida
+// aqui em escopo de módulo porque _previsaoCalcular também precisa dela
+// e roda fora daquele fechamento (ver textoIngredientes/textoSobra logo
+// acima, mesmo motivo de viver no escopo do módulo).
+function _dataBRParaDate(dataBR) {
+  const partes = (dataBR || '').split('/');
+  if (partes.length !== 3) return null;
+  return new Date(Number(partes[2]), Number(partes[1]) - 1, Number(partes[0]));
+}
+
+// Previsão de compra por ingrediente — ver
+// docs/superpowers/specs/2026-09-17-previsao-compra-refeicoes-design.md.
+// Soma o KG usado (produção: cru quando tiver, senão produzido; extras:
+// o próprio KG registrado) nos últimos 30 dias corridos, divide pelos
+// dias de histórico REALMENTE disponíveis nessa janela (não sempre 30 —
+// um sistema com só 5 dias de uso não pode ser dividido por 30, senão a
+// previsão sai artificialmente baixa) e escala pro período escolhido
+// (diasAlvo: 7 Semana / 15 Quinzena / 30 Mês). Devolve lista ordenada do
+// maior pro menor KG previsto; [] se não há nenhum registro na janela.
+function _previsaoCalcular(producao, ingredientesExtras, diasAlvo) {
+  const hoje = new Date();
+  hoje.setHours(0, 0, 0, 0);
+  const inicioJanela = new Date(hoje);
+  inicioJanela.setDate(inicioJanela.getDate() - 29); // últimos 30 dias corridos, hoje incluído
+
+  const totalKg = {};
+  let dataMaisAntiga = null;
+
+  function registrar(chave, kg, dataObj) {
+    if (!chave || !(kg > 0)) return;
+    totalKg[chave] = (totalKg[chave] || 0) + kg;
+    if (!dataMaisAntiga || dataObj < dataMaisAntiga) dataMaisAntiga = dataObj;
+  }
+
+  producao.forEach(p => {
+    const dataObj = _dataBRParaDate(p.data);
+    if (!dataObj || dataObj < inicioJanela || dataObj > hoje) return;
+    // Arroz/Feijão/Salada não têm "ingrediente" preenchido (o formulário
+    // só pede isso pra Prato Principal/Guarnição) — nesse caso o próprio
+    // nome da categoria já É o ingrediente a comprar. Mesmo fallback
+    // usado em registrarProducao (Apps Script) pra achar o rendimento
+    // esperado.
+    const chave = p.ingrediente || p.item;
+    const kg = p.kgCru > 0 ? p.kgCru : p.kgProduzido;
+    registrar(chave, kg, dataObj);
+  });
+
+  ingredientesExtras.forEach(e => {
+    const dataObj = _dataBRParaDate(e.data);
+    if (!dataObj || dataObj < inicioJanela || dataObj > hoje) return;
+    registrar(e.nome, e.kg, dataObj);
+  });
+
+  if (!dataMaisAntiga) return [];
+
+  const diasHistorico = Math.max(1, Math.round((hoje - dataMaisAntiga) / 86400000) + 1);
+
+  return Object.keys(totalKg)
+    .map(ingrediente => {
+      const mediaDiaria = totalKg[ingrediente] / diasHistorico;
+      return {
+        ingrediente,
+        previsaoKg: arredondarKg(mediaDiaria * diasAlvo),
+        mediaDiaria: arredondarKg(mediaDiaria),
+        diasHistorico,
+      };
+    })
+    .sort((a, b) => b.previsaoKg - a.previsaoKg);
 }
 
 async function carregarRefeicoes() {
@@ -3111,6 +3189,12 @@ async function carregarRefeicoes() {
       const idxTipoExtra = cabecalhoConfig.findIndex(c => c === 'TIPO');
       const idxDataExtra = cabecalhoConfig.findIndex(c => c === 'DATA');
       const idxItemExtra = cabecalhoConfig.findIndex(c => c === 'ITEM');
+      // KG também é opcional aqui (só usado pela Previsão de Compra) —
+      // sem essa coluna, os extras continuam aparecendo normalmente na
+      // lista de ingredientes do dia (textoIngredientes não depende de
+      // kg), só ficam de fora da previsão (kg vira 0, _previsaoCalcular
+      // ignora contribuições de 0).
+      const idxKgExtra = cabecalhoConfig.findIndex(c => c === 'KG');
 
       if (idxCategoriaExtra !== -1 && idxTipoExtra !== -1 && idxDataExtra !== -1 && idxItemExtra !== -1) {
         ingredientesExtras = linhasConfigRendimento.slice(1)
@@ -3119,6 +3203,7 @@ async function carregarRefeicoes() {
             nome: (cols[idxCategoriaExtra] || '').trim(),
             data: (cols[idxDataExtra] || '').trim(),
             item: (cols[idxItemExtra] || '').trim(),
+            kg: idxKgExtra === -1 ? 0 : Number((cols[idxKgExtra] || '0').replace(',', '.')) || 0,
           }))
           .filter(e => e.nome);
       }
@@ -3233,6 +3318,18 @@ async function carregarRefeicoes() {
         ? presentesDoDia.map(nome => `<tr><td>${nome}</td></tr>`).join('')
         : '<tr><td style="color:var(--text-muted);">Ninguém registrado nesse dia.</td></tr>';
 
+      // Previsão de compra — não depende da data selecionada no filtro
+      // (é sobre um período pra frente, não um dia específico); só do
+      // botão Semana/Quinzena/Mês (previsaoDiasAlvo, estado do módulo).
+      const previsaoItens = _previsaoCalcular(producao, ingredientesExtras, previsaoDiasAlvo);
+      const rotuloPeriodo = { 7: 'Semana', 15: 'Quinzena', 30: 'Mês' }[previsaoDiasAlvo] || 'Semana';
+      const linhasPrevisaoHtml = previsaoItens.length
+        ? previsaoItens.map(p => {
+            const aviso = p.diasHistorico < 7 ? ' <span style="color:var(--text-muted);font-size:0.75rem;">⚠️ poucos dados</span>' : '';
+            return `<tr><td>${p.ingrediente}</td><td>${p.previsaoKg.toFixed(1)} kg</td><td>${p.mediaDiaria.toFixed(1)} kg/dia</td><td>${p.diasHistorico} dias${aviso}</td></tr>`;
+          }).join('')
+        : '';
+
       conteudo.innerHTML = `
         <div class="dashboard-grid" style="margin-bottom:1rem;">
           <div class="kpi-card"><div class="kpi-label">👥 TOTAL DO DIA</div><div class="kpi-value">${doDia.length}</div></div>
@@ -3264,6 +3361,24 @@ async function carregarRefeicoes() {
             <tbody>${linhasProducaoHtml}</tbody>
           </table>
         </div>
+
+        <div class="panel-header" style="margin-top:1.8rem;">
+          <h3>📦 Previsão de Compra</h3>
+          <button id="previsao-btn-pdf" class="btn btn-secondary" type="button" style="font-size:0.78rem;padding:0.35rem 0.7rem;">📄 PDF</button>
+        </div>
+        <div style="display:flex;gap:0.5rem;margin-bottom:0.75rem;">
+          <button id="previsao-semana" class="btn ${previsaoDiasAlvo === 7 ? 'btn-primary' : 'btn-secondary'}" type="button" style="font-size:0.8rem;padding:0.4rem 0.9rem;">Semana</button>
+          <button id="previsao-quinzena" class="btn ${previsaoDiasAlvo === 15 ? 'btn-primary' : 'btn-secondary'}" type="button" style="font-size:0.8rem;padding:0.4rem 0.9rem;">Quinzena</button>
+          <button id="previsao-mes" class="btn ${previsaoDiasAlvo === 30 ? 'btn-primary' : 'btn-secondary'}" type="button" style="font-size:0.8rem;padding:0.4rem 0.9rem;">Mês</button>
+        </div>
+        ${previsaoItens.length
+          ? `<div class="table-responsive">
+              <table class="modern-table">
+                <thead><tr><th>Ingrediente</th><th>Previsão (${rotuloPeriodo})</th><th>Média/dia</th><th>Base</th></tr></thead>
+                <tbody>${linhasPrevisaoHtml}</tbody>
+              </table>
+            </div>`
+          : '<p style="color:var(--text-muted);">Ainda não há dados suficientes pra prever.</p>'}
       `;
 
       // Guardado pro botão de PDF ler no momento do clique — assim o PDF
@@ -3276,6 +3391,18 @@ async function carregarRefeicoes() {
         categorias,
         porCategoria,
       };
+      ultimoEstadoPrevisao = { diasAlvo: previsaoDiasAlvo, rotuloPeriodo, itens: previsaoItens };
+
+      // Botões da Previsão de Compra vivem dentro de conteudo.innerHTML,
+      // então são recriados a cada renderizar() — precisam de listener
+      // novo a cada vez (mesmo padrão já usado nos botões de navegação
+      // de semana do módulo Perdas, logo abaixo no arquivo).
+      document.getElementById('previsao-semana')?.addEventListener('click', () => { previsaoDiasAlvo = 7; renderizar(); });
+      document.getElementById('previsao-quinzena')?.addEventListener('click', () => { previsaoDiasAlvo = 15; renderizar(); });
+      document.getElementById('previsao-mes')?.addEventListener('click', () => { previsaoDiasAlvo = 30; renderizar(); });
+      document.getElementById('previsao-btn-pdf')?.addEventListener('click', () => {
+        if (ultimoEstadoPrevisao) previsaoComprarGerarPDF(ultimoEstadoPrevisao);
+      });
     }
 
     if (!inputData._refEvt) {
@@ -3376,6 +3503,69 @@ function refeicoesGerarPDF(estado) {
       ${secao('Lista de Presença', ['Nome'], linhasPresenca)}
       ${secao('Ausências (faltas e férias)', ['Nome', 'Tipo', 'Data'], linhasAusencias)}
       ${secao('Produção e Sobra', ['Categoria', 'Cru', 'Produzido', 'Sobra', 'Rendimento', 'Ingredientes'], linhasProducao)}
+
+      <div style="margin-top:24px;padding-top:12px;border-top:1px solid #e8ddd0;font-size:10px;color:#a09284;text-align:center;">
+        Mamma Mia Control — Gestão Inteligente de Operações • © 2026 Mamma Mia Salgados
+      </div>
+    </div>`;
+
+  const iframe = document.createElement('iframe');
+  iframe.style.cssText = 'position:fixed;top:-9999px;left:-9999px;width:900px;height:600px;border:none;';
+  document.body.appendChild(iframe);
+  iframe.contentDocument.open();
+  iframe.contentDocument.write(html);
+  iframe.contentDocument.close();
+  setTimeout(() => {
+    iframe.contentWindow.print();
+    setTimeout(() => document.body.removeChild(iframe), 1000);
+  }, 400);
+}
+
+// PDF só da Previsão de Compra — separado do PDF de Refeições acima
+// (refeicoesGerarPDF), que continua intacto. Recebe o estado já
+// calculado pela tela (ultimoEstadoPrevisao) — não busca nem recalcula
+// nada, mesmo padrão técnico dos outros PDFs do painel.
+function previsaoComprarGerarPDF(estado) {
+  const { rotuloPeriodo, itens } = estado;
+  const agora = new Date().toLocaleString('pt-BR');
+
+  const linhas = itens.length
+    ? itens.map(p => {
+        const aviso = p.diasHistorico < 7 ? ' <span style="color:#c07a6c;">⚠️ poucos dados</span>' : '';
+        return `<tr>
+          <td style="font-size:11px;padding:5px 6px;">${p.ingrediente}</td>
+          <td style="font-size:11px;padding:5px 6px;">${p.previsaoKg.toFixed(1)} kg</td>
+          <td style="font-size:11px;padding:5px 6px;">${p.mediaDiaria.toFixed(1)} kg/dia</td>
+          <td style="font-size:11px;padding:5px 6px;">${p.diasHistorico} dias${aviso}</td>
+        </tr>`;
+      }).join('')
+    : '<tr><td colspan="4" style="font-size:11px;padding:5px 6px;color:#a09284;">Ainda não há dados suficientes pra prever.</td></tr>';
+
+  const html = `
+    <div style="font-family:Arial,sans-serif;max-width:820px;margin:0 auto;padding:28px;background:#fff;color:#4b433c;">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid #b79b6c;padding-bottom:14px;margin-bottom:20px;">
+        <div>
+          <h1 style="margin:0;font-size:20px;font-weight:800;color:#4b433c;">Mamma Mia Control</h1>
+          <p style="margin:4px 0 0;font-size:13px;color:#8a8570;">📦 Previsão de Compra</p>
+          <p style="margin:2px 0 0;font-size:12px;color:#b79b6c;font-weight:600;">Período: ${rotuloPeriodo}</p>
+        </div>
+        <div style="text-align:right;font-size:11px;color:#a09284;">
+          <div>Emitido em:</div>
+          <div style="font-weight:600;color:#4b433c;">${agora}</div>
+        </div>
+      </div>
+
+      <table style="width:100%;border-collapse:collapse;margin-bottom:6px;">
+        <thead>
+          <tr style="background:#f3ede3;">
+            <th style="font-size:10px;text-align:left;padding:6px;">Ingrediente</th>
+            <th style="font-size:10px;text-align:left;padding:6px;">Previsão (${rotuloPeriodo})</th>
+            <th style="font-size:10px;text-align:left;padding:6px;">Média/dia</th>
+            <th style="font-size:10px;text-align:left;padding:6px;">Base</th>
+          </tr>
+        </thead>
+        <tbody>${linhas}</tbody>
+      </table>
 
       <div style="margin-top:24px;padding-top:12px;border-top:1px solid #e8ddd0;font-size:10px;color:#a09284;text-align:center;">
         Mamma Mia Control — Gestão Inteligente de Operações • © 2026 Mamma Mia Salgados
