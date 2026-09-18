@@ -3973,6 +3973,11 @@ function _comprasRenderizarCampo(campo, dados) {
 }
 
 function _comprasRenderizarFormulario(dados) {
+  // Só compra já existente (tem ID) pode ter histórico — "Nova compra"
+  // não tem nada ainda pra buscar. Preenchido depois, de forma
+  // assíncrona, por comprasAbrirModal (ver _comprasBuscarHistorico).
+  const historicoPlaceholder = dados.id ? `<div id="compra-historico" style="margin-bottom:1rem;"><p style="color:var(--text-muted);font-size:0.8rem;">Carregando histórico...</p></div>` : '';
+
   const secoesUnicas = [...new Set(COMPRAS_CAMPOS_FORM.map(c => c.secao))];
   const secoesHtml = secoesUnicas.map(secao => `
     <div class="compra-secao">
@@ -3992,6 +3997,7 @@ function _comprasRenderizarFormulario(dados) {
   `).join('');
 
   return `
+    ${historicoPlaceholder}
     ${secoesHtml}
     <div class="compra-secao">
       <h4 style="margin:1rem 0 0.5rem;font-size:0.78rem;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.03em;">Documentos</h4>
@@ -4003,6 +4009,50 @@ function _comprasRenderizarFormulario(dados) {
       <button type="button" class="btn btn-primary" id="compra-form-salvar">Salvar</button>
     </div>
   `;
+}
+
+// ---------- Histórico / Timeline (Fase 2) ----------
+
+async function _comprasBuscarHistorico(id) {
+  const resposta = await fetch(COMPRAS_EXEC_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body: JSON.stringify({ acao: 'historico', id }),
+  });
+  const resultado = await resposta.json();
+  if (!resultado.ok) throw new Error(resultado.erro || 'Erro ao buscar histórico.');
+  return resultado.historico || [];
+}
+
+function _comprasRenderizarHistorico(historico) {
+  const area = document.getElementById('compra-historico');
+  if (!area) return; // modal já foi fechado/trocado antes da resposta chegar
+
+  if (!historico.length) {
+    area.innerHTML = '<p style="color:var(--text-muted);font-size:0.8rem;">Sem histórico ainda.</p>';
+    return;
+  }
+
+  const itens = historico.map(h => {
+    const data = new Date(h.timestamp);
+    const dataTexto = isNaN(data.getTime())
+      ? String(h.timestamp)
+      : data.toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+    return `<div style="display:flex;gap:0.6rem;font-size:0.82rem;padding:0.3rem 0;border-bottom:1px solid var(--card-border);">
+      <span style="color:var(--text-secondary);white-space:nowrap;">${_comprasEscaparHtml(dataTexto)}</span>
+      <span>${_comprasEscaparHtml(h.status)}</span>
+    </div>`;
+  }).join('');
+
+  area.innerHTML = `
+    <h4 style="margin:0 0 0.4rem;font-size:0.78rem;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.03em;">Histórico</h4>
+    <div>${itens}</div>
+  `;
+}
+
+function _comprasRenderizarHistoricoErro() {
+  const area = document.getElementById('compra-historico');
+  if (area) area.innerHTML = '<p style="color:var(--text-muted);font-size:0.8rem;">Não foi possível carregar o histórico.</p>';
 }
 
 function _comprasColetarValoresFormulario() {
@@ -4070,6 +4120,17 @@ function comprasAbrirModal(registro) {
 
   _comprasAtualizarCondicionais();
   openModal(document.getElementById('modal-compra'));
+
+  // Histórico busca depois de abrir o modal (não trava a abertura
+  // esperando rede) — só pra compra já existente, e o resultado só é
+  // aplicado se o placeholder #compra-historico ainda existir na tela
+  // (ver _comprasRenderizarHistorico) — evita escrever num modal que já
+  // foi fechado ou trocado por outra compra antes da resposta voltar.
+  if (registro) {
+    _comprasBuscarHistorico(registro.id)
+      .then(_comprasRenderizarHistorico)
+      .catch(_comprasRenderizarHistoricoErro);
+  }
 }
 
 async function comprasSalvar() {

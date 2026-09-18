@@ -1,13 +1,15 @@
 /**
- * MÓDULO COMPRAS — Fase 1 (ver
- * docs/superpowers/specs/2026-09-18-compras-fase1-design.md no repo
+ * MÓDULO COMPRAS — Fase 1 + Fase 2 (ver
+ * docs/superpowers/specs/2026-09-18-compras-fase1-design.md e
+ * docs/superpowers/specs/2026-09-20-compras-fase2-design.md, no repo
  * controle-agua-mamma-mia).
  *
  * Backend puro (sem tela própria) — o registro/edição de compras
  * acontece dentro do próprio Mamma Mia Control (painel Vercel), que
  * escreve aqui via fetch POST no /exec deste projeto (mesmo padrão do
  * mural de Avisos). A leitura (dashboard, lista, KPIs) é pelo CSV
- * publicado da aba COMPRAS, não passa por este arquivo.
+ * publicado da aba COMPRAS, não passa por este arquivo — só o histórico
+ * de uma compra específica (Fase 2) é pedido direto aqui via doPost.
  *
  * ─────────────────────────── COMO INSTALAR (do zero) ───────────────────────────
  * 1) Crie uma planilha nova no Google Sheets (ex.: "Compras — Mamma Mia Control").
@@ -23,14 +25,27 @@
  *    DATA RECEBIMENTO | RECEBIDO POR | CONFERIDO | CONDIÇÃO MATERIAL |
  *    NF | COMPROVANTE | FOTO
  *
+ * 2.1) NOVO NA FASE 2: crie uma segunda aba, chamada exatamente
+ *      "COMPRAS_HISTORICO", com estes 3 cabeçalhos na linha 1:
+ *
+ *      ID_COMPRA | TIMESTAMP | STATUS
+ *
+ *      (Se você já tinha só a Fase 1 instalada, é só adicionar essa aba —
+ *      não precisa mexer em nada da aba COMPRAS.)
+ *
  * 3) Extensões > Apps Script, apague o conteúdo do Code.gs padrão e cole
  *    este arquivo inteiro no lugar.
  * 4) Implantar > Nova implantação > tipo "App da Web":
  *      - Executar como: Eu (sua conta)
  *      - Quem pode acessar: Qualquer pessoa
  *    Implantar. Copie a URL que termina em /exec — é o COMPRAS_EXEC_URL.
+ *    (Se já tinha uma implantação da Fase 1: Implantar > Gerenciar
+ *    implantações > ✏️ editar > Nova versão > Implantar — mesma URL de
+ *    antes, não precisa trocar nada no painel.)
  * 5) Arquivo > Compartilhar > Publicar na Web, escolha a aba "COMPRAS",
- *    formato CSV, Publicar. Copie esse link — é o COMPRAS_CSV_URL.
+ *    formato CSV, Publicar — e marque "Republicar automaticamente quando
+ *    alterações forem feitas" (senão o painel só vê snapshots antigos).
+ *    Copie esse link — é o COMPRAS_CSV_URL.
  * 6) Me manda os dois links (exec e CSV) que eu termino de configurar o
  *    painel (faltam só essas duas constantes no src/main.js).
  *
@@ -38,6 +53,18 @@
  * primeira vez que alguém anexar algo — não precisa criar nada no Drive
  * antes. Fica em "Compras/<ano>/<mês>/<ID da compra>/", na raiz do Drive
  * da conta que fez a implantação.
+ *
+ * ────────────────────── FASE 2: alertas automáticos (opcional) ──────────────────────
+ * Pra ligar o resumo diário de atrasos/reembolsos no Telegram:
+ * 1) Configurações do projeto (ícone de engrenagem) > Propriedades do
+ *    script > adicione TELEGRAM_TOKEN e TELEGRAM_CHAT_ID — os MESMOS
+ *    valores que você já tem configurados no bot de Água/OS (é só copiar
+ *    de lá, o alerta de Compras cai no mesmo chat).
+ * 2) Rode a função `testarTelegram` (menu suspenso ao lado de ▶️ Executar)
+ *    — deve chegar uma mensagem de teste. Se não chegar, revise o passo 1.
+ * 3) Rode a função `configurarAlertasCompras` UMA VEZ — liga o resumo
+ *    diário às 8h e manda uma confirmação no Telegram. Não precisa rodar
+ *    de novo depois disso (nem ao reimplantar).
  */
 
 var ABA_COMPRAS = "COMPRAS";
@@ -290,6 +317,13 @@ function registrarCompra(dados) {
     preencherAnexosNovos(linha, mapa, dados, id);
 
     sheet.appendRow(linha);
+
+    // Só grava a primeira entrada do histórico se já veio um status
+    // escolhido na criação — sem isso, fica sem histórico até a
+    // primeira edição que definir um status (ver registrarEntradaHistorico).
+    var statusInicial = (dados.statusCompra || "").toString().trim();
+    if (statusInicial) registrarEntradaHistorico(id, statusInicial);
+
     return { ok: true, id: id };
   } catch (erro) {
     Logger.log("Erro em registrarCompra: " + erro);
@@ -319,9 +353,15 @@ function editarCompra(id, dados) {
     var mapa = mapaColunas(sheet);
     var colId = colunaObrigatoria(mapa, ABA_COMPRAS, "ID");
 
+    var colStatusCompra = mapa["STATUS COMPRA"];
+
     var dadosPlanilha = sheet.getDataRange().getValues();
     for (var i = 1; i < dadosPlanilha.length; i++) {
       if ((dadosPlanilha[i][colId - 1] || "").toString().trim() !== id) continue;
+
+      // Lido ANTES de sobrescrever a linha — é o que permite comparar
+      // "mudou de verdade" com o status novo logo abaixo.
+      var statusAntigo = colStatusCompra ? (dadosPlanilha[i][colStatusCompra - 1] || "").toString().trim() : "";
 
       var linha = dadosPlanilha[i].slice();
       preencherCamposComuns(linha, mapa, dados);
@@ -329,6 +369,13 @@ function editarCompra(id, dados) {
       preencherAnexosNovos(linha, mapa, dados, id);
 
       sheet.getRange(i + 1, 1, 1, linha.length).setValues([linha]);
+
+      // Só grava uma entrada nova no histórico quando o status REALMENTE
+      // mudou — editar outros campos (valor, fornecedor, anexo...) sem
+      // tocar no status não gera entrada.
+      var statusNovo = (dados.statusCompra || "").toString().trim();
+      if (statusNovo && statusNovo !== statusAntigo) registrarEntradaHistorico(id, statusNovo);
+
       return { ok: true };
     }
     throw new Error("Compra não encontrada.");
@@ -337,6 +384,208 @@ function editarCompra(id, dados) {
     throw erro;
   } finally {
     lock.releaseLock();
+  }
+}
+
+// ───────────────────────── Histórico / Timeline (Fase 2) ─────────────────────────
+// Aba COMPRAS_HISTORICO (cabeçalhos: ID_COMPRA | TIMESTAMP | STATUS) — um
+// registro por MUDANÇA de status (não por edição de campo qualquer). Ver
+// docs/superpowers/specs/2026-09-20-compras-fase2-design.md.
+
+var ABA_COMPRAS_HISTORICO = "COMPRAS_HISTORICO";
+
+function obterAbaHistorico() {
+  return SpreadsheetApp.getActiveSpreadsheet().getSheetByName(ABA_COMPRAS_HISTORICO);
+}
+
+// Silenciosa se a aba ainda não existir (Fase 2 pode não estar instalada
+// ainda) ou se algo falhar — histórico é um extra, nunca pode travar o
+// registro/edição principal da compra, que já foi salvo antes desta
+// chamada.
+function registrarEntradaHistorico(idCompra, status) {
+  try {
+    var aba = obterAbaHistorico();
+    if (!aba) return;
+    var mapa = mapaColunas(aba);
+    var colId = mapa["ID_COMPRA"];
+    var colTimestamp = mapa["TIMESTAMP"];
+    var colStatus = mapa["STATUS"];
+    if (!colId || !colTimestamp || !colStatus) return;
+
+    var linha = new Array(aba.getLastColumn()).fill("");
+    linha[colId - 1] = idCompra;
+    linha[colTimestamp - 1] = new Date();
+    linha[colStatus - 1] = status;
+    aba.appendRow(linha);
+  } catch (erro) {
+    Logger.log("Erro ao registrar histórico da compra " + idCompra + ": " + erro);
+  }
+}
+
+// [] se a aba não existir, o cabeçalho estiver incompleto, ou não houver
+// nenhuma entrada — nunca lança erro (o formulário de edição precisa
+// continuar abrindo mesmo sem histórico). Mais antigo primeiro.
+function obterHistorico(idCompra) {
+  try {
+    var aba = obterAbaHistorico();
+    if (!aba) return [];
+    var mapa = mapaColunas(aba);
+    var colId = mapa["ID_COMPRA"];
+    var colTimestamp = mapa["TIMESTAMP"];
+    var colStatus = mapa["STATUS"];
+    if (!colId || !colTimestamp || !colStatus) return [];
+
+    var dados = aba.getDataRange().getValues();
+    var historico = [];
+    for (var i = 1; i < dados.length; i++) {
+      if ((dados[i][colId - 1] || "").toString().trim() !== idCompra) continue;
+      var ts = dados[i][colTimestamp - 1];
+      historico.push({
+        status: dados[i][colStatus - 1],
+        timestamp: ts instanceof Date ? ts.toISOString() : ts,
+      });
+    }
+    historico.sort(function (a, b) { return new Date(a.timestamp) - new Date(b.timestamp); });
+    return historico;
+  } catch (erro) {
+    Logger.log("Erro ao ler histórico da compra " + idCompra + ": " + erro);
+    return [];
+  }
+}
+
+// ───────────────────────── Alertas automáticos (Fase 2) ─────────────────────────
+// Resumo diário via Telegram — mesmo TELEGRAM_TOKEN/TELEGRAM_CHAT_ID
+// (Propriedades do Script) já usado no bot de água/OS; copie os mesmos
+// dois valores pra cá. Ver docs/superpowers/specs/2026-09-20-compras-
+// fase2-design.md.
+
+function getConfigTelegram() {
+  var props = PropertiesService.getScriptProperties();
+  return {
+    token: props.getProperty("TELEGRAM_TOKEN"),
+    chatId: props.getProperty("TELEGRAM_CHAT_ID"),
+  };
+}
+
+function enviarTelegram(mensagem) {
+  var c = getConfigTelegram();
+  if (!c.token || !c.chatId) {
+    throw new Error("TELEGRAM_TOKEN/TELEGRAM_CHAT_ID não configurados nas Propriedades do Script.");
+  }
+  var url = "https://api.telegram.org/bot" + c.token + "/sendMessage";
+  UrlFetchApp.fetch(url, {
+    method: "post",
+    contentType: "application/json",
+    payload: JSON.stringify({ chat_id: c.chatId, text: mensagem }),
+  });
+}
+
+/** Roda esta primeiro, isolada, pra confirmar que TELEGRAM_TOKEN/TELEGRAM_CHAT_ID estão certos. */
+function testarTelegram() {
+  enviarTelegram("🧪 Teste de conexão — Compras. Se você recebeu isso, o token e o chat ID estão certos.");
+}
+
+/**
+ * Roda esta UMA VEZ pra ligar o resumo diário (8h) — remove qualquer
+ * trigger antigo da mesma função antes de criar um novo, pra rodar essa
+ * configuração de novo nunca duplicar o agendamento.
+ */
+function configurarAlertasCompras() {
+  ScriptApp.getProjectTriggers().forEach(function (t) {
+    if (t.getHandlerFunction() === "verificarAlertasCompras") ScriptApp.deleteTrigger(t);
+  });
+  ScriptApp.newTrigger("verificarAlertasCompras").timeBased().atHour(8).everyDays(1).create();
+  enviarTelegram("⏱️ Alertas automáticos de Compras configurados — todo dia às 8h, se tiver entrega atrasada ou reembolso pendente, você recebe um resumo aqui.");
+}
+
+// "dd/mm/aaaa" OU um objeto Date (o Sheets converte texto de data
+// sozinho em algumas colunas, dependendo de como foi digitado) -> Date
+// local zerado na hora, ou null se não reconhecer nenhum dos dois formatos.
+function parseDataBR(valor) {
+  if (!valor) return null;
+  if (valor instanceof Date) {
+    var d = new Date(valor);
+    d.setHours(0, 0, 0, 0);
+    return d;
+  }
+  var partes = valor.toString().split("/");
+  if (partes.length !== 3) return null;
+  return new Date(Number(partes[2]), Number(partes[1]) - 1, Number(partes[0]));
+}
+
+/**
+ * Chamada pelo trigger diário (ver configurarAlertasCompras) — monta um
+ * resumo só com o que precisa de atenção HOJE (entregas atrasadas,
+ * reembolsos pendentes) e manda uma mensagem só. Sem nada pra avisar,
+ * fica em silêncio (não manda "tudo certo" todo dia). Erro aqui fica só
+ * no log de Execuções — não existe alerta-de-erro-do-alerta.
+ */
+function verificarAlertasCompras() {
+  try {
+    var sheet = obterAbaCompras();
+    var mapa = mapaColunas(sheet);
+    var dados = sheet.getDataRange().getValues();
+
+    var colId = mapa["ID"];
+    var colItem = mapa["ITEM"];
+    var colUnidade = mapa["UNIDADE"];
+    var colStatus = mapa["STATUS COMPRA"];
+    var colPrevisao = mapa["PREVISÃO ENTREGA"];
+    var colValorTotal = mapa["VALOR TOTAL"];
+    var colPagoPor = mapa["PAGO POR"];
+    var colReembolsoNecessario = mapa["REEMBOLSO NECESSÁRIO"];
+    var colStatusReembolso = mapa["STATUS REEMBOLSO"];
+    var colDataCompra = mapa["DATA COMPRA"];
+    var colDataSolicitacao = mapa["DATA SOLICITAÇÃO"];
+
+    var hoje = new Date();
+    hoje.setHours(0, 0, 0, 0);
+
+    var atrasadas = [];
+    var reembolsosPendentes = [];
+
+    for (var i = 1; i < dados.length; i++) {
+      var linha = dados[i];
+      var id = colId ? (linha[colId - 1] || "").toString().trim() : "";
+      if (!id) continue;
+
+      var status = colStatus ? (linha[colStatus - 1] || "").toString().trim() : "";
+
+      if (colPrevisao && status !== "✅ Entregue" && status !== "❌ Cancelado") {
+        var previsao = parseDataBR(linha[colPrevisao - 1]);
+        if (previsao && previsao < hoje) {
+          atrasadas.push(
+            id + " — " + (colItem ? linha[colItem - 1] : "") +
+            (colUnidade && linha[colUnidade - 1] ? " (" + linha[colUnidade - 1] + ")" : "") +
+            " — previsão " + Utilities.formatDate(previsao, "GMT-3", "dd/MM/yyyy")
+          );
+        }
+      }
+
+      var reembolsoNecessario = colReembolsoNecessario ? (linha[colReembolsoNecessario - 1] || "").toString().trim() : "";
+      var statusReembolso = colStatusReembolso ? (linha[colStatusReembolso - 1] || "").toString().trim() : "";
+      if (reembolsoNecessario === "Sim" && statusReembolso !== "Reembolsado") {
+        var dataRef = parseDataBR(colDataCompra ? linha[colDataCompra - 1] : "") || parseDataBR(colDataSolicitacao ? linha[colDataSolicitacao - 1] : "");
+        var dias = dataRef ? Math.floor((hoje - dataRef) / 86400000) : null;
+        var valor = colValorTotal ? linha[colValorTotal - 1] : "";
+        var pagoPor = colPagoPor ? linha[colPagoPor - 1] : "";
+        reembolsosPendentes.push(
+          id +
+          (valor ? " — R$ " + Number(valor).toFixed(2).replace(".", ",") : "") +
+          (pagoPor ? " — " + pagoPor : "") +
+          (dias != null ? " — pendente há " + dias + " dia" + (dias === 1 ? "" : "s") : "")
+        );
+      }
+    }
+
+    if (atrasadas.length === 0 && reembolsosPendentes.length === 0) return;
+
+    var partes = ["📦 Resumo diário de Compras — " + Utilities.formatDate(hoje, "GMT-3", "dd/MM")];
+    if (atrasadas.length) partes.push("\n🚨 Entregas atrasadas (" + atrasadas.length + ")\n" + atrasadas.join("\n"));
+    if (reembolsosPendentes.length) partes.push("\n💰 Reembolsos pendentes (" + reembolsosPendentes.length + ")\n" + reembolsosPendentes.join("\n"));
+    enviarTelegram(partes.join("\n"));
+  } catch (erro) {
+    Logger.log("Erro em verificarAlertasCompras: " + erro);
   }
 }
 
@@ -351,6 +600,7 @@ function doPost(e) {
     var dados = JSON.parse(e.postData.contents);
     if (dados.acao === "criar") return respostaJson(registrarCompra(dados));
     if (dados.acao === "editar") return respostaJson(editarCompra(dados.id, dados));
+    if (dados.acao === "historico") return respostaJson({ ok: true, historico: obterHistorico(dados.id) });
     throw new Error("Ação inválida: " + dados.acao);
   } catch (erro) {
     return respostaJson({ ok: false, erro: erro.message });
