@@ -39,7 +39,7 @@ const DEDETIZACAO_EXEC_URL = 'https://script.google.com/macros/s/AKfycbzboegVJXJ
 // implantação), troca estas duas linhas pelos links reais; até lá a aba
 // Compras mostra um aviso em vez de tentar buscar um CSV que não existe.
 const COMPRAS_CSV_URL = 'COLE_AQUI_A_URL_DO_CSV_DE_COMPRAS';
-const COMPRAS_EXEC_URL = 'COLE_AQUI_A_URL_DO_EXEC_DE_COMPRAS';
+const COMPRAS_EXEC_URL = 'https://script.google.com/macros/s/AKfycbxg34g07LP6huO-f9AA4FCyOrg-xgKRTheRWxKrZyJfiTlj3qJCFZCzkl7drhs5jv3b/exec';
 
 // --- SINCRONIZAÇÃO MÓDULO ÁGUA (gviz) ---
 const AGUA_SPREADSHEET_ID = '1tixTJ74aaEo-EuCfTFl-efWOT7p-TIgN0su8NzX8aKw';
