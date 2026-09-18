@@ -3841,18 +3841,10 @@ function _comprasCalcularKPIs(registros) {
   return { valorMes, comprasRealizadas, aguardando, atrasadas, porUnidade };
 }
 
-function _comprasAplicarFiltros(registros) {
+// Só o filtro de Período (usado sozinho pelos 3 primeiros gráficos do
+// dashboard gerencial, que ignoram Unidade/Categoria/Status/Fornecedor).
+function _comprasFiltrarPorPeriodo(registros) {
   return registros.filter(r => {
-    if (comprasFiltros.unidade !== 'TODAS' && r.unidade !== comprasFiltros.unidade) return false;
-    if (comprasFiltros.categoria !== 'TODAS') {
-      // Categoria agora é por ITEM (uma compra pode ter vários) — entra
-      // no filtro se QUALQUER item dela bater com a categoria escolhida.
-      const itensDaCompra = comprasItensPorCompra[r.id] || [];
-      if (!itensDaCompra.some(it => it.categoria === comprasFiltros.categoria)) return false;
-    }
-    if (comprasFiltros.status !== 'TODAS' && r.statusCompra !== comprasFiltros.status) return false;
-    if (comprasFiltros.fornecedor !== 'TODOS' && r.fornecedor !== comprasFiltros.fornecedor) return false;
-
     if (comprasFiltros.periodo === 'TODOS') return true;
 
     const dataRef = _comprasParseData(r.dataCompra) || _comprasParseData(r.dataSolicitacao);
@@ -3874,6 +3866,76 @@ function _comprasAplicarFiltros(registros) {
     }
     return true;
   });
+}
+
+function _comprasAplicarFiltros(registros) {
+  return _comprasFiltrarPorPeriodo(registros).filter(r => {
+    if (comprasFiltros.unidade !== 'TODAS' && r.unidade !== comprasFiltros.unidade) return false;
+    if (comprasFiltros.categoria !== 'TODAS') {
+      // Categoria agora é por ITEM (uma compra pode ter vários) — entra
+      // no filtro se QUALQUER item dela bater com a categoria escolhida.
+      const itensDaCompra = comprasItensPorCompra[r.id] || [];
+      if (!itensDaCompra.some(it => it.categoria === comprasFiltros.categoria)) return false;
+    }
+    if (comprasFiltros.status !== 'TODAS' && r.statusCompra !== comprasFiltros.status) return false;
+    if (comprasFiltros.fornecedor !== 'TODOS' && r.fornecedor !== comprasFiltros.fornecedor) return false;
+    return true;
+  });
+}
+
+const COMPRAS_MESES_ABREV = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+
+// Dashboard gerencial (Fase 3). registrosFiltradosPorPeriodo já passou por
+// _comprasAplicarFiltros ignorando Unidade/Categoria/Status/Fornecedor (só
+// respeita Período) — usado nos 3 primeiros gráficos. Evolução Mensal usa
+// todosRegistros, ignorando inclusive o Período (sempre últimos 6 meses
+// corridos). Todos os 4 excluem "❌ Cancelado".
+function _comprasDadosGraficos(registrosFiltradosPorPeriodo, todosRegistros) {
+  const validos = registrosFiltradosPorPeriodo.filter(r => r.statusCompra !== '❌ Cancelado');
+
+  const porUnidade = { TC: 0, YUKA: 0, CD: 0 };
+  validos.forEach(r => {
+    if (Object.prototype.hasOwnProperty.call(porUnidade, r.unidade)) porUnidade[r.unidade] += r.valorTotal || 0;
+  });
+
+  // Por categoria: soma por ITEM (comprasItensPorCompra), não por nota —
+  // uma compra com itens de categorias diferentes contribui pra cada
+  // categoria correspondente (spec: itens-multiplos, "Impacto na Fase 3").
+  const categoriaTotais = {};
+  validos.forEach(r => {
+    (comprasItensPorCompra[r.id] || []).forEach(item => {
+      if (!item.categoria) return;
+      categoriaTotais[item.categoria] = (categoriaTotais[item.categoria] || 0) + (item.valorTotal || 0);
+    });
+  });
+  const porCategoria = Object.entries(categoriaTotais)
+    .sort((a, b) => b[1] - a[1])
+    .map(([categoria, valor]) => ({ categoria, valor }));
+
+  const fornecedorTotais = {};
+  validos.forEach(r => {
+    if (!r.fornecedor) return;
+    fornecedorTotais[r.fornecedor] = (fornecedorTotais[r.fornecedor] || 0) + (r.valorTotal || 0);
+  });
+  const porFornecedor = Object.entries(fornecedorTotais)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 5)
+    .map(([fornecedor, valor]) => ({ fornecedor, valor }));
+
+  const hoje = new Date();
+  const mesesEvolucao = [];
+  for (let i = 5; i >= 0; i--) {
+    const ref = new Date(hoje.getFullYear(), hoje.getMonth() - i, 1);
+    mesesEvolucao.push({ mes: ref.getMonth(), ano: ref.getFullYear(), label: `${COMPRAS_MESES_ABREV[ref.getMonth()]}/${String(ref.getFullYear()).slice(-2)}`, valor: 0 });
+  }
+  todosRegistros.filter(r => r.statusCompra !== '❌ Cancelado').forEach(r => {
+    const dataRef = _comprasParseData(r.dataCompra) || _comprasParseData(r.dataSolicitacao);
+    if (!dataRef) return;
+    const alvo = mesesEvolucao.find(m => m.mes === dataRef.getMonth() && m.ano === dataRef.getFullYear());
+    if (alvo) alvo.valor += r.valorTotal || 0;
+  });
+
+  return { porUnidade, porCategoria, porFornecedor, evolucaoMensal: mesesEvolucao };
 }
 
 function _comprasIsoParaBR(iso) {
@@ -3997,6 +4059,14 @@ function _comprasRenderizar() {
         <tbody>${linhasTabela}</tbody>
       </table>
     </div>
+
+    <div class="panel-header" style="margin-top:1.8rem;"><h3>📊 Dashboard Gerencial</h3></div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:16px;">
+      <div class="panel-card"><h3>💰 Gastos por Unidade</h3><div class="chart-wrapper"><canvas id="grafico-compras-unidade"></canvas></div></div>
+      <div class="panel-card"><h3>🏷️ Gastos por Categoria</h3><div class="chart-wrapper"><canvas id="grafico-compras-categoria"></canvas></div></div>
+      <div class="panel-card"><h3>🏆 Principais Fornecedores</h3><div class="chart-wrapper"><canvas id="grafico-compras-fornecedores"></canvas></div></div>
+      <div class="panel-card"><h3>📈 Evolução Mensal</h3><div class="chart-wrapper"><canvas id="grafico-compras-evolucao"></canvas></div></div>
+    </div>
   `;
 
   document.getElementById('compras-filtro-unidade').value = comprasFiltros.unidade;
@@ -4018,6 +4088,21 @@ function _comprasRenderizar() {
       if (registro) comprasAbrirModal(registro);
     });
   });
+
+  const registrosPeriodo = _comprasFiltrarPorPeriodo(comprasRegistros);
+  const dadosGraficos = _comprasDadosGraficos(registrosPeriodo, comprasRegistros);
+
+  const ctxUnidade = document.getElementById('grafico-compras-unidade');
+  if (ctxUnidade) new Chart(ctxUnidade, { type: 'bar', data: { labels: ['TC', 'YUKA', 'CD'], datasets: [{ label: 'Gasto', data: [dadosGraficos.porUnidade.TC, dadosGraficos.porUnidade.YUKA, dadosGraficos.porUnidade.CD] }] }, options: { responsive: true, maintainAspectRatio: false } });
+
+  const ctxCategoria = document.getElementById('grafico-compras-categoria');
+  if (ctxCategoria) new Chart(ctxCategoria, { type: 'bar', data: { labels: dadosGraficos.porCategoria.map(c => c.categoria), datasets: [{ label: 'Gasto', data: dadosGraficos.porCategoria.map(c => c.valor) }] }, options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false } });
+
+  const ctxFornecedores = document.getElementById('grafico-compras-fornecedores');
+  if (ctxFornecedores) new Chart(ctxFornecedores, { type: 'bar', data: { labels: dadosGraficos.porFornecedor.map(f => f.fornecedor), datasets: [{ label: 'Gasto', data: dadosGraficos.porFornecedor.map(f => f.valor) }] }, options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false } });
+
+  const ctxEvolucao = document.getElementById('grafico-compras-evolucao');
+  if (ctxEvolucao) new Chart(ctxEvolucao, { type: 'bar', data: { labels: dadosGraficos.evolucaoMensal.map(m => m.label), datasets: [{ label: 'Gasto', data: dadosGraficos.evolucaoMensal.map(m => m.valor) }] }, options: { responsive: true, maintainAspectRatio: false } });
 }
 
 // ---------- Formulário único (criar/editar) ----------
