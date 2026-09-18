@@ -34,12 +34,14 @@ const CONFIG_RENDIMENTO_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PAC
 const AVISOS_EXEC_URL = 'https://script.google.com/macros/s/AKfycbzHvvPZzBDSB730gShVCl7CPQb23h37w8k8B-cY8n1RI-NkBJzp0eUP5m-rbtj3nGdwpw/exec';
 const INSUMOS_EXEC_URL = 'https://script.google.com/macros/s/AKfycbxtrM875Sb92YmXJRQUyTTW1fYgEIyDYwg_D6FJqlQHcsyiPvg8frozc2nug8WbTJzM/exec';
 const DEDETIZACAO_EXEC_URL = 'https://script.google.com/macros/s/AKfycbzboegVJXJT55v2iOPr51DvgHFRShIN-dLnZzhGdfpTh1pnohV92k9LiIn6M6jE9ekt/exec';
-// MÓDULO COMPRAS (compras-appsscript) — ainda não publicado. Depois de
-// seguir os passos do topo de compras-appsscript/Code.gs (planilha +
-// implantação), troca estas duas linhas pelos links reais; até lá a aba
-// Compras mostra um aviso em vez de tentar buscar um CSV que não existe.
+// MÓDULO COMPRAS (compras-appsscript).
 const COMPRAS_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTQ3-2e6ttLWAuBJq-eDbTFbp5QqTQ9c_h1-JhA4FmZkkmumebbS_wDMDQtT1-LzdSsrPWzrVmNN6sG/pub?output=csv';
 const COMPRAS_EXEC_URL = 'https://script.google.com/macros/s/AKfycbxg34g07LP6huO-f9AA4FCyOrg-xgKRTheRWxKrZyJfiTlj3qJCFZCzkl7drhs5jv3b/exec';
+// Aba nova (reestruturação de itens múltiplos) — publica como CSV depois
+// de criar a aba COMPRAS_ITENS (ver instruções no topo de
+// compras-appsscript/Code.gs) e troca esta linha pelo link real; até lá
+// a aba Compras mostra um aviso em vez de tentar buscar um CSV que não existe.
+const COMPRAS_ITENS_CSV_URL = 'COLE_AQUI_A_URL_DO_CSV_DE_COMPRAS_ITENS';
 
 // --- SINCRONIZAÇÃO MÓDULO ÁGUA (gviz) ---
 const AGUA_SPREADSHEET_ID = '1tixTJ74aaEo-EuCfTFl-efWOT7p-TIgN0su8NzX8aKw';
@@ -3619,20 +3621,18 @@ function previsaoComprarGerarPDF(estado) {
 // {acao: "criar"|"editar"}), igual o mural de Avisos — não existe tela
 // separada pra celular, o formulário único mora dentro deste painel.
 
-// Campos lidos do CSV — superset dos campos do formulário (inclui ID,
-// TIMESTAMP, VALOR TOTAL e os 3 anexos, que não são digitados à mão).
+// Campos lidos do CSV de COMPRAS — cabeçalho da compra. Desde a
+// reestruturação de itens múltiplos (ver
+// docs/superpowers/specs/2026-09-21-compras-itens-multiplos-design.md),
+// categoria/item/descrição/quantidade/unidade/valor unitário SAÍRAM
+// daqui — cada compra pode ter vários itens, lidos à parte do CSV de
+// COMPRAS_ITENS (ver COMPRAS_ITENS_CAMPOS_CSV mais abaixo).
 const COMPRAS_CAMPOS_CSV = [
   { chave: 'id', coluna: 'ID' },
   { chave: 'timestamp', coluna: 'TIMESTAMP' },
   { chave: 'unidade', coluna: 'UNIDADE' },
   { chave: 'categoriaSolicitante', coluna: 'CATEGORIA SOLICITANTE' },
   { chave: 'nomeSolicitante', coluna: 'NOME SOLICITANTE' },
-  { chave: 'categoria', coluna: 'CATEGORIA' },
-  { chave: 'item', coluna: 'ITEM' },
-  { chave: 'descricao', coluna: 'DESCRIÇÃO' },
-  { chave: 'quantidade', coluna: 'QUANTIDADE', numero: true },
-  { chave: 'unidadeMedida', coluna: 'UNIDADE MEDIDA' },
-  { chave: 'valorUnitario', coluna: 'VALOR UNITÁRIO', numero: true },
   { chave: 'valorTotal', coluna: 'VALOR TOTAL', numero: true },
   { chave: 'fornecedor', coluna: 'FORNECEDOR' },
   { chave: 'linkCompra', coluna: 'LINK COMPRA' },
@@ -3653,6 +3653,19 @@ const COMPRAS_CAMPOS_CSV = [
   { chave: 'foto', coluna: 'FOTO' },
 ];
 
+// Campos lidos do CSV de COMPRAS_ITENS — um item por linha, ligado à
+// compra por idCompra.
+const COMPRAS_ITENS_CAMPOS_CSV = [
+  { chave: 'idCompra', coluna: 'ID_COMPRA' },
+  { chave: 'categoria', coluna: 'CATEGORIA' },
+  { chave: 'item', coluna: 'ITEM' },
+  { chave: 'descricao', coluna: 'DESCRIÇÃO' },
+  { chave: 'quantidade', coluna: 'QUANTIDADE', numero: true },
+  { chave: 'unidadeMedida', coluna: 'UNIDADE MEDIDA' },
+  { chave: 'valorUnitario', coluna: 'VALOR UNITÁRIO', numero: true },
+  { chave: 'valorTotal', coluna: 'VALOR TOTAL', numero: true },
+];
+
 const COMPRAS_STATUS_OPCOES = [
   '🟣 Solicitação registrada',
   '🟠 Cotação',
@@ -3663,23 +3676,24 @@ const COMPRAS_STATUS_OPCOES = [
   '❌ Cancelado',
 ];
 
-// Campos editáveis do formulário único (criar/editar) — fonte única pra
-// montar a tela E coletar os valores no salvar. `secao` agrupa
-// visualmente; `condicional(dados)` esconde o campo quando devolve false
-// (reavaliado a cada mudança no formulário, ver _comprasAtualizarCondicionais).
+// Compartilhadas entre os itens do formulário e o filtro de Categoria da
+// lista — só existem aqui (não são mais um campo de COMPRAS_CAMPOS_FORM,
+// já que Categoria virou um campo por ITEM, não da compra inteira).
+const COMPRAS_CATEGORIAS_OPCOES = ['EPI', 'Manutenção', 'Produção', 'Qualidade', 'Higiene e Limpeza', 'Estrutura', 'Refeitório', 'Escritório', 'TI', 'Uniforme', 'Segurança do Trabalho', 'Ferramentas', 'Equipamentos', 'Peças', 'Outros'];
+const COMPRAS_UNIDADES_MEDIDA_OPCOES = ['UN', 'PCT', 'CX', 'KG', 'L', 'M', 'PAR', 'KIT'];
+
+// Campos editáveis do CABEÇALHO da compra no formulário único (criar/
+// editar) — fonte única pra montar a tela E coletar os valores no
+// salvar. `secao` agrupa visualmente; `condicional(dados)` esconde o
+// campo quando devolve false (reavaliado a cada mudança no formulário,
+// ver _comprasAtualizarCondicionais). Os itens (Categoria/Item/
+// Descrição/Quantidade/Unidade/Valor) têm sua própria seção — ver
+// _comprasItensRenderizarSecao — não entram nesta lista.
 const COMPRAS_CAMPOS_FORM = [
   { chave: 'dataSolicitacao', coluna: 'DATA SOLICITAÇÃO', label: 'Data da solicitação', tipo: 'date', secao: 'Identificação' },
   { chave: 'unidade', coluna: 'UNIDADE', label: 'Unidade', tipo: 'select', opcoes: ['TC', 'YUKA', 'CD', 'Geral'], secao: 'Identificação' },
   { chave: 'categoriaSolicitante', coluna: 'CATEGORIA SOLICITANTE', label: 'Origem da necessidade', tipo: 'select', opcoes: ['Qualidade', 'Produção', 'Manutenção', 'RH', 'Administrativo', 'Limpeza', 'Cozinha', 'Outro'], secao: 'Identificação' },
   { chave: 'nomeSolicitante', coluna: 'NOME SOLICITANTE', label: 'Nome do solicitante', tipo: 'text', placeholder: 'Ex.: Carlos - Manutenção', secao: 'Identificação' },
-
-  { chave: 'categoria', coluna: 'CATEGORIA', label: 'Categoria', tipo: 'select', opcoes: ['EPI', 'Manutenção', 'Produção', 'Qualidade', 'Higiene e Limpeza', 'Estrutura', 'Refeitório', 'Escritório', 'TI', 'Uniforme', 'Segurança do Trabalho', 'Ferramentas', 'Equipamentos', 'Peças', 'Outros'], obrigatorio: true, secao: 'Categoria e item' },
-  { chave: 'item', coluna: 'ITEM', label: 'Item / Produto', tipo: 'text', placeholder: 'Ex.: Cinta de teflon para seladora', obrigatorio: true, secao: 'Categoria e item' },
-  { chave: 'descricao', coluna: 'DESCRIÇÃO', label: 'Descrição / especificação', tipo: 'text', placeholder: 'Ex.: 43,5 cm x 0,2 mm', secao: 'Categoria e item' },
-
-  { chave: 'quantidade', coluna: 'QUANTIDADE', label: 'Quantidade', tipo: 'number', secao: 'Quantidade e valores' },
-  { chave: 'unidadeMedida', coluna: 'UNIDADE MEDIDA', label: 'Unidade de medida', tipo: 'select', opcoes: ['UN', 'PCT', 'CX', 'KG', 'L', 'M', 'PAR', 'KIT'], secao: 'Quantidade e valores' },
-  { chave: 'valorUnitario', coluna: 'VALOR UNITÁRIO', label: 'Valor unitário (R$)', tipo: 'number', secao: 'Quantidade e valores' },
 
   { chave: 'fornecedor', coluna: 'FORNECEDOR', label: 'Fornecedor', tipo: 'text', placeholder: 'Ex.: Mercado Livre, Amazon, loja física...', secao: 'Fornecedor' },
   { chave: 'linkCompra', coluna: 'LINK COMPRA', label: 'Link da compra', tipo: 'text', placeholder: 'https://...', secao: 'Fornecedor' },
@@ -3706,9 +3720,18 @@ const COMPRAS_ANEXOS = [
 ];
 
 let comprasRegistros = [];
+// Itens de todas as compras, e o mesmo indexado por ID da compra (ver
+// carregarCompras) — usado pra montar a coluna de Categoria/Itens da
+// lista e pra pré-preencher a seção de itens ao editar uma compra.
+let comprasItensRegistros = [];
+let comprasItensPorCompra = {};
 let comprasFiltros = { unidade: 'TODAS', periodo: 'MES_ATUAL', dataDe: '', dataAte: '', categoria: 'TODAS', status: 'TODAS', fornecedor: 'TODOS' };
 // null = criando uma compra nova; senão, ID da compra sendo editada.
 let comprasEditandoId = null;
+// Contador pra gerar IDs únicos de linha de item dentro do formulário
+// aberto no momento (ver _comprasItensLinhaHtml) — reiniciado a cada
+// abertura do modal (comprasAbrirModal).
+let comprasProximoIndiceItem = 0;
 // Só os anexos TROCADOS na sessão atual de criar/editar (ver
 // _comprasLerArquivoAnexo) — os que não mudam ficam de fora daqui e o
 // backend mantém o que já existia (ver preencherAnexosNovos no Code.gs).
@@ -3765,6 +3788,27 @@ function _comprasParseLinhas(linhas) {
     .filter(r => r.id);
 }
 
+function _comprasParseItensLinhas(linhas) {
+  if (linhas.length < 2) return [];
+  const cabecalho = linhas[0].map(c => c.trim().toUpperCase());
+  const indices = {};
+  COMPRAS_ITENS_CAMPOS_CSV.forEach(campo => { indices[campo.chave] = cabecalho.findIndex(c => c === campo.coluna); });
+
+  return linhas.slice(1)
+    .filter(cols => cols.some(c => c.trim() !== ''))
+    .map(cols => {
+      const registro = {};
+      COMPRAS_ITENS_CAMPOS_CSV.forEach(campo => {
+        const idx = indices[campo.chave];
+        let valor = idx === -1 ? '' : (cols[idx] || '').replace(/"/g, '').trim();
+        if (campo.numero) valor = Number(valor.replace(',', '.')) || 0;
+        registro[campo.chave] = valor;
+      });
+      return registro;
+    })
+    .filter(r => r.idCompra && r.item);
+}
+
 // KPIs sempre sobre o MÊS CORRENTE e o ESTADO ATUAL — independentes dos
 // filtros da lista abaixo (mesma lógica de "resumo fixo no topo" já
 // usada no resto do painel). Data de referência de cada compra: DATA
@@ -3800,7 +3844,12 @@ function _comprasCalcularKPIs(registros) {
 function _comprasAplicarFiltros(registros) {
   return registros.filter(r => {
     if (comprasFiltros.unidade !== 'TODAS' && r.unidade !== comprasFiltros.unidade) return false;
-    if (comprasFiltros.categoria !== 'TODAS' && r.categoria !== comprasFiltros.categoria) return false;
+    if (comprasFiltros.categoria !== 'TODAS') {
+      // Categoria agora é por ITEM (uma compra pode ter vários) — entra
+      // no filtro se QUALQUER item dela bater com a categoria escolhida.
+      const itensDaCompra = comprasItensPorCompra[r.id] || [];
+      if (!itensDaCompra.some(it => it.categoria === comprasFiltros.categoria)) return false;
+    }
     if (comprasFiltros.status !== 'TODAS' && r.statusCompra !== comprasFiltros.status) return false;
     if (comprasFiltros.fornecedor !== 'TODOS' && r.fornecedor !== comprasFiltros.fornecedor) return false;
 
@@ -3842,17 +3891,32 @@ async function carregarCompras() {
   const btnFecharModal = document.getElementById('btn-close-compra-modal');
   if (btnFecharModal && !btnFecharModal._wired) { btnFecharModal._wired = true; btnFecharModal.addEventListener('click', () => closeModal(document.getElementById('modal-compra'))); }
 
-  if (!COMPRAS_CSV_URL || COMPRAS_CSV_URL.indexOf('COLE_AQUI') === 0) {
-    conteudo.innerHTML = '<p style="color:var(--text-muted);">Compras ainda não configurado — falta publicar a aba COMPRAS como CSV e colar o link em src/main.js (COMPRAS_CSV_URL/COMPRAS_EXEC_URL). Ver instruções no topo de compras-appsscript/Code.gs.</p>';
+  const faltaConfigurar = [COMPRAS_CSV_URL, COMPRAS_ITENS_CSV_URL].some(url => !url || url.indexOf('COLE_AQUI') === 0);
+  if (faltaConfigurar) {
+    conteudo.innerHTML = '<p style="color:var(--text-muted);">Compras ainda não configurado — falta publicar as abas COMPRAS e COMPRAS_ITENS como CSV e colar os links em src/main.js (COMPRAS_CSV_URL/COMPRAS_ITENS_CSV_URL/COMPRAS_EXEC_URL). Ver instruções no topo de compras-appsscript/Code.gs.</p>';
     return;
   }
 
   conteudo.innerHTML = '<p style="color:var(--text-muted);">Carregando...</p>';
   try {
-    const resposta = await fetch(COMPRAS_CSV_URL, { cache: 'no-store' });
-    if (!resposta.ok) throw new Error('HTTP ' + resposta.status);
-    const linhas = parseCSVLinhas(await resposta.text());
-    comprasRegistros = _comprasParseLinhas(linhas);
+    const [respostaCompras, respostaItens] = await Promise.all([
+      fetch(COMPRAS_CSV_URL, { cache: 'no-store' }),
+      fetch(COMPRAS_ITENS_CSV_URL, { cache: 'no-store' }),
+    ]);
+    if (!respostaCompras.ok) throw new Error('HTTP ' + respostaCompras.status);
+    if (!respostaItens.ok) throw new Error('HTTP ' + respostaItens.status);
+
+    const linhasCompras = parseCSVLinhas(await respostaCompras.text());
+    const linhasItens = parseCSVLinhas(await respostaItens.text());
+
+    comprasRegistros = _comprasParseLinhas(linhasCompras);
+    comprasItensRegistros = _comprasParseItensLinhas(linhasItens);
+    comprasItensPorCompra = {};
+    comprasItensRegistros.forEach(item => {
+      if (!comprasItensPorCompra[item.idCompra]) comprasItensPorCompra[item.idCompra] = [];
+      comprasItensPorCompra[item.idCompra].push(item);
+    });
+
     _comprasRenderizar();
   } catch (erro) {
     console.error('[COMPRAS]', erro);
@@ -3867,21 +3931,28 @@ function _comprasRenderizar() {
   const kpis = _comprasCalcularKPIs(comprasRegistros);
   const filtrados = _comprasAplicarFiltros(comprasRegistros).sort((a, b) => (b.id || '').localeCompare(a.id || ''));
   const fornecedores = [...new Set(comprasRegistros.map(r => r.fornecedor).filter(Boolean))].sort((a, b) => a.localeCompare(b));
-  const categoriaOpcoes = COMPRAS_CAMPOS_FORM.find(c => c.chave === 'categoria').opcoes;
 
   const linhasTabela = filtrados.length
-    ? filtrados.map(r => `
+    ? filtrados.map(r => {
+        // Categoria agora é por item — mostra a única quando só há 1,
+        // "Várias" quando a compra mistura categorias diferentes (ex.:
+        // papel higiênico + uma caneta na mesma nota).
+        const itensDaCompra = comprasItensPorCompra[r.id] || [];
+        const categoriasUnicas = [...new Set(itensDaCompra.map(it => it.categoria).filter(Boolean))];
+        const categoriaExibida = categoriasUnicas.length === 1 ? categoriasUnicas[0] : (categoriasUnicas.length > 1 ? 'Várias' : '-');
+        const itensExibido = itensDaCompra.length ? `${itensDaCompra.length} ${itensDaCompra.length === 1 ? 'item' : 'itens'}` : '-';
+        return `
         <tr class="compra-linha" data-id="${r.id}" style="cursor:pointer;">
           <td>${r.id}</td>
           <td>${r.dataCompra || r.dataSolicitacao || '-'}</td>
           <td>${r.unidade || '-'}</td>
-          <td>${r.categoria || '-'}</td>
-          <td>${_comprasEscaparHtml(r.item) || '-'}</td>
+          <td>${_comprasEscaparHtml(categoriaExibida)}</td>
+          <td>${itensExibido}</td>
           <td>${r.valorTotal ? _comprasFormatarMoeda(r.valorTotal) : '-'}</td>
           <td>${_comprasEscaparHtml(r.fornecedor) || '-'}</td>
           <td>${r.statusCompra || '-'}</td>
-        </tr>
-      `).join('')
+        </tr>`;
+      }).join('')
     : '<tr><td colspan="8" style="text-align:center;color:var(--text-muted);">Nenhuma compra encontrada.</td></tr>';
 
   conteudo.innerHTML = `
@@ -3908,7 +3979,7 @@ function _comprasRenderizar() {
       <input type="date" id="compras-filtro-data-ate" style="background: rgba(255,255,255,0.95); border: 1px solid var(--card-border); color: var(--text-primary); padding: 0.45rem 0.75rem; border-radius: var(--border-radius-sm); font-family: var(--font-main); font-size: 0.85rem;" ${comprasFiltros.periodo === 'LIVRE' ? '' : 'hidden'}>
       <select id="compras-filtro-categoria" class="filter-select">
         <option value="TODAS">Todas categorias</option>
-        ${categoriaOpcoes.map(c => `<option value="${c}" ${comprasFiltros.categoria === c ? 'selected' : ''}>${c}</option>`).join('')}
+        ${COMPRAS_CATEGORIAS_OPCOES.map(c => `<option value="${c}" ${comprasFiltros.categoria === c ? 'selected' : ''}>${c}</option>`).join('')}
       </select>
       <select id="compras-filtro-status" class="filter-select">
         <option value="TODAS">Todos status</option>
@@ -3922,7 +3993,7 @@ function _comprasRenderizar() {
 
     <div class="table-responsive">
       <table class="modern-table">
-        <thead><tr><th>ID</th><th>Data</th><th>Unidade</th><th>Categoria</th><th>Item</th><th>Valor</th><th>Fornecedor</th><th>Status</th></tr></thead>
+        <thead><tr><th>ID</th><th>Data</th><th>Unidade</th><th>Categoria</th><th>Itens</th><th>Valor</th><th>Fornecedor</th><th>Status</th></tr></thead>
         <tbody>${linhasTabela}</tbody>
       </table>
     </div>
@@ -3972,21 +4043,35 @@ function _comprasRenderizarCampo(campo, dados) {
   </div>`;
 }
 
-function _comprasRenderizarFormulario(dados) {
+function _comprasRenderizarFormulario(dados, itensIniciais) {
   // Só compra já existente (tem ID) pode ter histórico — "Nova compra"
   // não tem nada ainda pra buscar. Preenchido depois, de forma
   // assíncrona, por comprasAbrirModal (ver _comprasBuscarHistorico).
   const historicoPlaceholder = dados.id ? `<div id="compra-historico" style="margin-bottom:1rem;"><p style="color:var(--text-muted);font-size:0.8rem;">Carregando histórico...</p></div>` : '';
 
-  const secoesUnicas = [...new Set(COMPRAS_CAMPOS_FORM.map(c => c.secao))];
-  const secoesHtml = secoesUnicas.map(secao => `
+  const renderizarGrupo = campos => `
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:0.75rem;">
+      ${campos.map(campo => _comprasRenderizarCampo(campo, dados)).join('')}
+    </div>`;
+
+  // "Identificação" vem primeiro, a seção de Itens logo depois (onde
+  // antes ficavam Categoria/Item/Quantidade/Valores, antes da
+  // reestruturação de itens múltiplos), e o resto das seções do
+  // cabeçalho (Fornecedor, Pagamento, Status, Entrega) continua depois.
+  const secaoIdentificacao = COMPRAS_CAMPOS_FORM.filter(c => c.secao === 'Identificação');
+  const outrasSecoes = [...new Set(COMPRAS_CAMPOS_FORM.filter(c => c.secao !== 'Identificação').map(c => c.secao))];
+
+  const htmlIdentificacao = `
+    <div class="compra-secao">
+      <h4 style="margin:1rem 0 0.5rem;font-size:0.78rem;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.03em;">Identificação</h4>
+      ${renderizarGrupo(secaoIdentificacao)}
+    </div>`;
+
+  const htmlOutrasSecoes = outrasSecoes.map(secao => `
     <div class="compra-secao">
       <h4 style="margin:1rem 0 0.5rem;font-size:0.78rem;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.03em;">${secao}</h4>
-      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:0.75rem;">
-        ${COMPRAS_CAMPOS_FORM.filter(c => c.secao === secao).map(campo => _comprasRenderizarCampo(campo, dados)).join('')}
-      </div>
-    </div>
-  `).join('');
+      ${renderizarGrupo(COMPRAS_CAMPOS_FORM.filter(c => c.secao === secao))}
+    </div>`).join('');
 
   const anexosHtml = COMPRAS_ANEXOS.map(anexo => `
     <div class="compra-anexo" style="margin-bottom:0.6rem;">
@@ -3998,7 +4083,9 @@ function _comprasRenderizarFormulario(dados) {
 
   return `
     ${historicoPlaceholder}
-    ${secoesHtml}
+    ${htmlIdentificacao}
+    ${_comprasItensRenderizarSecao(itensIniciais)}
+    ${htmlOutrasSecoes}
     <div class="compra-secao">
       <h4 style="margin:1rem 0 0.5rem;font-size:0.78rem;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.03em;">Documentos</h4>
       ${anexosHtml}
@@ -4009,6 +4096,181 @@ function _comprasRenderizarFormulario(dados) {
       <button type="button" class="btn btn-primary" id="compra-form-salvar">Salvar</button>
     </div>
   `;
+}
+
+// ---------- Itens da compra (reestruturação pra itens múltiplos) ----------
+// Ver docs/superpowers/specs/2026-09-21-compras-itens-multiplos-design.md.
+// Diferente do resto do formulário, as linhas de item NÃO são recriadas
+// a cada tecla digitada — cada linha é um pedaço de HTML estável
+// (renderizado uma vez, ao abrir o modal / adicionar / colar) e só o
+// "Total" daquela linha é atualizado ao vivo via listener delegado, lendo
+// direto do DOM. Evita perder o foco/cursor do campo sendo digitado, que
+// aconteceria se a tabela inteira fosse redesenhada a cada input.
+
+function _comprasItensLinhaHtml(item) {
+  item = item || {};
+  const idx = comprasProximoIndiceItem++;
+  const categoria = item.categoria || '';
+  const nomeItem = item.item || '';
+  const descricao = item.descricao || '';
+  const quantidade = item.quantidade || '';
+  const unidadeMedida = item.unidadeMedida || '';
+  const valorUnitario = item.valorUnitario || '';
+  const valorTotal = (Number(quantidade) || 0) * (Number(valorUnitario) || 0);
+
+  return `
+    <div class="compra-item-linha" data-item-idx="${idx}" style="display:grid;grid-template-columns:1.3fr 1.6fr 1.2fr 0.7fr 0.8fr 0.9fr 0.9fr auto;gap:0.4rem;align-items:end;padding:0.5rem 0;border-bottom:1px solid var(--card-border);min-width:760px;">
+      <div>
+        <label style="display:block;font-size:0.7rem;color:var(--text-secondary);">Categoria</label>
+        <select id="compra-item-${idx}-categoria" class="form-control" style="font-size:0.82rem;padding:0.4rem;">
+          <option value="">Selecione...</option>
+          ${COMPRAS_CATEGORIAS_OPCOES.map(c => `<option value="${c}" ${categoria === c ? 'selected' : ''}>${c}</option>`).join('')}
+        </select>
+      </div>
+      <div>
+        <label style="display:block;font-size:0.7rem;color:var(--text-secondary);">Item</label>
+        <input type="text" id="compra-item-${idx}-item" class="form-control" style="font-size:0.82rem;padding:0.4rem;" value="${_comprasEscaparHtml(nomeItem)}">
+      </div>
+      <div>
+        <label style="display:block;font-size:0.7rem;color:var(--text-secondary);">Descrição</label>
+        <input type="text" id="compra-item-${idx}-descricao" class="form-control" style="font-size:0.82rem;padding:0.4rem;" value="${_comprasEscaparHtml(descricao)}">
+      </div>
+      <div>
+        <label style="display:block;font-size:0.7rem;color:var(--text-secondary);">Qtd.</label>
+        <input type="number" inputmode="decimal" step="any" min="0" id="compra-item-${idx}-quantidade" class="form-control compra-item-calculo" style="font-size:0.82rem;padding:0.4rem;" value="${quantidade}">
+      </div>
+      <div>
+        <label style="display:block;font-size:0.7rem;color:var(--text-secondary);">Unid.</label>
+        <select id="compra-item-${idx}-unidade" class="form-control" style="font-size:0.82rem;padding:0.4rem;">
+          <option value="">-</option>
+          ${COMPRAS_UNIDADES_MEDIDA_OPCOES.map(u => `<option value="${u}" ${unidadeMedida === u ? 'selected' : ''}>${u}</option>`).join('')}
+        </select>
+      </div>
+      <div>
+        <label style="display:block;font-size:0.7rem;color:var(--text-secondary);">Valor unit.</label>
+        <input type="number" inputmode="decimal" step="any" min="0" id="compra-item-${idx}-valorUnitario" class="form-control compra-item-calculo" style="font-size:0.82rem;padding:0.4rem;" value="${valorUnitario}">
+      </div>
+      <div>
+        <label style="display:block;font-size:0.7rem;color:var(--text-secondary);">Total</label>
+        <div id="compra-item-${idx}-total" style="font-size:0.82rem;padding:0.4rem 0;font-weight:600;">${_comprasFormatarMoeda(valorTotal)}</div>
+      </div>
+      <button type="button" class="btn btn-secondary compra-item-remover" data-item-idx="${idx}" style="padding:0.4rem 0.6rem;font-size:0.8rem;" title="Remover item">✕</button>
+    </div>`;
+}
+
+function _comprasItensRenderizarSecao(itensIniciais) {
+  const linhasIniciais = (itensIniciais && itensIniciais.length ? itensIniciais : [{}]).map(_comprasItensLinhaHtml).join('');
+  return `
+    <div class="compra-secao">
+      <h4 style="margin:1rem 0 0.3rem;font-size:0.78rem;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.03em;">Itens da compra</h4>
+      <div style="overflow-x:auto;">
+        <div id="compra-itens-lista">${linhasIniciais}</div>
+      </div>
+      <div style="display:flex;gap:0.5rem;margin-top:0.6rem;flex-wrap:wrap;">
+        <button type="button" class="btn btn-secondary" id="compra-item-add" style="font-size:0.8rem;padding:0.4rem 0.8rem;">+ item</button>
+        <button type="button" class="btn btn-secondary" id="compra-item-colar-toggle" style="font-size:0.8rem;padding:0.4rem 0.8rem;">Colar itens</button>
+      </div>
+      <div id="compra-item-colar-area" hidden style="margin-top:0.6rem;">
+        <p style="font-size:0.78rem;color:var(--text-secondary);margin:0 0 0.3rem;">Cola a lista (um item por linha) — o sistema tenta separar item/quantidade/valor sozinho; revise antes de salvar.</p>
+        <textarea id="compra-item-colar-texto" rows="5" class="form-control" style="font-size:0.82rem;" placeholder="Ex.: Papel Higiênico 2 R$77,80"></textarea>
+        <button type="button" class="btn btn-primary" id="compra-item-colar-processar" style="margin-top:0.4rem;font-size:0.8rem;padding:0.4rem 0.8rem;">Adicionar itens colados</button>
+      </div>
+    </div>`;
+}
+
+// Recalcula só o "Total" da linha de item que mudou (não redesenha a
+// tabela inteira — ver comentário no topo desta seção).
+function _comprasItemAtualizarTotal(linhaEl) {
+  if (!linhaEl) return;
+  const idx = linhaEl.dataset.itemIdx;
+  const quantidade = Number(document.getElementById(`compra-item-${idx}-quantidade`)?.value) || 0;
+  const valorUnitario = Number(document.getElementById(`compra-item-${idx}-valorUnitario`)?.value) || 0;
+  const totalEl = document.getElementById(`compra-item-${idx}-total`);
+  if (totalEl) totalEl.textContent = _comprasFormatarMoeda(quantidade * valorUnitario);
+}
+
+function _comprasItemAdicionarLinha(itemInicial) {
+  const lista = document.getElementById('compra-itens-lista');
+  if (lista) lista.insertAdjacentHTML('beforeend', _comprasItensLinhaHtml(itemInicial));
+}
+
+function _comprasItemRemoverLinha(linhaEl) {
+  if (!linhaEl) return;
+  const lista = document.getElementById('compra-itens-lista');
+  // Nunca deixa a tabela sem nenhuma linha — sempre sobra pelo menos 1
+  // pra editar, em vez de sumir com o jeito de adicionar item de novo.
+  if (lista && lista.children.length <= 1) { linhaEl.remove(); _comprasItemAdicionarLinha(); return; }
+  linhaEl.remove();
+}
+
+function _comprasItemToggleColar() {
+  const area = document.getElementById('compra-item-colar-area');
+  if (area) area.hidden = !area.hidden;
+}
+
+// Best-effort: tenta separar cada linha do texto colado em item/
+// quantidade/valor. Quando não reconhece nada com confiança na linha,
+// ela inteira vira o campo Item, sem quantidade/valor — sempre
+// revisável na tabela antes de salvar, nunca é a fonte final da
+// verdade (ver spec: mesma cautela já usada com texto livre no resto
+// do projeto, ex. Pão de Queijo em kg — nunca confiar cegamente em
+// parse de texto sem estrutura garantida).
+function _comprasParsearItensColados(texto) {
+  return (texto || '')
+    .split('\n')
+    .map(l => l.trim())
+    .filter(Boolean)
+    .map(linhaOriginal => {
+      let resto = linhaOriginal;
+      let valorUnitario = '';
+      let quantidade = '';
+
+      const matchValor = resto.match(/R\$?\s?(\d{1,3}(?:\.\d{3})*,\d{2}|\d+,\d{2}|\d+\.\d{2})/);
+      if (matchValor) {
+        valorUnitario = matchValor[1].replace(/\./g, '').replace(',', '.');
+        resto = resto.replace(matchValor[0], ' ');
+      }
+
+      const matchQtd = resto.match(/\b(\d+(?:[.,]\d+)?)\s*(un|und|pct|cx|kg|l|m|par|kit)?\b/i);
+      if (matchQtd) {
+        quantidade = matchQtd[1].replace(',', '.');
+        resto = resto.replace(matchQtd[0], ' ');
+      }
+
+      const nomeItem = resto.replace(/\s{2,}/g, ' ').trim().replace(/^[-•\d.\s]+/, '').trim();
+
+      return { categoria: '', item: nomeItem || linhaOriginal, descricao: '', quantidade, unidadeMedida: '', valorUnitario };
+    });
+}
+
+function _comprasItemProcessarColados() {
+  const textarea = document.getElementById('compra-item-colar-texto');
+  if (!textarea || !textarea.value.trim()) return;
+  _comprasParsearItensColados(textarea.value).forEach(item => _comprasItemAdicionarLinha(item));
+  textarea.value = '';
+  const area = document.getElementById('compra-item-colar-area');
+  if (area) area.hidden = true;
+}
+
+// Lê os itens direto do DOM na hora de salvar (mesmo espírito de
+// _comprasColetarValoresFormulario pro resto do formulário) — linha sem
+// Categoria ou sem Item preenchidos é descartada, não impede salvar as
+// outras (a validação de "pelo menos 1 item válido" é feita em
+// comprasSalvar, sobre o resultado desta função).
+function _comprasColetarItensFormulario() {
+  return Array.from(document.querySelectorAll('.compra-item-linha'))
+    .map(linhaEl => {
+      const idx = linhaEl.dataset.itemIdx;
+      return {
+        categoria: document.getElementById(`compra-item-${idx}-categoria`)?.value || '',
+        item: document.getElementById(`compra-item-${idx}-item`)?.value || '',
+        descricao: document.getElementById(`compra-item-${idx}-descricao`)?.value || '',
+        quantidade: document.getElementById(`compra-item-${idx}-quantidade`)?.value || '',
+        unidadeMedida: document.getElementById(`compra-item-${idx}-unidade`)?.value || '',
+        valorUnitario: document.getElementById(`compra-item-${idx}-valorUnitario`)?.value || '',
+      };
+    })
+    .filter(item => item.categoria.trim() && item.item.trim());
 }
 
 // ---------- Histórico / Timeline (Fase 2) ----------
@@ -4093,11 +4355,13 @@ function comprasAbrirModal(registro) {
   comprasEditandoId = registro ? registro.id : null;
   comprasAnexosNovos = {};
   const dados = registro || {};
+  const itensIniciais = registro ? (comprasItensPorCompra[registro.id] || []) : [];
 
   document.getElementById('compra-modal-titulo').textContent = registro ? `Editar ${registro.id}` : 'Nova compra';
 
+  comprasProximoIndiceItem = 0; // reinicia a contagem de índices a cada abertura de modal
   const container = document.getElementById('compra-form-conteudo');
-  container.innerHTML = _comprasRenderizarFormulario(dados);
+  container.innerHTML = _comprasRenderizarFormulario(dados, itensIniciais);
 
   // Delegação attachada só UMA VEZ no container (que nunca é recriado,
   // só seu innerHTML muda) — evita empilhar um listener novo a cada
@@ -4108,6 +4372,17 @@ function comprasAbrirModal(registro) {
       const inputAnexo = ev.target.closest('[data-anexo-compra]');
       if (inputAnexo) { _comprasLerArquivoAnexo(inputAnexo); return; }
       _comprasAtualizarCondicionais();
+    });
+    container.addEventListener('input', ev => {
+      const linhaItem = ev.target.closest('.compra-item-calculo') && ev.target.closest('.compra-item-linha');
+      if (linhaItem) _comprasItemAtualizarTotal(linhaItem);
+    });
+    container.addEventListener('click', ev => {
+      if (ev.target.closest('#compra-item-add')) { _comprasItemAdicionarLinha(); return; }
+      if (ev.target.closest('#compra-item-colar-toggle')) { _comprasItemToggleColar(); return; }
+      if (ev.target.closest('#compra-item-colar-processar')) { _comprasItemProcessarColados(); return; }
+      const btnRemover = ev.target.closest('.compra-item-remover');
+      if (btnRemover) _comprasItemRemoverLinha(btnRemover.closest('.compra-item-linha'));
     });
   }
 
@@ -4139,10 +4414,10 @@ async function comprasSalvar() {
   areaErro.innerHTML = '';
 
   const dadosFormulario = _comprasColetarValoresFormulario();
-  if (!dadosFormulario.categoria) { areaErro.innerHTML = _comprasHtmlErro('Selecione a categoria.'); return; }
-  if (!dadosFormulario.item) { areaErro.innerHTML = _comprasHtmlErro('Informe o item/produto.'); return; }
+  const itens = _comprasColetarItensFormulario();
+  if (itens.length === 0) { areaErro.innerHTML = _comprasHtmlErro('Adicione pelo menos um item com categoria e nome preenchidos.'); return; }
 
-  const corpo = Object.assign({ acao: comprasEditandoId ? 'editar' : 'criar' }, dadosFormulario);
+  const corpo = Object.assign({ acao: comprasEditandoId ? 'editar' : 'criar', itens }, dadosFormulario);
   if (comprasEditandoId) corpo.id = comprasEditandoId;
   Object.keys(comprasAnexosNovos).forEach(chave => {
     corpo[chave + 'Base64'] = comprasAnexosNovos[chave].base64;

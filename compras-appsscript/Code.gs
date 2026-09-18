@@ -1,37 +1,55 @@
 /**
- * MÓDULO COMPRAS — Fase 1 + Fase 2 (ver
- * docs/superpowers/specs/2026-09-18-compras-fase1-design.md e
- * docs/superpowers/specs/2026-09-20-compras-fase2-design.md, no repo
+ * MÓDULO COMPRAS — Fase 1 + Fase 2 + reestruturação de itens múltiplos
+ * (ver docs/superpowers/specs/2026-09-18-compras-fase1-design.md,
+ * 2026-09-20-compras-fase2-design.md e
+ * 2026-09-21-compras-itens-multiplos-design.md, no repo
  * controle-agua-mamma-mia).
  *
  * Backend puro (sem tela própria) — o registro/edição de compras
  * acontece dentro do próprio Mamma Mia Control (painel Vercel), que
  * escreve aqui via fetch POST no /exec deste projeto (mesmo padrão do
- * mural de Avisos). A leitura (dashboard, lista, KPIs) é pelo CSV
- * publicado da aba COMPRAS, não passa por este arquivo — só o histórico
- * de uma compra específica (Fase 2) é pedido direto aqui via doPost.
+ * mural de Avisos). A leitura (dashboard, lista, KPIs) é pelos CSVs
+ * publicados das abas COMPRAS e COMPRAS_ITENS, não passa por este
+ * arquivo — só o histórico de uma compra específica (Fase 2) é pedido
+ * direto aqui via doPost.
  *
  * ─────────────────────────── COMO INSTALAR (do zero) ───────────────────────────
  * 1) Crie uma planilha nova no Google Sheets (ex.: "Compras — Mamma Mia Control").
  * 2) Renomeie a primeira aba pra exatamente "COMPRAS" e cole na linha 1, em
  *    qualquer ordem de colunas, estes cabeçalhos exatos (copie certinho, com
- *    acento — o código acha a coluna pelo nome, não pela posição):
+ *    acento — o código acha a coluna pelo nome, não pela posição). Essa aba é
+ *    o CABEÇALHO de cada compra — os itens em si moram na aba COMPRAS_ITENS
+ *    (passo 2.2 abaixo), então as colunas CATEGORIA/ITEM/DESCRIÇÃO/
+ *    QUANTIDADE/UNIDADE MEDIDA/VALOR UNITÁRIO desta lista só existem aqui
+ *    por causa de instalações antigas — se for instalação nova, pode nem
+ *    criar essas 6 colunas em COMPRAS, só em COMPRAS_ITENS:
  *
  *    ID | TIMESTAMP | UNIDADE | CATEGORIA SOLICITANTE | NOME SOLICITANTE |
- *    CATEGORIA | ITEM | DESCRIÇÃO | QUANTIDADE | UNIDADE MEDIDA |
- *    VALOR UNITÁRIO | VALOR TOTAL | FORNECEDOR | LINK COMPRA |
+ *    FORNECEDOR | LINK COMPRA | VALOR TOTAL |
  *    FORMA PAGAMENTO | PAGO POR | REEMBOLSO NECESSÁRIO | STATUS REEMBOLSO |
  *    STATUS COMPRA | DATA SOLICITAÇÃO | DATA COMPRA | PREVISÃO ENTREGA |
  *    DATA RECEBIMENTO | RECEBIDO POR | CONFERIDO | CONDIÇÃO MATERIAL |
  *    NF | COMPROVANTE | FOTO
  *
- * 2.1) NOVO NA FASE 2: crie uma segunda aba, chamada exatamente
+ * 2.1) NA FASE 2: crie uma segunda aba, chamada exatamente
  *      "COMPRAS_HISTORICO", com estes 3 cabeçalhos na linha 1:
  *
  *      ID_COMPRA | TIMESTAMP | STATUS
  *
- *      (Se você já tinha só a Fase 1 instalada, é só adicionar essa aba —
- *      não precisa mexer em nada da aba COMPRAS.)
+ * 2.2) NA REESTRUTURAÇÃO DE ITENS MÚLTIPLOS: crie uma terceira aba,
+ *      chamada exatamente "COMPRAS_ITENS", com estes cabeçalhos na
+ *      linha 1 — é aqui que ficam os itens de cada compra (uma compra
+ *      pode ter vários):
+ *
+ *      ID_COMPRA | CATEGORIA | ITEM | DESCRIÇÃO | QUANTIDADE |
+ *      UNIDADE MEDIDA | VALOR UNITÁRIO | VALOR TOTAL
+ *
+ *      Se você já tinha compras lançadas no formato antigo (1 item nos
+ *      próprios campos de COMPRAS), depois de criar essa aba rode a
+ *      função `migrarItensParaComprasItens` UMA VEZ (menu suspenso ao
+ *      lado de ▶️ Executar) — ela copia o item de cada compra antiga pra
+ *      cá, sem apagar nem mudar nada em COMPRAS. Pode rodar mais de uma
+ *      vez sem medo (compra já migrada é pulada).
  *
  * 3) Extensões > Apps Script, apague o conteúdo do Code.gs padrão e cole
  *    este arquivo inteiro no lugar.
@@ -39,15 +57,18 @@
  *      - Executar como: Eu (sua conta)
  *      - Quem pode acessar: Qualquer pessoa
  *    Implantar. Copie a URL que termina em /exec — é o COMPRAS_EXEC_URL.
- *    (Se já tinha uma implantação da Fase 1: Implantar > Gerenciar
+ *    (Se já tinha uma implantação anterior: Implantar > Gerenciar
  *    implantações > ✏️ editar > Nova versão > Implantar — mesma URL de
  *    antes, não precisa trocar nada no painel.)
- * 5) Arquivo > Compartilhar > Publicar na Web, escolha a aba "COMPRAS",
- *    formato CSV, Publicar — e marque "Republicar automaticamente quando
- *    alterações forem feitas" (senão o painel só vê snapshots antigos).
- *    Copie esse link — é o COMPRAS_CSV_URL.
- * 6) Me manda os dois links (exec e CSV) que eu termino de configurar o
- *    painel (faltam só essas duas constantes no src/main.js).
+ * 5) Arquivo > Compartilhar > Publicar na Web — publique CADA UMA das
+ *    abas COMPRAS e COMPRAS_ITENS (uma de cada vez, escolhendo a aba
+ *    certa no seletor), formato CSV, Publicar — e marque "Republicar
+ *    automaticamente quando alterações forem feitas" nas duas (senão o
+ *    painel só vê snapshots antigos). Copie os dois links — são o
+ *    COMPRAS_CSV_URL e o COMPRAS_ITENS_CSV_URL.
+ * 6) Me manda os três links (exec, CSV de COMPRAS e CSV de COMPRAS_ITENS)
+ *    que eu termino de configurar o painel (faltam só essas constantes
+ *    em src/main.js).
  *
  * A pasta do Drive pros anexos (NF/comprovante/foto) é criada sozinha na
  * primeira vez que alguém anexar algo — não precisa criar nada no Drive
@@ -81,16 +102,16 @@ var MESES_PT = [
 // salva). `data: true` marca os campos que chegam como "aaaa-mm-dd" (do
 // <input type="date"> do painel) e precisam virar "dd/mm/aaaa" antes de
 // gravar — mesmo formato de data usado no resto do projeto.
+// Campos do CABEÇALHO da compra — desde a reestruturação pra itens
+// múltiplos (ver docs/superpowers/specs/2026-09-21-compras-itens-
+// multiplos-design.md), Categoria/Item/Descrição/Quantidade/Unidade
+// medida/Valor unitário SAÍRAM daqui e viraram linhas em COMPRAS_ITENS
+// (ver CAMPOS_ITEM mais abaixo) — uma compra agora é 1 fornecedor/
+// pagamento/status/entrega + N itens dentro.
 var CAMPOS_COMPRA = [
   { chave: "unidade", coluna: "UNIDADE" },
   { chave: "categoriaSolicitante", coluna: "CATEGORIA SOLICITANTE" },
   { chave: "nomeSolicitante", coluna: "NOME SOLICITANTE" },
-  { chave: "categoria", coluna: "CATEGORIA" },
-  { chave: "item", coluna: "ITEM" },
-  { chave: "descricao", coluna: "DESCRIÇÃO" },
-  { chave: "quantidade", coluna: "QUANTIDADE" },
-  { chave: "unidadeMedida", coluna: "UNIDADE MEDIDA" },
-  { chave: "valorUnitario", coluna: "VALOR UNITÁRIO" },
   { chave: "fornecedor", coluna: "FORNECEDOR" },
   { chave: "linkCompra", coluna: "LINK COMPRA" },
   { chave: "formaPagamento", coluna: "FORMA PAGAMENTO" },
@@ -105,6 +126,19 @@ var CAMPOS_COMPRA = [
   { chave: "recebidoPor", coluna: "RECEBIDO POR" },
   { chave: "conferido", coluna: "CONFERIDO" },
   { chave: "condicaoMaterial", coluna: "CONDIÇÃO MATERIAL" },
+];
+
+// Campos de cada linha de item, na aba COMPRAS_ITENS (cabeçalhos:
+// ID_COMPRA | CATEGORIA | ITEM | DESCRIÇÃO | QUANTIDADE | UNIDADE MEDIDA
+// | VALOR UNITÁRIO | VALOR TOTAL — ID_COMPRA e VALOR TOTAL tratados à
+// parte, não entram nesta lista).
+var CAMPOS_ITEM = [
+  { chave: "categoria", coluna: "CATEGORIA" },
+  { chave: "item", coluna: "ITEM" },
+  { chave: "descricao", coluna: "DESCRIÇÃO" },
+  { chave: "quantidade", coluna: "QUANTIDADE" },
+  { chave: "unidadeMedida", coluna: "UNIDADE MEDIDA" },
+  { chave: "valorUnitario", coluna: "VALOR UNITÁRIO" },
 ];
 
 // Os 3 anexos — cada um só é salvo no Drive quando vem um *base64 novo*
@@ -271,33 +305,150 @@ function preencherCamposComuns(linha, mapa, dados) {
   });
 }
 
-function preencherValorTotal(linha, mapa, dados) {
-  var col = mapa["VALOR TOTAL"];
-  if (!col) return;
-  var quantidade = Number(dados.quantidade) || 0;
-  var valorUnitario = Number(dados.valorUnitario) || 0;
-  linha[col - 1] = (quantidade > 0 && valorUnitario > 0)
-    ? Math.round(quantidade * valorUnitario * 100) / 100
-    : "";
+// ───────────────────────── Itens da compra (COMPRAS_ITENS) ─────────────────────────
+
+var ABA_COMPRAS_ITENS = "COMPRAS_ITENS";
+
+function obterAbaItens() {
+  var aba = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(ABA_COMPRAS_ITENS);
+  if (!aba) {
+    throw new Error('Aba "' + ABA_COMPRAS_ITENS + '" não foi encontrada na planilha.');
+  }
+  return aba;
+}
+
+function calcularValorTotalItem(item) {
+  var quantidade = Number(item.quantidade) || 0;
+  var valorUnitario = Number(item.valorUnitario) || 0;
+  return Math.round(quantidade * valorUnitario * 100) / 100;
+}
+
+function calcularValorTotalCompra(itens) {
+  return (itens || []).reduce(function (soma, item) { return soma + calcularValorTotalItem(item); }, 0);
+}
+
+// Apaga todas as linhas de COMPRAS_ITENS de uma compra — usado antes de
+// regravar os itens numa edição (mais simples e seguro que tentar
+// comparar item a item o que mudou). De baixo pra cima, pra deleteRow
+// não bagunçar os índices das próximas iterações.
+function excluirItensDaCompra(idCompra) {
+  var aba = obterAbaItens();
+  var mapa = mapaColunas(aba);
+  var colId = mapa["ID_COMPRA"];
+  if (!colId) return;
+  var dados = aba.getDataRange().getValues();
+  for (var i = dados.length - 1; i >= 1; i--) {
+    if ((dados[i][colId - 1] || "").toString().trim() === idCompra) aba.deleteRow(i + 1);
+  }
+}
+
+// Grava uma linha em COMPRAS_ITENS por item — chamada tanto na criação
+// quanto (depois de excluirItensDaCompra) na edição.
+function gravarItens(idCompra, itens) {
+  var aba = obterAbaItens();
+  var mapa = mapaColunas(aba);
+  var colIdCompra = mapa["ID_COMPRA"];
+  if (!colIdCompra) throw new Error('Coluna "ID_COMPRA" não encontrada na aba "' + ABA_COMPRAS_ITENS + '".');
+
+  (itens || []).forEach(function (item) {
+    var linha = new Array(aba.getLastColumn()).fill("");
+    linha[colIdCompra - 1] = idCompra;
+    CAMPOS_ITEM.forEach(function (campo) {
+      var col = mapa[campo.coluna];
+      if (!col) return;
+      linha[col - 1] = item[campo.chave] != null ? item[campo.chave] : "";
+    });
+    var colValorTotal = mapa["VALOR TOTAL"];
+    if (colValorTotal) linha[colValorTotal - 1] = calcularValorTotalItem(item);
+    aba.appendRow(linha);
+  });
+}
+
+/**
+ * Migração ÚNICA — rode esta função UMA VEZ, direto no editor do Apps
+ * Script, depois de criar a aba COMPRAS_ITENS. Lê toda compra já
+ * lançada no formato antigo (item nos próprios campos de COMPRAS) e
+ * cria a linha correspondente em COMPRAS_ITENS — sem apagar nem alterar
+ * nada em COMPRAS (as colunas antigas de item ficam intactas, só sem
+ * uso daqui pra frente). Idempotente: pode rodar de novo sem medo, uma
+ * compra que já tem item em COMPRAS_ITENS é pulada.
+ */
+function migrarItensParaComprasItens() {
+  var abaCompras = obterAbaCompras();
+  var mapaCompras = mapaColunas(abaCompras);
+  var colId = mapaCompras["ID"];
+  var colItem = mapaCompras["ITEM"];
+  if (!colId || !colItem) {
+    throw new Error("Não encontrei as colunas ID/ITEM na aba COMPRAS — nada pra migrar.");
+  }
+  var colCategoria = mapaCompras["CATEGORIA"];
+  var colDescricao = mapaCompras["DESCRIÇÃO"];
+  var colQuantidade = mapaCompras["QUANTIDADE"];
+  var colUnidadeMedida = mapaCompras["UNIDADE MEDIDA"];
+  var colValorUnitario = mapaCompras["VALOR UNITÁRIO"];
+
+  var abaItens = obterAbaItens(); // erro claro se COMPRAS_ITENS ainda não existir
+  var mapaItens = mapaColunas(abaItens);
+  var colIdCompraItens = mapaItens["ID_COMPRA"];
+  if (!colIdCompraItens) throw new Error('Coluna "ID_COMPRA" não encontrada na aba COMPRAS_ITENS.');
+
+  var jaMigrados = {};
+  var dadosItensAtuais = abaItens.getDataRange().getValues();
+  for (var j = 1; j < dadosItensAtuais.length; j++) {
+    var idJa = (dadosItensAtuais[j][colIdCompraItens - 1] || "").toString().trim();
+    if (idJa) jaMigrados[idJa] = true;
+  }
+
+  var dadosCompras = abaCompras.getDataRange().getValues();
+  var migrados = 0;
+  for (var i = 1; i < dadosCompras.length; i++) {
+    var idCompra = (dadosCompras[i][colId - 1] || "").toString().trim();
+    var nomeItem = (dadosCompras[i][colItem - 1] || "").toString().trim();
+    if (!idCompra || !nomeItem || jaMigrados[idCompra]) continue;
+
+    var valorUnitario = colValorUnitario ? dadosCompras[i][colValorUnitario - 1] : "";
+    var quantidade = colQuantidade ? dadosCompras[i][colQuantidade - 1] : "";
+
+    var linha = new Array(abaItens.getLastColumn()).fill("");
+    linha[colIdCompraItens - 1] = idCompra;
+    if (mapaItens["CATEGORIA"]) linha[mapaItens["CATEGORIA"] - 1] = colCategoria ? dadosCompras[i][colCategoria - 1] : "";
+    if (mapaItens["ITEM"]) linha[mapaItens["ITEM"] - 1] = nomeItem;
+    if (mapaItens["DESCRIÇÃO"]) linha[mapaItens["DESCRIÇÃO"] - 1] = colDescricao ? dadosCompras[i][colDescricao - 1] : "";
+    if (mapaItens["QUANTIDADE"]) linha[mapaItens["QUANTIDADE"] - 1] = quantidade;
+    if (mapaItens["UNIDADE MEDIDA"]) linha[mapaItens["UNIDADE MEDIDA"] - 1] = colUnidadeMedida ? dadosCompras[i][colUnidadeMedida - 1] : "";
+    if (mapaItens["VALOR UNITÁRIO"]) linha[mapaItens["VALOR UNITÁRIO"] - 1] = valorUnitario;
+    if (mapaItens["VALOR TOTAL"]) linha[mapaItens["VALOR TOTAL"] - 1] = calcularValorTotalItem({ quantidade: quantidade, valorUnitario: valorUnitario });
+
+    abaItens.appendRow(linha);
+    migrados++;
+  }
+
+  var mensagem = "Migração concluída: " + migrados + " item(ns) criado(s) em COMPRAS_ITENS.";
+  Logger.log(mensagem);
+  return mensagem;
 }
 
 // ───────────────────────── Registrar / editar ─────────────────────────
 
 /**
- * Cria uma compra nova. Só Categoria e Item são obrigatórios — tudo o
- * resto pode ficar em branco pra ser completado depois via editarCompra
- * (a ideia é registrar o que já se sabe no momento, sem travar em campo
- * que ainda não tem resposta).
+ * Cria uma compra nova. `dados.itens` é uma lista de
+ * {categoria, item, descricao, quantidade, unidadeMedida, valorUnitario}
+ * — só entram os itens com Categoria E Item preenchidos; precisa sobrar
+ * pelo menos 1 pra poder salvar. O resto dos campos (fornecedor,
+ * pagamento, status, entrega...) fica no cabeçalho da compra e pode
+ * ficar em branco pra ser completado depois via editarCompra.
  */
 function registrarCompra(dados) {
   var lock = LockService.getScriptLock();
   lock.waitLock(30000);
   try {
     dados = dados || {};
-    var categoria = (dados.categoria || "").toString().trim();
-    var item = (dados.item || "").toString().trim();
-    if (!categoria) throw new Error("Selecione a categoria.");
-    if (!item) throw new Error("Informe o item/produto.");
+    var itensValidos = (dados.itens || []).filter(function (item) {
+      return item && (item.categoria || "").toString().trim() && (item.item || "").toString().trim();
+    });
+    if (itensValidos.length === 0) {
+      throw new Error("Adicione pelo menos um item com categoria e nome preenchidos.");
+    }
 
     var sheet = obterAbaCompras();
     var mapa = mapaColunas(sheet);
@@ -313,10 +464,12 @@ function registrarCompra(dados) {
     linha[colTimestamp - 1] = new Date();
 
     preencherCamposComuns(linha, mapa, dados);
-    preencherValorTotal(linha, mapa, dados);
+    var colValorTotal = mapa["VALOR TOTAL"];
+    if (colValorTotal) linha[colValorTotal - 1] = calcularValorTotalCompra(itensValidos);
     preencherAnexosNovos(linha, mapa, dados, id);
 
     sheet.appendRow(linha);
+    gravarItens(id, itensValidos);
 
     // Só grava a primeira entrada do histórico se já veio um status
     // escolhido na criação — sem isso, fica sem histórico até a
@@ -336,10 +489,12 @@ function registrarCompra(dados) {
 /**
  * Edita uma compra já existente, pelo ID. Reaproveita a mesma tela do
  * painel usada pra criar — a usuária vai preenchendo/corrigindo ao longo
- * do tempo (valor, fornecedor, entrega, anexos...) sem precisar recriar
- * o registro. Parte de uma CÓPIA da linha atual, então qualquer coluna
- * não coberta por CAMPOS_COMPRA/ANEXOS_COMPRA (ou um anexo sem base64
- * novo) mantém o valor que já tinha, automaticamente.
+ * do tempo (valor, fornecedor, entrega, anexos, itens...) sem precisar
+ * recriar o registro. O cabeçalho parte de uma CÓPIA da linha atual,
+ * então qualquer coluna não coberta por CAMPOS_COMPRA/ANEXOS_COMPRA (ou
+ * um anexo sem base64 novo) mantém o valor que já tinha, automaticamente
+ * — mas os ITENS são sempre substituídos por inteiro (ver
+ * excluirItensDaCompra/gravarItens), nunca mesclados linha a linha.
  */
 function editarCompra(id, dados) {
   var lock = LockService.getScriptLock();
@@ -348,6 +503,13 @@ function editarCompra(id, dados) {
     id = (id || "").toString().trim();
     if (!id) throw new Error("Compra não identificada.");
     dados = dados || {};
+
+    var itensValidos = (dados.itens || []).filter(function (item) {
+      return item && (item.categoria || "").toString().trim() && (item.item || "").toString().trim();
+    });
+    if (itensValidos.length === 0) {
+      throw new Error("Adicione pelo menos um item com categoria e nome preenchidos.");
+    }
 
     var sheet = obterAbaCompras();
     var mapa = mapaColunas(sheet);
@@ -365,14 +527,18 @@ function editarCompra(id, dados) {
 
       var linha = dadosPlanilha[i].slice();
       preencherCamposComuns(linha, mapa, dados);
-      preencherValorTotal(linha, mapa, dados);
+      var colValorTotal = mapa["VALOR TOTAL"];
+      if (colValorTotal) linha[colValorTotal - 1] = calcularValorTotalCompra(itensValidos);
       preencherAnexosNovos(linha, mapa, dados, id);
 
       sheet.getRange(i + 1, 1, 1, linha.length).setValues([linha]);
 
+      excluirItensDaCompra(id);
+      gravarItens(id, itensValidos);
+
       // Só grava uma entrada nova no histórico quando o status REALMENTE
-      // mudou — editar outros campos (valor, fornecedor, anexo...) sem
-      // tocar no status não gera entrada.
+      // mudou — editar outros campos (valor, fornecedor, anexo, itens...)
+      // sem tocar no status não gera entrada.
       var statusNovo = (dados.statusCompra || "").toString().trim();
       if (statusNovo && statusNovo !== statusAntigo) registrarEntradaHistorico(id, statusNovo);
 
