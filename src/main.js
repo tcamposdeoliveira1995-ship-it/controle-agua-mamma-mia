@@ -38,7 +38,7 @@ const DEDETIZACAO_EXEC_URL = 'https://script.google.com/macros/s/AKfycbzboegVJXJ
 // seguir os passos do topo de compras-appsscript/Code.gs (planilha +
 // implantação), troca estas duas linhas pelos links reais; até lá a aba
 // Compras mostra um aviso em vez de tentar buscar um CSV que não existe.
-const COMPRAS_CSV_URL = 'COLE_AQUI_A_URL_DO_CSV_DE_COMPRAS';
+const COMPRAS_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTQ3-2e6ttLWAuBJq-eDbTFbp5QqTQ9c_h1-JhA4FmZkkmumebbS_wDMDQtT1-LzdSsrPWzrVmNN6sG/pub?output=csv';
 const COMPRAS_EXEC_URL = 'https://script.google.com/macros/s/AKfycbxg34g07LP6huO-f9AA4FCyOrg-xgKRTheRWxKrZyJfiTlj3qJCFZCzkl7drhs5jv3b/exec';
 
 // --- SINCRONIZAÇÃO MÓDULO ÁGUA (gviz) ---
