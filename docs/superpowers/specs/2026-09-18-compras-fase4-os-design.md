@@ -1,7 +1,9 @@
 # Módulo Compras — Fase 4 (integração com OS de Manutenção)
 
 **Data:** 2026-09-18
-**Status:** Aprovado para implementação
+**Status:** Implementado e validado em produção (sinalização de peça pelo técnico, alerta no
+Telegram, botão "Registrar compra" no Painel e pré-preenchimento da OS/unidade no formulário de
+Compras testados de ponta a ponta)
 
 ## Contexto
 
