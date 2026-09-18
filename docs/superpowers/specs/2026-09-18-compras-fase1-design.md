@@ -1,7 +1,7 @@
 # Módulo Compras — Fase 1 (registro completo + dashboard)
 
 **Data:** 2026-09-18
-**Status:** Aprovado para implementação
+**Status:** Implementado e validado em produção (criar, listar, KPIs e editar testados de ponta a ponta)
 
 ## Contexto
 
