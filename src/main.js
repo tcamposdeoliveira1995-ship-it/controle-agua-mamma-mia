@@ -41,7 +41,7 @@ const COMPRAS_EXEC_URL = 'https://script.google.com/macros/s/AKfycbxg34g07LP6huO
 // de criar a aba COMPRAS_ITENS (ver instruções no topo de
 // compras-appsscript/Code.gs) e troca esta linha pelo link real; até lá
 // a aba Compras mostra um aviso em vez de tentar buscar um CSV que não existe.
-const COMPRAS_ITENS_CSV_URL = 'COLE_AQUI_A_URL_DO_CSV_DE_COMPRAS_ITENS';
+const COMPRAS_ITENS_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTQ3-2e6ttLWAuBJq-eDbTFbp5QqTQ9c_h1-JhA4FmZkkmumebbS_wDMDQtT1-LzdSsrPWzrVmNN6sG/pub?gid=188433737&single=true&output=csv';
 
 // --- SINCRONIZAÇÃO MÓDULO ÁGUA (gviz) ---
 const AGUA_SPREADSHEET_ID = '1tixTJ74aaEo-EuCfTFl-efWOT7p-TIgN0su8NzX8aKw';
