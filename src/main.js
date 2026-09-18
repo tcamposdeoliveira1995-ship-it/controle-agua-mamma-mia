@@ -4208,14 +4208,59 @@ function _comprasItemToggleColar() {
   if (area) area.hidden = !area.hidden;
 }
 
-// Best-effort: tenta separar cada linha do texto colado em item/
-// quantidade/valor. Quando não reconhece nada com confiança na linha,
-// ela inteira vira o campo Item, sem quantidade/valor — sempre
-// revisável na tabela antes de salvar, nunca é a fonte final da
-// verdade (ver spec: mesma cautela já usada com texto livre no resto
-// do projeto, ex. Pão de Queijo em kg — nunca confiar cegamente em
-// parse de texto sem estrutura garantida).
+// Best-effort: sempre revisável na tabela antes de salvar, nunca é a
+// fonte final da verdade (mesma cautela já usada com texto livre no
+// resto do projeto, ex. Pão de Queijo em kg — nunca confiar cegamente
+// em parse de texto sem estrutura garantida). Dois modos, escolhidos
+// automaticamente pelo formato do texto colado:
+//
+// 1) POR BLOCO — quando o texto tem linhas em branco separando os
+//    itens. É o formato real de copiar a tabela de itens do CMV Fácil:
+//    cada bloco tem o nome (às vezes repetido), a quantidade
+//    ("2,000Und"), às vezes uma linha extra de unidade secundária que a
+//    gente ignora, o subtotal ("R$77,80" — também ignorado, o
+//    formulário calcula o total sozinho) e o valor UNITÁRIO, que vem
+//    com 3 casas decimais e uma barra no fim ("R$38,900/Und" = 38,90).
+// 2) POR LINHA — quando não tem nenhuma linha em branco (lista digitada
+//    à mão ou colada de outro lugar, 1 item por linha) — tenta achar
+//    quantidade e valor dentro da própria linha.
 function _comprasParsearItensColados(texto) {
+  const blocos = (texto || '').split(/\n\s*\n/).map(b => b.trim()).filter(Boolean);
+  return blocos.length > 1
+    ? blocos.map(_comprasParsearBlocoItemColado)
+    : _comprasParsearItensColadosPorLinha(texto);
+}
+
+function _comprasParsearBlocoItemColado(bloco) {
+  const linhas = bloco.split('\n').map(l => l.trim()).filter(Boolean);
+  let nomeItem = '';
+  let quantidade = '';
+  let valorUnitario = '';
+
+  linhas.forEach(linha => {
+    // Valor unitário: "R$38,900/Und" — 3 casas decimais, termina com
+    // "/algo" (a unidade). Diferente do subtotal, que não tem barra.
+    const matchUnitario = linha.match(/^R\$\s?([\d.]+,\d+)\s*\/\s*\S+$/i);
+    if (matchUnitario) { if (!valorUnitario) valorUnitario = matchUnitario[1].replace(/\./g, '').replace(',', '.'); return; }
+
+    // Subtotal — "R$77,80", sem barra — ignorado de propósito.
+    if (/^R\$\s?[\d.]+,\d+$/i.test(linha)) return;
+
+    // Quantidade — "2,000Und" (a PRIMEIRA linha nesse formato do bloco;
+    // uma segunda linha parecida, tipo "1,000 L", é uma unidade
+    // secundária que a gente ignora, mantendo só a primeira).
+    const matchQtd = linha.match(/^(\d+)[,.]\d*\s*[A-Za-zÀ-ú]*$/);
+    if (matchQtd) { if (!quantidade) quantidade = matchQtd[1]; return; }
+
+    // Sobrou: nome do item (primeira ocorrência — a repetição do nome,
+    // comum nesse formato, fica ignorada por já ter sido capturada).
+    if (!nomeItem) nomeItem = linha;
+  });
+
+  return { categoria: '', item: nomeItem || linhas[0] || '', descricao: '', quantidade, unidadeMedida: '', valorUnitario };
+}
+
+function _comprasParsearItensColadosPorLinha(texto) {
   return (texto || '')
     .split('\n')
     .map(l => l.trim())
