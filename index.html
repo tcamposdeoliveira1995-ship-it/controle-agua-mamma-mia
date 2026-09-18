@@ -66,6 +66,7 @@
     <button class="tab-btn" data-tab="os"><i data-lucide="wrench"></i>OS</button>
     <button class="tab-btn" data-tab="perdas"><i data-lucide="trending-down"></i>Perdas</button>
     <button class="tab-btn" data-tab="requisicoes"><i data-lucide="package"></i>Requisições</button>
+    <button class="tab-btn" data-tab="compras"><i data-lucide="shopping-cart"></i>Compras</button>
     <button class="tab-btn" data-tab="operacao"><i data-lucide="clipboard-check"></i>Operação</button>
     <button class="tab-btn" data-tab="refeicoes"><i data-lucide="utensils"></i>Refeições</button>
     <button class="tab-btn" data-tab="pipa"><i data-lucide="truck"></i>Pipa</button>
@@ -275,6 +276,28 @@
         </div>
         <div id="refeicoes-conteudo"><p style="color:var(--text-muted);">Carregando...</p></div>
       </section>
+    </div>
+
+    <!-- ================= ABA: COMPRAS ================= -->
+    <div id="tab-content-compras" class="tab-panel">
+      <section class="panel-card">
+        <div class="panel-header">
+          <h2>🛒 Compras</h2>
+          <button class="btn btn-primary" id="compras-btn-nova" type="button">➕ Nova compra</button>
+        </div>
+        <div id="compras-conteudo"><p style="color:var(--text-muted);">Carregando...</p></div>
+      </section>
+    </div>
+
+    <!-- Modal Nova/Editar Compra -->
+    <div id="modal-compra" class="modal-overlay" aria-hidden="true" role="dialog">
+      <div class="modal-content" style="max-width:650px;max-height:85vh;overflow-y:auto;">
+        <div class="modal-header">
+          <h3 id="compra-modal-titulo">Nova compra</h3>
+          <button id="btn-close-compra-modal" class="modal-close" type="button">&times;</button>
+        </div>
+        <div id="compra-form-conteudo"></div>
+      </div>
     </div>
 
     <!-- ================= ABA: DIRETORIA ================= -->

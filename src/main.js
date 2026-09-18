@@ -34,6 +34,12 @@ const CONFIG_RENDIMENTO_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PAC
 const AVISOS_EXEC_URL = 'https://script.google.com/macros/s/AKfycbzHvvPZzBDSB730gShVCl7CPQb23h37w8k8B-cY8n1RI-NkBJzp0eUP5m-rbtj3nGdwpw/exec';
 const INSUMOS_EXEC_URL = 'https://script.google.com/macros/s/AKfycbxtrM875Sb92YmXJRQUyTTW1fYgEIyDYwg_D6FJqlQHcsyiPvg8frozc2nug8WbTJzM/exec';
 const DEDETIZACAO_EXEC_URL = 'https://script.google.com/macros/s/AKfycbzboegVJXJT55v2iOPr51DvgHFRShIN-dLnZzhGdfpTh1pnohV92k9LiIn6M6jE9ekt/exec';
+// MÓDULO COMPRAS (compras-appsscript) — ainda não publicado. Depois de
+// seguir os passos do topo de compras-appsscript/Code.gs (planilha +
+// implantação), troca estas duas linhas pelos links reais; até lá a aba
+// Compras mostra um aviso em vez de tentar buscar um CSV que não existe.
+const COMPRAS_CSV_URL = 'COLE_AQUI_A_URL_DO_CSV_DE_COMPRAS';
+const COMPRAS_EXEC_URL = 'COLE_AQUI_A_URL_DO_EXEC_DE_COMPRAS';
 
 // --- SINCRONIZAÇÃO MÓDULO ÁGUA (gviz) ---
 const AGUA_SPREADSHEET_ID = '1tixTJ74aaEo-EuCfTFl-efWOT7p-TIgN0su8NzX8aKw';
@@ -538,6 +544,8 @@ function refreshApp() {
   if (state.currentTab === 'auditoria') { setTimeout(() => { initAuditoria(); if (typeof lucide !== 'undefined') lucide.createIcons(); }, 50); return; }
 
   if (state.currentTab === 'refeicoes') { carregarRefeicoes(); if (typeof lucide !== 'undefined') lucide.createIcons(); return; }
+
+  if (state.currentTab === 'compras') { carregarCompras(); if (typeof lucide !== 'undefined') lucide.createIcons(); return; }
 
   // O ciclo "real" de hoje é sempre calculado pela data atual (regra: vira todo dia 7),
   // não apenas pelas leituras já lançadas. Isso evita o painel ficar "preso" no ciclo
@@ -3601,6 +3609,503 @@ function previsaoComprarGerarPDF(estado) {
     iframe.contentWindow.print();
     setTimeout(() => document.body.removeChild(iframe), 1000);
   }, 400);
+}
+
+// ================= MÓDULO COMPRAS =================
+// Fase 1 — ver docs/superpowers/specs/2026-09-18-compras-fase1-design.md.
+// Lê a aba COMPRAS (compras-appsscript, repo próprio) publicada como CSV
+// — mesmo padrão de leitura de OS/Perdas/Refeições. Escrita (criar/editar
+// compra) vai por fetch POST pro /exec desse Apps Script (COMPRAS_EXEC_URL,
+// {acao: "criar"|"editar"}), igual o mural de Avisos — não existe tela
+// separada pra celular, o formulário único mora dentro deste painel.
+
+// Campos lidos do CSV — superset dos campos do formulário (inclui ID,
+// TIMESTAMP, VALOR TOTAL e os 3 anexos, que não são digitados à mão).
+const COMPRAS_CAMPOS_CSV = [
+  { chave: 'id', coluna: 'ID' },
+  { chave: 'timestamp', coluna: 'TIMESTAMP' },
+  { chave: 'unidade', coluna: 'UNIDADE' },
+  { chave: 'categoriaSolicitante', coluna: 'CATEGORIA SOLICITANTE' },
+  { chave: 'nomeSolicitante', coluna: 'NOME SOLICITANTE' },
+  { chave: 'categoria', coluna: 'CATEGORIA' },
+  { chave: 'item', coluna: 'ITEM' },
+  { chave: 'descricao', coluna: 'DESCRIÇÃO' },
+  { chave: 'quantidade', coluna: 'QUANTIDADE', numero: true },
+  { chave: 'unidadeMedida', coluna: 'UNIDADE MEDIDA' },
+  { chave: 'valorUnitario', coluna: 'VALOR UNITÁRIO', numero: true },
+  { chave: 'valorTotal', coluna: 'VALOR TOTAL', numero: true },
+  { chave: 'fornecedor', coluna: 'FORNECEDOR' },
+  { chave: 'linkCompra', coluna: 'LINK COMPRA' },
+  { chave: 'formaPagamento', coluna: 'FORMA PAGAMENTO' },
+  { chave: 'pagoPor', coluna: 'PAGO POR' },
+  { chave: 'reembolsoNecessario', coluna: 'REEMBOLSO NECESSÁRIO' },
+  { chave: 'statusReembolso', coluna: 'STATUS REEMBOLSO' },
+  { chave: 'statusCompra', coluna: 'STATUS COMPRA' },
+  { chave: 'dataSolicitacao', coluna: 'DATA SOLICITAÇÃO' },
+  { chave: 'dataCompra', coluna: 'DATA COMPRA' },
+  { chave: 'previsaoEntrega', coluna: 'PREVISÃO ENTREGA' },
+  { chave: 'dataRecebimento', coluna: 'DATA RECEBIMENTO' },
+  { chave: 'recebidoPor', coluna: 'RECEBIDO POR' },
+  { chave: 'conferido', coluna: 'CONFERIDO' },
+  { chave: 'condicaoMaterial', coluna: 'CONDIÇÃO MATERIAL' },
+  { chave: 'nf', coluna: 'NF' },
+  { chave: 'comprovante', coluna: 'COMPROVANTE' },
+  { chave: 'foto', coluna: 'FOTO' },
+];
+
+const COMPRAS_STATUS_OPCOES = [
+  '🟣 Solicitação registrada',
+  '🟠 Cotação',
+  '🟡 Aguardando aprovação',
+  '🛒 Comprado',
+  '🚚 Em transporte',
+  '✅ Entregue',
+  '❌ Cancelado',
+];
+
+// Campos editáveis do formulário único (criar/editar) — fonte única pra
+// montar a tela E coletar os valores no salvar. `secao` agrupa
+// visualmente; `condicional(dados)` esconde o campo quando devolve false
+// (reavaliado a cada mudança no formulário, ver _comprasAtualizarCondicionais).
+const COMPRAS_CAMPOS_FORM = [
+  { chave: 'dataSolicitacao', coluna: 'DATA SOLICITAÇÃO', label: 'Data da solicitação', tipo: 'date', secao: 'Identificação' },
+  { chave: 'unidade', coluna: 'UNIDADE', label: 'Unidade', tipo: 'select', opcoes: ['TC', 'YUKA', 'CD', 'Geral'], secao: 'Identificação' },
+  { chave: 'categoriaSolicitante', coluna: 'CATEGORIA SOLICITANTE', label: 'Origem da necessidade', tipo: 'select', opcoes: ['Qualidade', 'Produção', 'Manutenção', 'RH', 'Administrativo', 'Limpeza', 'Cozinha', 'Outro'], secao: 'Identificação' },
+  { chave: 'nomeSolicitante', coluna: 'NOME SOLICITANTE', label: 'Nome do solicitante', tipo: 'text', placeholder: 'Ex.: Carlos - Manutenção', secao: 'Identificação' },
+
+  { chave: 'categoria', coluna: 'CATEGORIA', label: 'Categoria', tipo: 'select', opcoes: ['EPI', 'Manutenção', 'Produção', 'Qualidade', 'Higiene e Limpeza', 'Estrutura', 'Refeitório', 'Escritório', 'TI', 'Uniforme', 'Segurança do Trabalho', 'Ferramentas', 'Equipamentos', 'Peças', 'Outros'], obrigatorio: true, secao: 'Categoria e item' },
+  { chave: 'item', coluna: 'ITEM', label: 'Item / Produto', tipo: 'text', placeholder: 'Ex.: Cinta de teflon para seladora', obrigatorio: true, secao: 'Categoria e item' },
+  { chave: 'descricao', coluna: 'DESCRIÇÃO', label: 'Descrição / especificação', tipo: 'text', placeholder: 'Ex.: 43,5 cm x 0,2 mm', secao: 'Categoria e item' },
+
+  { chave: 'quantidade', coluna: 'QUANTIDADE', label: 'Quantidade', tipo: 'number', secao: 'Quantidade e valores' },
+  { chave: 'unidadeMedida', coluna: 'UNIDADE MEDIDA', label: 'Unidade de medida', tipo: 'select', opcoes: ['UN', 'PCT', 'CX', 'KG', 'L', 'M', 'PAR', 'KIT'], secao: 'Quantidade e valores' },
+  { chave: 'valorUnitario', coluna: 'VALOR UNITÁRIO', label: 'Valor unitário (R$)', tipo: 'number', secao: 'Quantidade e valores' },
+
+  { chave: 'fornecedor', coluna: 'FORNECEDOR', label: 'Fornecedor', tipo: 'text', placeholder: 'Ex.: Mercado Livre, Amazon, loja física...', secao: 'Fornecedor' },
+  { chave: 'linkCompra', coluna: 'LINK COMPRA', label: 'Link da compra', tipo: 'text', placeholder: 'https://...', secao: 'Fornecedor' },
+
+  { chave: 'formaPagamento', coluna: 'FORMA PAGAMENTO', label: 'Forma de pagamento', tipo: 'select', opcoes: ['PIX', 'Boleto', 'Cartão', 'Dinheiro', 'Faturado', 'Outro'], secao: 'Pagamento' },
+  { chave: 'pagoPor', coluna: 'PAGO POR', label: 'Pago por', tipo: 'select', opcoes: ['Empresa', 'Thalita', 'Outro colaborador'], secao: 'Pagamento' },
+  { chave: 'reembolsoNecessario', coluna: 'REEMBOLSO NECESSÁRIO', label: 'Reembolso necessário?', tipo: 'select', opcoes: ['Sim', 'Não'], secao: 'Pagamento', condicional: d => d.pagoPor === 'Thalita' || d.pagoPor === 'Outro colaborador' },
+  { chave: 'statusReembolso', coluna: 'STATUS REEMBOLSO', label: 'Status do reembolso', tipo: 'select', opcoes: ['Pendente', 'Solicitado', 'Reembolsado'], secao: 'Pagamento', condicional: d => (d.pagoPor === 'Thalita' || d.pagoPor === 'Outro colaborador') && d.reembolsoNecessario === 'Sim' },
+
+  { chave: 'statusCompra', coluna: 'STATUS COMPRA', label: 'Status da compra', tipo: 'select', opcoes: COMPRAS_STATUS_OPCOES, secao: 'Status' },
+
+  { chave: 'dataCompra', coluna: 'DATA COMPRA', label: 'Data da compra', tipo: 'date', secao: 'Entrega' },
+  { chave: 'previsaoEntrega', coluna: 'PREVISÃO ENTREGA', label: 'Previsão de entrega', tipo: 'date', secao: 'Entrega' },
+  { chave: 'dataRecebimento', coluna: 'DATA RECEBIMENTO', label: 'Data do recebimento', tipo: 'date', secao: 'Entrega' },
+  { chave: 'recebidoPor', coluna: 'RECEBIDO POR', label: 'Recebido por', tipo: 'text', secao: 'Entrega' },
+  { chave: 'conferido', coluna: 'CONFERIDO', label: 'Conferido?', tipo: 'select', opcoes: ['Sim', 'Não'], secao: 'Entrega' },
+  { chave: 'condicaoMaterial', coluna: 'CONDIÇÃO MATERIAL', label: 'Condição do material', tipo: 'select', opcoes: ['Conforme', 'Divergente', 'Danificado', 'Quantidade incorreta'], secao: 'Entrega' },
+];
+
+const COMPRAS_ANEXOS = [
+  { chave: 'nf', label: '📎 Nota fiscal' },
+  { chave: 'comprovante', label: '📎 Comprovante de pagamento' },
+  { chave: 'foto', label: '📎 Foto do produto' },
+];
+
+let comprasRegistros = [];
+let comprasFiltros = { unidade: 'TODAS', periodo: 'MES_ATUAL', dataDe: '', dataAte: '', categoria: 'TODAS', status: 'TODAS', fornecedor: 'TODOS' };
+// null = criando uma compra nova; senão, ID da compra sendo editada.
+let comprasEditandoId = null;
+// Só os anexos TROCADOS na sessão atual de criar/editar (ver
+// _comprasLerArquivoAnexo) — os que não mudam ficam de fora daqui e o
+// backend mantém o que já existia (ver preencherAnexosNovos no Code.gs).
+let comprasAnexosNovos = {};
+
+function _comprasEscaparHtml(texto) {
+  const div = document.createElement('div');
+  div.textContent = texto == null ? '' : String(texto);
+  return div.innerHTML;
+}
+
+// "dd/mm/aaaa" (formato usado na planilha/CSV) -> Date local, ou null se
+// não reconhecer o formato (célula vazia, valor inesperado).
+function _comprasParseData(dataBR) {
+  const partes = (dataBR || '').split('/');
+  if (partes.length !== 3) return null;
+  return new Date(Number(partes[2]), Number(partes[1]) - 1, Number(partes[0]));
+}
+
+// "dd/mm/aaaa" -> "aaaa-mm-dd" (o que <input type="date"> espera no
+// value ao pré-preencher o formulário de edição).
+function _comprasBRParaIso(dataBR) {
+  const partes = (dataBR || '').split('/');
+  if (partes.length !== 3) return '';
+  return `${partes[2]}-${partes[1].padStart(2, '0')}-${partes[0].padStart(2, '0')}`;
+}
+
+function _comprasFormatarMoeda(valor) {
+  return (valor || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+}
+
+function _comprasHtmlErro(mensagem) {
+  return `<div style="background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.3);color:var(--color-red);padding:0.6rem 0.9rem;border-radius:8px;font-size:0.85rem;margin-top:0.5rem;">${_comprasEscaparHtml(mensagem)}</div>`;
+}
+
+function _comprasParseLinhas(linhas) {
+  if (linhas.length < 2) return [];
+  const cabecalho = linhas[0].map(c => c.trim().toUpperCase());
+  const indices = {};
+  COMPRAS_CAMPOS_CSV.forEach(campo => { indices[campo.chave] = cabecalho.findIndex(c => c === campo.coluna); });
+
+  return linhas.slice(1)
+    .filter(cols => cols.some(c => c.trim() !== ''))
+    .map(cols => {
+      const registro = {};
+      COMPRAS_CAMPOS_CSV.forEach(campo => {
+        const idx = indices[campo.chave];
+        let valor = idx === -1 ? '' : (cols[idx] || '').replace(/"/g, '').trim();
+        if (campo.numero) valor = Number(valor.replace(',', '.')) || 0;
+        registro[campo.chave] = valor;
+      });
+      return registro;
+    })
+    .filter(r => r.id);
+}
+
+// KPIs sempre sobre o MÊS CORRENTE e o ESTADO ATUAL — independentes dos
+// filtros da lista abaixo (mesma lógica de "resumo fixo no topo" já
+// usada no resto do painel). Data de referência de cada compra: DATA
+// COMPRA quando preenchida, senão DATA SOLICITAÇÃO (uma compra ainda só
+// "solicitada" não tem data de compra ainda).
+function _comprasCalcularKPIs(registros) {
+  const hoje = new Date();
+  hoje.setHours(0, 0, 0, 0);
+  const mesAtual = hoje.getMonth(), anoAtual = hoje.getFullYear();
+
+  let valorMes = 0, comprasRealizadas = 0, aguardando = 0, atrasadas = 0;
+  const porUnidade = { TC: 0, YUKA: 0, CD: 0 };
+
+  registros.forEach(r => {
+    if (r.statusCompra !== '❌ Cancelado') {
+      const dataRef = _comprasParseData(r.dataCompra) || _comprasParseData(r.dataSolicitacao);
+      if (dataRef && dataRef.getMonth() === mesAtual && dataRef.getFullYear() === anoAtual) {
+        valorMes += r.valorTotal || 0;
+        comprasRealizadas++;
+        if (Object.prototype.hasOwnProperty.call(porUnidade, r.unidade)) porUnidade[r.unidade] += r.valorTotal || 0;
+      }
+    }
+
+    if (r.statusCompra === '🛒 Comprado' || r.statusCompra === '🚚 Em transporte') aguardando++;
+
+    const previsao = _comprasParseData(r.previsaoEntrega);
+    if (previsao && hoje > previsao && r.statusCompra !== '✅ Entregue' && r.statusCompra !== '❌ Cancelado') atrasadas++;
+  });
+
+  return { valorMes, comprasRealizadas, aguardando, atrasadas, porUnidade };
+}
+
+function _comprasAplicarFiltros(registros) {
+  return registros.filter(r => {
+    if (comprasFiltros.unidade !== 'TODAS' && r.unidade !== comprasFiltros.unidade) return false;
+    if (comprasFiltros.categoria !== 'TODAS' && r.categoria !== comprasFiltros.categoria) return false;
+    if (comprasFiltros.status !== 'TODAS' && r.statusCompra !== comprasFiltros.status) return false;
+    if (comprasFiltros.fornecedor !== 'TODOS' && r.fornecedor !== comprasFiltros.fornecedor) return false;
+
+    if (comprasFiltros.periodo === 'TODOS') return true;
+
+    const dataRef = _comprasParseData(r.dataCompra) || _comprasParseData(r.dataSolicitacao);
+    if (comprasFiltros.periodo === 'MES_ATUAL') {
+      const hoje = new Date();
+      return !!dataRef && dataRef.getMonth() === hoje.getMonth() && dataRef.getFullYear() === hoje.getFullYear();
+    }
+    if (comprasFiltros.periodo === 'MES_PASSADO') {
+      const ref = new Date();
+      ref.setDate(1); // evita "31 de março - 1 mês" virar fevereiro errado
+      ref.setMonth(ref.getMonth() - 1);
+      return !!dataRef && dataRef.getMonth() === ref.getMonth() && dataRef.getFullYear() === ref.getFullYear();
+    }
+    if (comprasFiltros.periodo === 'LIVRE') {
+      if (!dataRef) return false;
+      if (comprasFiltros.dataDe && dataRef < _comprasParseData(_comprasIsoParaBR(comprasFiltros.dataDe))) return false;
+      if (comprasFiltros.dataAte && dataRef > _comprasParseData(_comprasIsoParaBR(comprasFiltros.dataAte))) return false;
+      return true;
+    }
+    return true;
+  });
+}
+
+function _comprasIsoParaBR(iso) {
+  const partes = (iso || '').split('-');
+  if (partes.length !== 3) return '';
+  return `${partes[2]}/${partes[1]}/${partes[0]}`;
+}
+
+async function carregarCompras() {
+  const conteudo = document.getElementById('compras-conteudo');
+  if (!conteudo) return;
+
+  const btnNova = document.getElementById('compras-btn-nova');
+  if (btnNova && !btnNova._wired) { btnNova._wired = true; btnNova.addEventListener('click', () => comprasAbrirModal(null)); }
+  const btnFecharModal = document.getElementById('btn-close-compra-modal');
+  if (btnFecharModal && !btnFecharModal._wired) { btnFecharModal._wired = true; btnFecharModal.addEventListener('click', () => closeModal(document.getElementById('modal-compra'))); }
+
+  if (!COMPRAS_CSV_URL || COMPRAS_CSV_URL.indexOf('COLE_AQUI') === 0) {
+    conteudo.innerHTML = '<p style="color:var(--text-muted);">Compras ainda não configurado — falta publicar a aba COMPRAS como CSV e colar o link em src/main.js (COMPRAS_CSV_URL/COMPRAS_EXEC_URL). Ver instruções no topo de compras-appsscript/Code.gs.</p>';
+    return;
+  }
+
+  conteudo.innerHTML = '<p style="color:var(--text-muted);">Carregando...</p>';
+  try {
+    const resposta = await fetch(COMPRAS_CSV_URL, { cache: 'no-store' });
+    if (!resposta.ok) throw new Error('HTTP ' + resposta.status);
+    const linhas = parseCSVLinhas(await resposta.text());
+    comprasRegistros = _comprasParseLinhas(linhas);
+    _comprasRenderizar();
+  } catch (erro) {
+    console.error('[COMPRAS]', erro);
+    conteudo.innerHTML = '<p style="color:var(--text-muted);">Não foi possível carregar as compras.</p>';
+  }
+}
+
+function _comprasRenderizar() {
+  const conteudo = document.getElementById('compras-conteudo');
+  if (!conteudo) return;
+
+  const kpis = _comprasCalcularKPIs(comprasRegistros);
+  const filtrados = _comprasAplicarFiltros(comprasRegistros).sort((a, b) => (b.id || '').localeCompare(a.id || ''));
+  const fornecedores = [...new Set(comprasRegistros.map(r => r.fornecedor).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+  const categoriaOpcoes = COMPRAS_CAMPOS_FORM.find(c => c.chave === 'categoria').opcoes;
+
+  const linhasTabela = filtrados.length
+    ? filtrados.map(r => `
+        <tr class="compra-linha" data-id="${r.id}" style="cursor:pointer;">
+          <td>${r.id}</td>
+          <td>${r.dataCompra || r.dataSolicitacao || '-'}</td>
+          <td>${r.unidade || '-'}</td>
+          <td>${r.categoria || '-'}</td>
+          <td>${_comprasEscaparHtml(r.item) || '-'}</td>
+          <td>${r.valorTotal ? _comprasFormatarMoeda(r.valorTotal) : '-'}</td>
+          <td>${_comprasEscaparHtml(r.fornecedor) || '-'}</td>
+          <td>${r.statusCompra || '-'}</td>
+        </tr>
+      `).join('')
+    : '<tr><td colspan="8" style="text-align:center;color:var(--text-muted);">Nenhuma compra encontrada.</td></tr>';
+
+  conteudo.innerHTML = `
+    <div class="dashboard-grid" style="margin-bottom:1rem;">
+      <div class="kpi-card"><div class="kpi-label">💰 Valor comprado no mês</div><div class="kpi-value">${_comprasFormatarMoeda(kpis.valorMes)}</div></div>
+      <div class="kpi-card"><div class="kpi-label">🛒 Compras realizadas</div><div class="kpi-value">${kpis.comprasRealizadas}</div></div>
+      <div class="kpi-card"><div class="kpi-label">🚚 Aguardando entrega</div><div class="kpi-value">${kpis.aguardando}</div></div>
+      <div class="kpi-card"><div class="kpi-label">⚠️ Entregas atrasadas</div><div class="kpi-value">${kpis.atrasadas}</div></div>
+    </div>
+    <div class="dashboard-grid" style="margin-bottom:1.5rem;">
+      <div class="kpi-card"><div class="kpi-label">TC</div><div class="kpi-value">${_comprasFormatarMoeda(kpis.porUnidade.TC)}</div></div>
+      <div class="kpi-card"><div class="kpi-label">YUKA</div><div class="kpi-value">${_comprasFormatarMoeda(kpis.porUnidade.YUKA)}</div></div>
+      <div class="kpi-card"><div class="kpi-label">CD</div><div class="kpi-value">${_comprasFormatarMoeda(kpis.porUnidade.CD)}</div></div>
+    </div>
+
+    <div class="filter-group" style="margin-bottom:1rem;flex-wrap:wrap;">
+      <select id="compras-filtro-unidade" class="filter-select">
+        <option value="TODAS">Todas</option><option value="TC">TC</option><option value="YUKA">YUKA</option><option value="CD">CD</option><option value="Geral">Geral</option>
+      </select>
+      <select id="compras-filtro-periodo" class="filter-select">
+        <option value="MES_ATUAL">Este mês</option><option value="MES_PASSADO">Mês passado</option><option value="TODOS">Todos</option><option value="LIVRE">Período livre</option>
+      </select>
+      <input type="date" id="compras-filtro-data-de" style="background: rgba(255,255,255,0.95); border: 1px solid var(--card-border); color: var(--text-primary); padding: 0.45rem 0.75rem; border-radius: var(--border-radius-sm); font-family: var(--font-main); font-size: 0.85rem;" ${comprasFiltros.periodo === 'LIVRE' ? '' : 'hidden'}>
+      <input type="date" id="compras-filtro-data-ate" style="background: rgba(255,255,255,0.95); border: 1px solid var(--card-border); color: var(--text-primary); padding: 0.45rem 0.75rem; border-radius: var(--border-radius-sm); font-family: var(--font-main); font-size: 0.85rem;" ${comprasFiltros.periodo === 'LIVRE' ? '' : 'hidden'}>
+      <select id="compras-filtro-categoria" class="filter-select">
+        <option value="TODAS">Todas categorias</option>
+        ${categoriaOpcoes.map(c => `<option value="${c}" ${comprasFiltros.categoria === c ? 'selected' : ''}>${c}</option>`).join('')}
+      </select>
+      <select id="compras-filtro-status" class="filter-select">
+        <option value="TODAS">Todos status</option>
+        ${COMPRAS_STATUS_OPCOES.map(s => `<option value="${s}" ${comprasFiltros.status === s ? 'selected' : ''}>${s}</option>`).join('')}
+      </select>
+      <select id="compras-filtro-fornecedor" class="filter-select">
+        <option value="TODOS">Todos fornecedores</option>
+        ${fornecedores.map(f => `<option value="${_comprasEscaparHtml(f)}" ${comprasFiltros.fornecedor === f ? 'selected' : ''}>${_comprasEscaparHtml(f)}</option>`).join('')}
+      </select>
+    </div>
+
+    <div class="table-responsive">
+      <table class="modern-table">
+        <thead><tr><th>ID</th><th>Data</th><th>Unidade</th><th>Categoria</th><th>Item</th><th>Valor</th><th>Fornecedor</th><th>Status</th></tr></thead>
+        <tbody>${linhasTabela}</tbody>
+      </table>
+    </div>
+  `;
+
+  document.getElementById('compras-filtro-unidade').value = comprasFiltros.unidade;
+  document.getElementById('compras-filtro-periodo').value = comprasFiltros.periodo;
+  document.getElementById('compras-filtro-data-de').value = comprasFiltros.dataDe;
+  document.getElementById('compras-filtro-data-ate').value = comprasFiltros.dataAte;
+
+  document.getElementById('compras-filtro-unidade').addEventListener('change', e => { comprasFiltros.unidade = e.target.value; _comprasRenderizar(); });
+  document.getElementById('compras-filtro-periodo').addEventListener('change', e => { comprasFiltros.periodo = e.target.value; _comprasRenderizar(); });
+  document.getElementById('compras-filtro-data-de').addEventListener('change', e => { comprasFiltros.dataDe = e.target.value; _comprasRenderizar(); });
+  document.getElementById('compras-filtro-data-ate').addEventListener('change', e => { comprasFiltros.dataAte = e.target.value; _comprasRenderizar(); });
+  document.getElementById('compras-filtro-categoria').addEventListener('change', e => { comprasFiltros.categoria = e.target.value; _comprasRenderizar(); });
+  document.getElementById('compras-filtro-status').addEventListener('change', e => { comprasFiltros.status = e.target.value; _comprasRenderizar(); });
+  document.getElementById('compras-filtro-fornecedor').addEventListener('change', e => { comprasFiltros.fornecedor = e.target.value; _comprasRenderizar(); });
+
+  document.querySelectorAll('.compra-linha').forEach(tr => {
+    tr.addEventListener('click', () => {
+      const registro = comprasRegistros.find(r => r.id === tr.dataset.id);
+      if (registro) comprasAbrirModal(registro);
+    });
+  });
+}
+
+// ---------- Formulário único (criar/editar) ----------
+
+function _comprasRenderizarCampo(campo, dados) {
+  const valor = dados[campo.chave] || '';
+  let inputHtml;
+  if (campo.tipo === 'select') {
+    inputHtml = `<select id="compra-campo-${campo.chave}" class="form-control">
+      <option value="">Selecione...</option>
+      ${campo.opcoes.map(o => `<option value="${_comprasEscaparHtml(o)}" ${valor === o ? 'selected' : ''}>${_comprasEscaparHtml(o)}</option>`).join('')}
+    </select>`;
+  } else if (campo.tipo === 'date') {
+    inputHtml = `<input type="date" id="compra-campo-${campo.chave}" class="form-control" value="${_comprasBRParaIso(valor)}">`;
+  } else if (campo.tipo === 'number') {
+    inputHtml = `<input type="number" inputmode="decimal" step="any" min="0" id="compra-campo-${campo.chave}" class="form-control" value="${valor || ''}">`;
+  } else {
+    inputHtml = `<input type="text" id="compra-campo-${campo.chave}" class="form-control" value="${_comprasEscaparHtml(valor)}" placeholder="${_comprasEscaparHtml(campo.placeholder || '')}">`;
+  }
+  return `<div class="compra-campo" data-condicional-chave="${campo.chave}">
+    <label style="display:block;font-size:0.8rem;color:var(--text-secondary);margin-bottom:0.3rem;">${campo.label}${campo.obrigatorio ? ' *' : ''}</label>
+    ${inputHtml}
+  </div>`;
+}
+
+function _comprasRenderizarFormulario(dados) {
+  const secoesUnicas = [...new Set(COMPRAS_CAMPOS_FORM.map(c => c.secao))];
+  const secoesHtml = secoesUnicas.map(secao => `
+    <div class="compra-secao">
+      <h4 style="margin:1rem 0 0.5rem;font-size:0.78rem;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.03em;">${secao}</h4>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:0.75rem;">
+        ${COMPRAS_CAMPOS_FORM.filter(c => c.secao === secao).map(campo => _comprasRenderizarCampo(campo, dados)).join('')}
+      </div>
+    </div>
+  `).join('');
+
+  const anexosHtml = COMPRAS_ANEXOS.map(anexo => `
+    <div class="compra-anexo" style="margin-bottom:0.6rem;">
+      <label style="display:block;font-size:0.8rem;color:var(--text-secondary);margin-bottom:0.3rem;">${anexo.label}</label>
+      ${dados[anexo.chave] ? `<div style="margin-bottom:0.3rem;"><a href="${dados[anexo.chave]}" target="_blank" style="color:var(--accent-color);font-size:0.82rem;">📄 Ver arquivo atual</a> — anexar outro abaixo substitui</div>` : ''}
+      <input type="file" accept="image/*,application/pdf" data-anexo-compra="${anexo.chave}">
+    </div>
+  `).join('');
+
+  return `
+    ${secoesHtml}
+    <div class="compra-secao">
+      <h4 style="margin:1rem 0 0.5rem;font-size:0.78rem;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.03em;">Documentos</h4>
+      ${anexosHtml}
+    </div>
+    <div id="compra-form-erro"></div>
+    <div class="modal-footer">
+      <button type="button" class="btn btn-secondary" id="compra-form-cancelar">Cancelar</button>
+      <button type="button" class="btn btn-primary" id="compra-form-salvar">Salvar</button>
+    </div>
+  `;
+}
+
+function _comprasColetarValoresFormulario() {
+  const dados = {};
+  COMPRAS_CAMPOS_FORM.forEach(campo => {
+    const el = document.getElementById('compra-campo-' + campo.chave);
+    if (el) dados[campo.chave] = el.value;
+  });
+  return dados;
+}
+
+// Reavalia todo campo com `condicional` contra o estado atual do
+// formulário e esconde/mostra o wrapper dele — chamado a cada mudança
+// (delegação em #compra-form-conteudo, ver comprasAbrirModal) e uma vez
+// na abertura, pra já nascer coerente com o que veio pré-preenchido.
+function _comprasAtualizarCondicionais() {
+  const dados = _comprasColetarValoresFormulario();
+  COMPRAS_CAMPOS_FORM.forEach(campo => {
+    if (!campo.condicional) return;
+    const wrapper = document.querySelector('[data-condicional-chave="' + campo.chave + '"]');
+    if (wrapper) wrapper.hidden = !campo.condicional(dados);
+  });
+}
+
+function _comprasLerArquivoAnexo(inputEl) {
+  const chave = inputEl.dataset.anexoCompra;
+  const arquivo = inputEl.files && inputEl.files[0];
+  if (!arquivo) { delete comprasAnexosNovos[chave]; return; }
+  const leitor = new FileReader();
+  leitor.onload = () => {
+    const base64Completo = leitor.result; // "data:image/jpeg;base64,AAAA..."
+    comprasAnexosNovos[chave] = { base64: base64Completo.split(',')[1], mimeType: arquivo.type };
+  };
+  leitor.readAsDataURL(arquivo);
+}
+
+function comprasAbrirModal(registro) {
+  comprasEditandoId = registro ? registro.id : null;
+  comprasAnexosNovos = {};
+  const dados = registro || {};
+
+  document.getElementById('compra-modal-titulo').textContent = registro ? `Editar ${registro.id}` : 'Nova compra';
+
+  const container = document.getElementById('compra-form-conteudo');
+  container.innerHTML = _comprasRenderizarFormulario(dados);
+
+  // Delegação attachada só UMA VEZ no container (que nunca é recriado,
+  // só seu innerHTML muda) — evita empilhar um listener novo a cada
+  // vez que o modal abre (criaria eco/duplicidade nos cliques).
+  if (!container._wired) {
+    container._wired = true;
+    container.addEventListener('change', ev => {
+      const inputAnexo = ev.target.closest('[data-anexo-compra]');
+      if (inputAnexo) { _comprasLerArquivoAnexo(inputAnexo); return; }
+      _comprasAtualizarCondicionais();
+    });
+  }
+
+  // Cancelar/Salvar SÃO recriados a cada abertura (fazem parte do
+  // innerHTML acima), então precisam de listener novo toda vez — sem
+  // acúmulo, porque o botão antigo (e o listener dele) já foi destruído
+  // junto com o innerHTML anterior.
+  document.getElementById('compra-form-cancelar').addEventListener('click', () => closeModal(document.getElementById('modal-compra')));
+  document.getElementById('compra-form-salvar').addEventListener('click', comprasSalvar);
+
+  _comprasAtualizarCondicionais();
+  openModal(document.getElementById('modal-compra'));
+}
+
+async function comprasSalvar() {
+  const areaErro = document.getElementById('compra-form-erro');
+  const botao = document.getElementById('compra-form-salvar');
+  areaErro.innerHTML = '';
+
+  const dadosFormulario = _comprasColetarValoresFormulario();
+  if (!dadosFormulario.categoria) { areaErro.innerHTML = _comprasHtmlErro('Selecione a categoria.'); return; }
+  if (!dadosFormulario.item) { areaErro.innerHTML = _comprasHtmlErro('Informe o item/produto.'); return; }
+
+  const corpo = Object.assign({ acao: comprasEditandoId ? 'editar' : 'criar' }, dadosFormulario);
+  if (comprasEditandoId) corpo.id = comprasEditandoId;
+  Object.keys(comprasAnexosNovos).forEach(chave => {
+    corpo[chave + 'Base64'] = comprasAnexosNovos[chave].base64;
+    corpo[chave + 'MimeType'] = comprasAnexosNovos[chave].mimeType;
+  });
+
+  botao.disabled = true;
+  botao.textContent = 'Salvando...';
+  try {
+    const resposta = await fetch(COMPRAS_EXEC_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify(corpo),
+    });
+    const resultado = await resposta.json();
+    if (!resultado.ok) throw new Error(resultado.erro || 'Erro ao salvar.');
+    closeModal(document.getElementById('modal-compra'));
+    carregarCompras();
+  } catch (erro) {
+    areaErro.innerHTML = _comprasHtmlErro(erro.message);
+  } finally {
+    botao.disabled = false;
+    botao.textContent = 'Salvar';
+  }
 }
 
 // ================= MÓDULO INSUMOS CRÍTICOS =================
