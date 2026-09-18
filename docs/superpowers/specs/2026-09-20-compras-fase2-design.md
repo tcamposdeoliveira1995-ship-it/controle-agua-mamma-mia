@@ -1,7 +1,7 @@
 # Módulo Compras — Fase 2 (histórico/timeline + alertas automáticos)
 
 **Data:** 2026-09-20
-**Status:** Aprovado para implementação
+**Status:** Implementado e validado em produção (histórico e alertas testados de ponta a ponta — bot do Telegram dedicado pra Compras, não o mesmo de Água/OS como o spec original previa)
 
 ## Contexto
 
