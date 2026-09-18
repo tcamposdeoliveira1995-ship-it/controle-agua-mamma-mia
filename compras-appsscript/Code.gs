@@ -1,8 +1,10 @@
 /**
- * MÓDULO COMPRAS — Fase 1 + Fase 2 + reestruturação de itens múltiplos
+ * MÓDULO COMPRAS — Fase 1 + Fase 2 + reestruturação de itens múltiplos +
+ * Fase 4 (integração com OS de Manutenção)
  * (ver docs/superpowers/specs/2026-09-18-compras-fase1-design.md,
- * 2026-09-20-compras-fase2-design.md e
- * 2026-09-21-compras-itens-multiplos-design.md, no repo
+ * 2026-09-20-compras-fase2-design.md,
+ * 2026-09-21-compras-itens-multiplos-design.md e
+ * 2026-09-18-compras-fase4-os-design.md, no repo
  * controle-agua-mamma-mia).
  *
  * Backend puro (sem tela própria) — o registro/edição de compras
@@ -24,12 +26,16 @@
  *    por causa de instalações antigas — se for instalação nova, pode nem
  *    criar essas 6 colunas em COMPRAS, só em COMPRAS_ITENS:
  *
- *    ID | TIMESTAMP | UNIDADE | CATEGORIA SOLICITANTE | NOME SOLICITANTE |
- *    FORNECEDOR | LINK COMPRA | VALOR TOTAL |
+ *    ID | TIMESTAMP | UNIDADE | OS RELACIONADA | CATEGORIA SOLICITANTE |
+ *    NOME SOLICITANTE | FORNECEDOR | LINK COMPRA | VALOR TOTAL |
  *    FORMA PAGAMENTO | PAGO POR | REEMBOLSO NECESSÁRIO | STATUS REEMBOLSO |
  *    STATUS COMPRA | DATA SOLICITAÇÃO | DATA COMPRA | PREVISÃO ENTREGA |
  *    DATA RECEBIMENTO | RECEBIDO POR | CONFERIDO | CONDIÇÃO MATERIAL |
  *    NF | COMPROVANTE | FOTO
+ *
+ *    (OS RELACIONADA é opcional — se você já tinha a planilha criada
+ *    antes da Fase 4, só adicionar essa coluna nova no meio do
+ *    cabeçalho já é suficiente, o código acha ela pelo nome)
  *
  * 2.1) NA FASE 2: crie uma segunda aba, chamada exatamente
  *      "COMPRAS_HISTORICO", com estes 3 cabeçalhos na linha 1:
@@ -110,6 +116,7 @@ var MESES_PT = [
 // pagamento/status/entrega + N itens dentro.
 var CAMPOS_COMPRA = [
   { chave: "unidade", coluna: "UNIDADE" },
+  { chave: "osRelacionada", coluna: "OS RELACIONADA" },
   { chave: "categoriaSolicitante", coluna: "CATEGORIA SOLICITANTE" },
   { chave: "nomeSolicitante", coluna: "NOME SOLICITANTE" },
   { chave: "fornecedor", coluna: "FORNECEDOR" },

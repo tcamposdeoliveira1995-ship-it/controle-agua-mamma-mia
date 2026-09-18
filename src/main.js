@@ -2372,6 +2372,12 @@ async function carregarPerdas() {
 }
 // ================= MÓDULO OS =================
 
+// Guarda os registros de OS carregados (não só os "visíveis" pelo filtro
+// da tabela) — reaproveitado pelo select "OS relacionada" do formulário
+// de Compras (Fase 4, ver docs/superpowers/specs/2026-09-18-compras-
+// fase4-os-design.md).
+let osRegistros = [];
+
 // Converte "dd/mm/aaaa" ou "dd/mm/aaaa hh:mm" em uma chave "aaaammddhhmm" que
 // ordena corretamente como texto (mais recente > mais antiga). Retorna '' se
 // não reconhecer o formato, para nunca quebrar a ordenação por causa de um
@@ -2381,6 +2387,68 @@ function _osChaveOrdenacaoData(dataBruta) {
   if (!m) return '';
   const [, dia, mes, ano, hh = '00', mm = '00'] = m;
   return `${ano}${mes.padStart(2, '0')}${dia.padStart(2, '0')}${hh.padStart(2, '0')}${mm.padStart(2, '0')}`;
+}
+
+// Entre as compras vinculadas a uma OS, mostra o status MENOS avançado
+// (a que ainda precisa de mais atenção), seguindo a mesma ordem que o
+// campo Status de Compras já usa. Ignora "❌ Cancelado" na comparação —
+// só volta a esse status se TODAS as compras vinculadas estiverem
+// canceladas.
+function _osStatusPecaExibir(comprasVinculadas) {
+  const naoCanceladas = comprasVinculadas.filter(c => c.statusCompra !== '❌ Cancelado');
+  if (naoCanceladas.length === 0) return '❌ Cancelado';
+  const ordenadas = naoCanceladas.slice().sort((a, b) => COMPRAS_STATUS_OPCOES.indexOf(a.statusCompra) - COMPRAS_STATUS_OPCOES.indexOf(b.statusCompra));
+  return ordenadas[0].statusCompra;
+}
+
+// Célula da coluna "Peça" — botão de atalho quando a OS está aguardando
+// peça e ainda não tem nenhuma compra vinculada; status da(s) compra(s)
+// vinculada(s) quando já existem (em qualquer status da OS, mesmo já
+// concluída — se a peça ainda está a caminho, continua interessante
+// saber). `comprasPorOS` vem de _osCarregarComprasVinculadas — um mapa
+// vazio (falha ao buscar o CSV de Compras) faz toda OS cair no estado
+// padrão, sem travar a tabela.
+function _osCelulaPeca(registro, comprasPorOS) {
+  const vinculadas = comprasPorOS[registro.os] || [];
+  if (vinculadas.length > 0) {
+    const statusExibir = _osStatusPecaExibir(vinculadas);
+    return vinculadas.length > 1 ? `${statusExibir} (${vinculadas.length} compras)` : statusExibir;
+  }
+  if (registro.status === 'AGUARDANDO PEÇA') {
+    return `<button class="btn btn-secondary os-btn-registrar-compra" data-os="${registro.os}" data-unidade="${registro.unidade || ''}" style="font-size:0.78rem;padding:0.3rem 0.6rem;">🛒 Registrar compra</button>`;
+  }
+  return '-';
+}
+
+// Busca o CSV de Compras só pra saber, por OS, quais compras estão
+// vinculadas (campo "OS relacionada") — reaproveita o parser que o
+// próprio módulo Compras já usa (_comprasParseLinhas), sem duplicar
+// lógica. Falha de rede aqui não trava a aba OS: volta um mapa vazio, e
+// a coluna "Peça" cai pro estado padrão (ver _osCelulaPeca).
+async function _osCarregarComprasVinculadas() {
+  try {
+    const resposta = await fetch(COMPRAS_CSV_URL, { cache: 'no-store' });
+    if (!resposta.ok) throw new Error('HTTP ' + resposta.status);
+    const linhas = parseCSVLinhas(await resposta.text());
+    const compras = _comprasParseLinhas(linhas);
+    const porOS = {};
+    compras.forEach(c => {
+      if (!c.osRelacionada) return;
+      if (!porOS[c.osRelacionada]) porOS[c.osRelacionada] = [];
+      porOS[c.osRelacionada].push(c);
+    });
+    return porOS;
+  } catch (erro) {
+    console.error('[OS] Erro ao buscar compras vinculadas:', erro);
+    return {};
+  }
+}
+
+// Abre o formulário de Compras já com a OS (e a unidade dela) vinculadas
+// — atalho a partir do botão "Registrar compra" na aba OS.
+function _osRegistrarCompraParaOS(osId, unidade) {
+  switchTab('compras');
+  comprasAbrirModal(null, { osRelacionada: osId, unidade: unidade || '' });
 }
 
 async function carregarOS() {
@@ -2397,6 +2465,9 @@ async function carregarOS() {
     // Cabeçalho real da planilha é "Setor" (confirmado direto no Apps Script da
     // OS), não "Unidade" — o código antigo procurava um nome que não existia.
     const indiceSetor = cabecalho.findIndex(col => col === 'SETOR');
+    // "UNIDADE" já existe na planilha (TC/YUKA/CD) e não era lida até a
+    // Fase 4 — usada pra pré-preencher a compra registrada a partir da OS.
+    const indiceUnidade = cabecalho.findIndex(col => col === 'UNIDADE');
     const indiceEquipamento = cabecalho.findIndex(col => col === 'EQUIPAMENTO OU LOCAL AFETADO');
     const indicePDF = cabecalho.findIndex(col => col === 'PDF_OS');
     // Coluna de data é opcional: se não existir na planilha, a tabela mantém a
@@ -2417,6 +2488,7 @@ async function carregarOS() {
       const prioridade = (colunas[indicePrioridade] || '').trim().replace(/"/g, '').toUpperCase();
       const os = (colunas[indiceOS] || '').replace(/"/g, '');
       const setor = (colunas[indiceSetor] || '').replace(/"/g, '');
+      const unidade = indiceUnidade >= 0 ? (colunas[indiceUnidade] || '').replace(/"/g, '') : '';
       const equipamento = (colunas[indiceEquipamento] || '').replace(/"/g, '');
       const pdf = (colunas[indicePDF] || '').replace(/"/g, '');
       const dataBruta = indiceData >= 0 ? (colunas[indiceData] || '').replace(/"/g, '').trim() : '';
@@ -2435,20 +2507,27 @@ async function carregarOS() {
       if (status === 'AGUARDANDO PEÇA') aguardando++;
       if (status === 'CONCLUÍDO' || status === 'CONCLUIDO') concluidas++;
 
-      registros.push({ os, status, prioridade, setor, equipamento, pdf, chaveData: _osChaveOrdenacaoData(dataBruta) });
+      registros.push({ os, status, prioridade, setor, unidade, equipamento, pdf, chaveData: _osChaveOrdenacaoData(dataBruta) });
     }
 
     // Mais recentes primeiro quando há coluna de data reconhecida; senão, mantém a ordem da planilha.
     if (indiceData >= 0) registros.sort((a, b) => b.chaveData.localeCompare(a.chaveData));
 
+    osRegistros = registros;
+
     if (tableBody) {
+      const comprasPorOS = await _osCarregarComprasVinculadas();
       const visiveis = registros.filter(r =>
         (filtroStatus === 'TODOS' || r.status === filtroStatus) &&
         (filtroPrioridade === 'TODOS' || r.prioridade === filtroPrioridade)
       );
       tableBody.innerHTML = visiveis.length === 0
-        ? `<tr><td colspan="6" style="text-align:center;color:var(--text-muted);">Nenhuma OS encontrada.</td></tr>`
-        : visiveis.map(r => `<tr><td>${r.os}</td><td>${r.status}</td><td>${r.prioridade}</td><td>${r.setor}</td><td>${r.equipamento}</td><td>${r.pdf ? `<a href="${r.pdf}" target="_blank">📄 Abrir</a>` : '-'}</td></tr>`).join('');
+        ? `<tr><td colspan="7" style="text-align:center;color:var(--text-muted);">Nenhuma OS encontrada.</td></tr>`
+        : visiveis.map(r => `<tr><td>${r.os}</td><td>${r.status}</td><td>${r.prioridade}</td><td>${r.setor}</td><td>${r.equipamento}</td><td>${_osCelulaPeca(r, comprasPorOS)}</td><td>${r.pdf ? `<a href="${r.pdf}" target="_blank">📄 Abrir</a>` : '-'}</td></tr>`).join('');
+
+      tableBody.querySelectorAll('.os-btn-registrar-compra').forEach(btn => {
+        btn.addEventListener('click', () => _osRegistrarCompraParaOS(btn.dataset.os, btn.dataset.unidade));
+      });
     }
 
     const openCard = document.getElementById('os-open-count'); if (openCard) openCard.textContent = abertas;
@@ -3631,6 +3710,7 @@ const COMPRAS_CAMPOS_CSV = [
   { chave: 'id', coluna: 'ID' },
   { chave: 'timestamp', coluna: 'TIMESTAMP' },
   { chave: 'unidade', coluna: 'UNIDADE' },
+  { chave: 'osRelacionada', coluna: 'OS RELACIONADA' },
   { chave: 'categoriaSolicitante', coluna: 'CATEGORIA SOLICITANTE' },
   { chave: 'nomeSolicitante', coluna: 'NOME SOLICITANTE' },
   { chave: 'valorTotal', coluna: 'VALOR TOTAL', numero: true },
@@ -3693,6 +3773,10 @@ const COMPRAS_CAMPOS_FORM = [
   { chave: 'dataSolicitacao', coluna: 'DATA SOLICITAÇÃO', label: 'Data da solicitação', tipo: 'date', secao: 'Identificação' },
   { chave: 'unidade', coluna: 'UNIDADE', label: 'Unidade', tipo: 'select', opcoes: ['TC', 'YUKA', 'CD', 'Geral'], secao: 'Identificação' },
   { chave: 'categoriaSolicitante', coluna: 'CATEGORIA SOLICITANTE', label: 'Origem da necessidade', tipo: 'select', opcoes: ['Qualidade', 'Produção', 'Manutenção', 'RH', 'Administrativo', 'Limpeza', 'Cozinha', 'Outro'], secao: 'Identificação' },
+  // Fase 4 (integração com OS de Manutenção) — opções montadas na hora,
+  // a partir de osRegistros (módulo OS), não uma lista fixa como os
+  // outros selects — ver tipo 'select-os' em _comprasRenderizarCampo.
+  { chave: 'osRelacionada', coluna: 'OS RELACIONADA', label: 'OS relacionada (peça de manutenção)', tipo: 'select-os', secao: 'Identificação' },
   { chave: 'nomeSolicitante', coluna: 'NOME SOLICITANTE', label: 'Nome do solicitante', tipo: 'text', placeholder: 'Ex.: Carlos - Manutenção', secao: 'Identificação' },
 
   { chave: 'fornecedor', coluna: 'FORNECEDOR', label: 'Fornecedor', tipo: 'text', placeholder: 'Ex.: Mercado Livre, Amazon, loja física...', secao: 'Fornecedor' },
@@ -4115,6 +4199,15 @@ function _comprasRenderizarCampo(campo, dados) {
       <option value="">Selecione...</option>
       ${campo.opcoes.map(o => `<option value="${_comprasEscaparHtml(o)}" ${valor === o ? 'selected' : ''}>${_comprasEscaparHtml(o)}</option>`).join('')}
     </select>`;
+  } else if (campo.tipo === 'select-os') {
+    // OS ainda não concluídas — permite vincular a compra a qualquer OS
+    // em andamento, não só as "Aguardando peça" (essas só ganham o botão
+    // de atalho "Registrar compra" na aba OS, ver _osStatusPecaCelula).
+    const osAbertas = (osRegistros || []).filter(r => r.status !== 'CONCLUÍDO' && r.status !== 'CONCLUIDO');
+    inputHtml = `<select id="compra-campo-${campo.chave}" class="form-control">
+      <option value="">Nenhuma</option>
+      ${osAbertas.map(os => `<option value="${_comprasEscaparHtml(os.os)}" ${valor === os.os ? 'selected' : ''}>${_comprasEscaparHtml(os.os)} — ${_comprasEscaparHtml(os.equipamento || '-')} (${_comprasEscaparHtml(os.setor || '-')})</option>`).join('')}
+    </select>`;
   } else if (campo.tipo === 'date') {
     inputHtml = `<input type="date" id="compra-campo-${campo.chave}" class="form-control" value="${_comprasBRParaIso(valor)}">`;
   } else if (campo.tipo === 'number') {
@@ -4481,10 +4574,10 @@ function _comprasLerArquivoAnexo(inputEl) {
   leitor.readAsDataURL(arquivo);
 }
 
-function comprasAbrirModal(registro) {
+function comprasAbrirModal(registro, prefill) {
   comprasEditandoId = registro ? registro.id : null;
   comprasAnexosNovos = {};
-  const dados = registro || {};
+  const dados = Object.assign({}, registro || {}, prefill || {});
   const itensIniciais = registro ? (comprasItensPorCompra[registro.id] || []) : [];
 
   document.getElementById('compra-modal-titulo').textContent = registro ? `Editar ${registro.id}` : 'Nova compra';

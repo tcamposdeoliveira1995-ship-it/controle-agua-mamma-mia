@@ -70,6 +70,17 @@
     .badge-outra { background: var(--text-muted); }
     .os-card-setor { font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0.15rem; }
     .os-card-desc { font-size: 0.85rem; color: var(--text); line-height: 1.4; }
+    .aviso-peca {
+      display: inline-block;
+      font-size: 0.72rem;
+      font-weight: 700;
+      color: var(--gold);
+      background: #fbf3e4;
+      border: 1px solid var(--gold);
+      border-radius: 20px;
+      padding: 0.15rem 0.55rem;
+      margin-top: 0.35rem;
+    }
 
     .form-secao { background: var(--card-bg); border: 1px solid var(--border); border-radius: 12px; padding: 1.2rem; }
     .form-secao label { display: block; font-size: 0.8rem; font-weight: 600; color: var(--text-muted); margin: 0.9rem 0 0.35rem; }
@@ -100,6 +111,8 @@
     .btn-primario { background: var(--green); color: #fff; margin-top: 1.2rem; }
     .btn-primario:disabled { opacity: 0.6; }
     .btn-secundario { background: none; color: var(--text-muted); margin-top: 0.6rem; font-weight: 600; }
+    .btn-peca { background: var(--gold); color: #fff; margin-top: 0.6rem; }
+    .btn-peca:disabled { opacity: 0.6; }
 
     .voltar { display: inline-block; margin-bottom: 0.8rem; color: var(--text-muted); font-size: 0.85rem; cursor: pointer; }
 
@@ -214,6 +227,7 @@
             '</div>' +
             '<div class="os-card-setor">' + escaparHtml(os.setor || '-') + ' · ' + escaparHtml(os.equipamento || '-') + '</div>' +
             '<div class="os-card-desc">' + escaparHtml(os.descricao || '') + '</div>' +
+            (os.status === 'Aguardando peça' ? '<div class="aviso-peca">🔩 Aguardando peça</div>' : '') +
           '</div>';
       });
       app.innerHTML = html;
@@ -240,6 +254,7 @@
             '<span class="badge ' + classeBadge(osSelecionada.prioridade) + '">' + escaparHtml(osSelecionada.prioridade || '-') + '</span>' +
           '</div>' +
           '<div class="os-card-setor">' + escaparHtml(osSelecionada.setor || '-') + ' · ' + escaparHtml(osSelecionada.equipamento || '-') + '</div>' +
+          (osSelecionada.status === 'Aguardando peça' ? '<div class="aviso-peca">🔩 Aguardando peça' + (osSelecionada.necessidadePeca ? ': ' + escaparHtml(osSelecionada.necessidadePeca) : '') + '</div>' : '') +
           '<label for="campo-feito">O que foi feito?</label>' +
           '<textarea id="campo-feito" placeholder="Descreva o reparo/solução..."></textarea>' +
           '<label for="campo-assinado">Assinado por</label>' +
@@ -253,13 +268,74 @@
           '<img class="preview-foto" id="preview-foto" alt="Prévia da foto">' +
           '<div id="area-erro"></div>' +
           '<button class="btn btn-primario" id="btn-confirmar">Confirmar baixa ✅</button>' +
+          '<button class="btn btn-peca" id="btn-precisa-peca">🔩 Preciso de uma peça</button>' +
           '<button class="btn btn-secundario" id="btn-cancelar">Cancelar</button>' +
         '</div>';
 
       document.getElementById('btn-voltar').addEventListener('click', iniciar);
       document.getElementById('btn-cancelar').addEventListener('click', iniciar);
       document.getElementById('btn-confirmar').addEventListener('click', confirmarBaixa);
+      document.getElementById('btn-precisa-peca').addEventListener('click', renderizarFormularioPeca);
       document.getElementById('campo-foto').addEventListener('change', mostrarPreviewFoto);
+    }
+
+    function renderizarFormularioPeca() {
+      var app = document.getElementById('app');
+
+      app.innerHTML =
+        '<div class="voltar" id="btn-voltar-peca">‹ Voltar</div>' +
+        '<div class="form-secao">' +
+          '<div class="os-card-topo">' +
+            '<span class="os-card-id">' + escaparHtml(osSelecionada.os) + '</span>' +
+            '<span class="badge ' + classeBadge(osSelecionada.prioridade) + '">' + escaparHtml(osSelecionada.prioridade || '-') + '</span>' +
+          '</div>' +
+          '<div class="os-card-setor">' + escaparHtml(osSelecionada.setor || '-') + ' · ' + escaparHtml(osSelecionada.equipamento || '-') + '</div>' +
+          '<label for="campo-necessidade">Qual peça você precisa?</label>' +
+          '<textarea id="campo-necessidade" placeholder="Descreva a peça que falta...">' + escaparHtml(osSelecionada.necessidadePeca || '') + '</textarea>' +
+          '<div id="area-erro-peca"></div>' +
+          '<button class="btn btn-peca" id="btn-confirmar-peca">Enviar sinalização 🔩</button>' +
+          '<button class="btn btn-secundario" id="btn-cancelar-peca">Cancelar</button>' +
+        '</div>';
+
+      document.getElementById('btn-voltar-peca').addEventListener('click', renderizarFormulario);
+      document.getElementById('btn-cancelar-peca').addEventListener('click', renderizarFormulario);
+      document.getElementById('btn-confirmar-peca').addEventListener('click', confirmarNecessidadePeca);
+    }
+
+    function confirmarNecessidadePeca() {
+      var descricao = document.getElementById('campo-necessidade').value.trim();
+      var areaErro = document.getElementById('area-erro-peca');
+      var botao = document.getElementById('btn-confirmar-peca');
+
+      areaErro.innerHTML = '';
+
+      if (!descricao) {
+        areaErro.innerHTML = '<div class="alerta">Descreva a peça que falta antes de enviar.</div>';
+        return;
+      }
+
+      botao.disabled = true;
+      botao.textContent = 'Enviando...';
+
+      google.script.run
+        .withSuccessHandler(renderizarSucessoPeca)
+        .withFailureHandler(function (erro) {
+          botao.disabled = false;
+          botao.textContent = 'Enviar sinalização 🔩';
+          areaErro.innerHTML = '<div class="alerta">' + escaparHtml(erro.message || String(erro)) + '</div>';
+        })
+        .sinalizarNecessidadePeca(osSelecionada.os, descricao);
+    }
+
+    function renderizarSucessoPeca() {
+      document.getElementById('app').innerHTML =
+        '<div class="sucesso">' +
+          '<div class="icone">🔩</div>' +
+          '<h2>Sinalização enviada</h2>' +
+          '<p>A OS ' + escaparHtml(osSelecionada.os) + ' ficou marcada como "Aguardando peça".</p>' +
+          '<p>Voltando para a lista...</p>' +
+        '</div>';
+      setTimeout(iniciar, 2200);
     }
 
     function mostrarPreviewFoto() {

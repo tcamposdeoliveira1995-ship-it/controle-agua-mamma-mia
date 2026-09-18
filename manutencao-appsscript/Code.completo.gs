@@ -19,6 +19,14 @@
  *    Implantar — publica no MESMO link que a equipe já usa.
  *      - Fechar OS: <esse link>
  *      - Abrir OS:  <esse link>?tela=abrir
+ *
+ * FASE 4 (integração com OS de Manutenção do módulo Compras — ver
+ * docs/superpowers/specs/2026-09-18-compras-fase4-os-design.md, no repo
+ * controle-agua-mamma-mia): adicione ao cabeçalho (linha 1) da planilha
+ * de OS a coluna nova "Necessidade de peça" (texto livre — é onde fica a
+ * nota do técnico quando ele sinaliza que precisa de uma peça em vez de
+ * fechar a OS). Depois de adicionar a coluna, reimplante (mesmo passo 6
+ * acima) pra tela de fechar OS ganhar o botão novo.
  */
 
 /**
@@ -84,10 +92,12 @@ function obterMapaColunas(sheet) {
     assinadoPor: getColumnIndexByHeader(sheet, "Assinado por"),
     fotoConclusao: getColumnIndexByHeader(sheet, "Foto da conclusão"),
     pdfFechamento: getColumnIndexByHeader(sheet, "PDF Fechamento"),
+    necessidadePeca: getColumnIndexByHeader(sheet, "Necessidade de peça"),
   };
 }
 
 var STATUS_CONCLUIDO = "Concluído";
+var STATUS_AGUARDANDO_PECA = "Aguardando peça";
 var NOME_ABA_TECNICOS = "Manutenção";
 var ORDEM_PRIORIDADE = { "Crítica": 0, "Alta": 1, "Média": 2, "Baixa": 3 };
 // Pasta do Drive usada por todos os anexos de OS: PDFs de abertura e
@@ -930,8 +940,10 @@ function listarOSAbertas() {
       status: status,
       prioridade: (linha[cols.prioridade - 1] || "").toString().trim(),
       setor: linha[cols.setor - 1],
+      unidade: linha[cols.unidade - 1],
       equipamento: linha[cols.equipamentoLocal - 1],
       descricao: linha[cols.descricao - 1],
+      necessidadePeca: linha[cols.necessidadePeca - 1],
     });
   }
 
@@ -942,6 +954,79 @@ function listarOSAbertas() {
   });
 
   return abertas;
+}
+
+/**
+ * Chamada pela tela "Fechar OS" (Index.html) quando o técnico não
+ * consegue resolver e precisa de uma peça, em vez de dar baixa na OS.
+ * Marca a OS como "Aguardando peça", grava a descrição do que falta
+ * (sobrescrevendo uma nota anterior, se houver — só a mais recente é
+ * guardada) e avisa a usuária no Telegram. Ver
+ * docs/superpowers/specs/2026-09-18-compras-fase4-os-design.md, no repo
+ * controle-agua-mamma-mia.
+ */
+function sinalizarNecessidadePeca(osId, descricao) {
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheets()[0];
+  var cols = obterMapaColunas(sheet);
+  var dados = sheet.getDataRange().getValues();
+
+  var linhaEncontrada = -1;
+  for (var i = 1; i < dados.length; i++) {
+    if (dados[i][cols.os - 1] === osId) {
+      linhaEncontrada = i + 1;
+      break;
+    }
+  }
+  if (linhaEncontrada === -1) {
+    throw new Error('OS "' + osId + '" não encontrada.');
+  }
+
+  var linhaDados = dados[linhaEncontrada - 1];
+  var statusAtual = (linhaDados[cols.status - 1] || "").toString().trim();
+  if (statusAtual === STATUS_CONCLUIDO) {
+    throw new Error("Essa OS já está concluída — não é possível sinalizar necessidade de peça.");
+  }
+
+  sheet.getRange(linhaEncontrada, cols.necessidadePeca).setValue(descricao);
+  sheet.getRange(linhaEncontrada, cols.status).setValue(STATUS_AGUARDANDO_PECA);
+
+  // setValue() feito pelo script não dispara o onEdit (que só reage a
+  // edição manual na planilha) — por isso o card do Trello precisa ser
+  // movido explicitamente aqui, e não só confiar no gatilho.
+  var cardId = linhaDados[cols.trello - 1];
+  if (cardId) moverCard(cardId, STATUS_AGUARDANDO_PECA);
+
+  enviarTelegramNecessidadePeca({
+    os: osId,
+    setor: linhaDados[cols.setor - 1],
+    equipamento: linhaDados[cols.equipamentoLocal - 1],
+    descricao: descricao,
+  });
+
+  return { ok: true };
+}
+
+function enviarTelegramNecessidadePeca(dados) {
+  try {
+    var TOKEN = PropertiesService.getScriptProperties().getProperty("TELEGRAM_TOKEN");
+    var CHAT_ID = PropertiesService.getScriptProperties().getProperty("TELEGRAM_CHAT_ID");
+    if (!TOKEN || !CHAT_ID) return;
+
+    var mensagem =
+      "🔩 OS AGUARDANDO PEÇA\n\n" +
+      "🆔 " + dados.os + "\n" +
+      "📍 Setor: " + dados.setor + "\n" +
+      "🛠️ Equipamento: " + dados.equipamento + "\n" +
+      "📝 O que falta: " + dados.descricao;
+
+    var url = "https://api.telegram.org/bot" + TOKEN + "/sendMessage";
+    UrlFetchApp.fetch(url, {
+      method: "post",
+      payload: { chat_id: CHAT_ID, text: mensagem },
+    });
+  } catch (erro) {
+    Logger.log("Erro ao enviar Telegram de necessidade de peça: " + erro);
+  }
 }
 
 /**
