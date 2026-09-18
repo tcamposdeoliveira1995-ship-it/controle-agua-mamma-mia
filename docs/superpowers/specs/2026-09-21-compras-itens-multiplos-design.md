@@ -1,7 +1,7 @@
 # Módulo Compras — Reestruturação: itens múltiplos por compra
 
 **Data:** 2026-09-21
-**Status:** Aprovado para implementação
+**Status:** Implementado e validado em produção (criar/editar compra com múltiplos itens, migração dos dados antigos, e "Colar itens" testados de ponta a ponta — inclusive com o formato real de cópia do CMV Fácil, corrigido após o primeiro teste real)
 
 ## Contexto
 
