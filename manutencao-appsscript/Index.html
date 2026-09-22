@@ -172,6 +172,10 @@
   <script>
     var osSelecionada = null;
     var listaTecnicos = [];
+    var todasOSAbertas = [];
+    // Persiste entre "Voltar para a lista" (não reseta ao recarregar) —
+    // só muda quando o técnico troca o filtro de propósito.
+    var unidadeFiltro = 'TODAS';
 
     function iniciar() {
       google.script.run
@@ -209,16 +213,42 @@
       }
     }
 
+    function htmlFiltroUnidade() {
+      var opcoes = ['TODAS', 'TC', 'YUKA', 'CD'];
+      var rotulos = { TODAS: 'Todas', TC: 'TC', YUKA: 'YUKA', CD: 'CD' };
+      return (
+        '<label for="filtro-unidade" style="display:block;font-size:0.8rem;font-weight:600;color:var(--text-muted);margin-bottom:0.35rem;">Unidade</label>' +
+        '<select id="filtro-unidade" style="margin-bottom:1rem;">' +
+          opcoes.map(function (op) {
+            return '<option value="' + op + '"' + (unidadeFiltro === op ? ' selected' : '') + '>' + rotulos[op] + '</option>';
+          }).join('') +
+        '</select>'
+      );
+    }
+
+    function wireFiltroUnidade() {
+      var sel = document.getElementById('filtro-unidade');
+      if (sel) sel.addEventListener('change', function () { unidadeFiltro = sel.value; renderizarLista(); });
+    }
+
+    // Sem argumento (osAbertas), reaproveita todasOSAbertas — usado ao
+    // trocar o filtro sem precisar buscar de novo no servidor.
     function renderizarLista(osAbertas) {
+      if (osAbertas) todasOSAbertas = osAbertas;
       var app = document.getElementById('app');
 
-      if (!osAbertas || osAbertas.length === 0) {
-        app.innerHTML = '<div class="estado-vazio">✅ Nenhuma OS em aberto no momento.</div>';
+      var filtradas = unidadeFiltro === 'TODAS'
+        ? todasOSAbertas
+        : todasOSAbertas.filter(function (os) { return os.unidade === unidadeFiltro; });
+
+      if (!filtradas || filtradas.length === 0) {
+        app.innerHTML = htmlFiltroUnidade() + '<div class="estado-vazio">✅ Nenhuma OS em aberto' + (unidadeFiltro === 'TODAS' ? ' no momento.' : ' nessa unidade.') + '</div>';
+        wireFiltroUnidade();
         return;
       }
 
       var html = '';
-      osAbertas.forEach(function (os, idx) {
+      filtradas.forEach(function (os, idx) {
         html +=
           '<div class="os-card" data-idx="' + idx + '">' +
             '<div class="os-card-topo">' +
@@ -230,11 +260,12 @@
             (os.status === 'Aguardando peça' ? '<div class="aviso-peca">🔩 Aguardando peça</div>' : '') +
           '</div>';
       });
-      app.innerHTML = html;
+      app.innerHTML = htmlFiltroUnidade() + html;
+      wireFiltroUnidade();
 
       Array.prototype.forEach.call(app.querySelectorAll('.os-card'), function (card) {
         card.addEventListener('click', function () {
-          osSelecionada = osAbertas[Number(card.getAttribute('data-idx'))];
+          osSelecionada = filtradas[Number(card.getAttribute('data-idx'))];
           renderizarFormulario();
         });
       });
