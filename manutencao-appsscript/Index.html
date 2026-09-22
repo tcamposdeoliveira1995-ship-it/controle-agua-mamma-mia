@@ -218,17 +218,41 @@
       var rotulos = { TODAS: 'Todas', TC: 'TC', YUKA: 'YUKA', CD: 'CD' };
       return (
         '<label for="filtro-unidade" style="display:block;font-size:0.8rem;font-weight:600;color:var(--text-muted);margin-bottom:0.35rem;">Unidade</label>' +
-        '<select id="filtro-unidade" style="margin-bottom:1rem;">' +
+        '<select id="filtro-unidade" style="margin-bottom:0.6rem;">' +
           opcoes.map(function (op) {
             return '<option value="' + op + '"' + (unidadeFiltro === op ? ' selected' : '') + '>' + rotulos[op] + '</option>';
           }).join('') +
-        '</select>'
+        '</select>' +
+        '<button class="btn btn-secundario" id="btn-gerar-pdf-lista" style="width:auto;padding:0.5rem 0.9rem;margin:0 0 1rem;display:inline-block;border:1px solid var(--border);border-radius:8px;">📄 Gerar PDF dessa lista</button>'
       );
     }
 
     function wireFiltroUnidade() {
       var sel = document.getElementById('filtro-unidade');
       if (sel) sel.addEventListener('change', function () { unidadeFiltro = sel.value; renderizarLista(); });
+      var btnPdf = document.getElementById('btn-gerar-pdf-lista');
+      if (btnPdf) btnPdf.addEventListener('click', gerarPDFListaAberta);
+    }
+
+    function gerarPDFListaAberta() {
+      var btn = document.getElementById('btn-gerar-pdf-lista');
+      if (!btn) return;
+      btn.disabled = true;
+      var textoOriginal = btn.textContent;
+      btn.textContent = 'Gerando...';
+
+      google.script.run
+        .withSuccessHandler(function (resultado) {
+          btn.disabled = false;
+          btn.textContent = textoOriginal;
+          window.open(resultado.url, '_blank');
+        })
+        .withFailureHandler(function (erro) {
+          btn.disabled = false;
+          btn.textContent = textoOriginal;
+          alert('Não foi possível gerar o PDF: ' + (erro.message || String(erro)));
+        })
+        .gerarPDFListaOSAbertas(unidadeFiltro);
     }
 
     // Sem argumento (osAbertas), reaproveita todasOSAbertas — usado ao

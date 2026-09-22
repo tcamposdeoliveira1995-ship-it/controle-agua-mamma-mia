@@ -1029,6 +1029,79 @@ function enviarTelegramNecessidadePeca(dados) {
   }
 }
 
+function escaparHtmlServidor(texto) {
+  return (texto == null ? "" : String(texto))
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
+
+/**
+ * Gera um PDF com a lista de OS abertas (mesmo critério de
+ * listarOSAbertas — status diferente de "Concluído"), filtrado por
+ * Unidade quando informado (chamado pela tela "Fechar OS", junto com o
+ * filtro de Unidade). É um relatório avulso — diferente do PDF de cada
+ * OS individual (gerarPDFOS/gerarPDFFechamentoOS) — mas salvo na MESMA
+ * pasta do Drive (PASTA_ANEXOS_OS) e entregue como link (não base64),
+ * mesmo padrão já comprovado nesse app pra abrir PDF no celular.
+ */
+function gerarPDFListaOSAbertas(unidade) {
+  var abertas = listarOSAbertas();
+  var filtradas = (!unidade || unidade === "TODAS")
+    ? abertas
+    : abertas.filter(function (os) { return os.unidade === unidade; });
+
+  var logoId = "1mBHCppmwzj65IlT7kCKXInhSV-ltqE3I";
+  var logoBlob = DriveApp.getFileById(logoId).getBlob();
+  logoBlob.setContentType("image/png");
+  var logoSrc = "data:image/png;base64," + Utilities.base64Encode(logoBlob.getBytes());
+
+  var dataGeracao = Utilities.formatDate(new Date(), "America/Sao_Paulo", "dd/MM/yyyy HH:mm");
+  var rotuloFiltro = (!unidade || unidade === "TODAS") ? "Todas as unidades" : unidade;
+
+  var linhasTabela = filtradas.map(function (os) {
+    return (
+      "<tr>" +
+      "<td>" + escaparHtmlServidor(os.os) + "</td>" +
+      "<td>" + escaparHtmlServidor(os.status) + "</td>" +
+      "<td>" + escaparHtmlServidor(os.prioridade) + "</td>" +
+      "<td>" + escaparHtmlServidor(os.setor) + "</td>" +
+      "<td>" + escaparHtmlServidor(os.equipamento) + "</td>" +
+      "<td>" + escaparHtmlServidor(os.descricao) + "</td>" +
+      "</tr>"
+    );
+  }).join("");
+
+  var html =
+    "<html><head><style>" +
+    "body{ font-family: Arial, sans-serif; padding: 25px; color:#222; }" +
+    ".topo{ text-align:center; margin-bottom:20px; }" +
+    ".logo{ width:150px; margin-bottom:10px; }" +
+    ".titulo{ font-size:22px; font-weight:bold; color:#c62828; }" +
+    ".subtitulo{ font-size:13px; color:#555; margin-top:4px; }" +
+    "table{ width:100%; border-collapse:collapse; font-size:11px; }" +
+    "th, td{ border:1px solid #dcdcdc; padding:6px 8px; text-align:left; vertical-align:top; }" +
+    "th{ background:#f5f5f5; }" +
+    "</style></head><body>" +
+    '<div class="topo">' +
+    '<img class="logo" src="' + logoSrc + '">' +
+    '<div class="titulo">ORDENS DE SERVIÇO ABERTAS</div>' +
+    '<div class="subtitulo">' + escaparHtmlServidor(rotuloFiltro) + " · Gerado em " + dataGeracao + " · " + filtradas.length + " OS</div>" +
+    "</div>" +
+    "<table><thead><tr><th>OS</th><th>Status</th><th>Prioridade</th><th>Setor</th><th>Equipamento</th><th>Descrição</th></tr></thead>" +
+    "<tbody>" + (linhasTabela || '<tr><td colspan="6">Nenhuma OS aberta.</td></tr>') + "</tbody></table>" +
+    "</body></html>";
+
+  var pdfBlob = HtmlService.createHtmlOutput(html).getBlob().getAs("application/pdf");
+  var nomeArquivo = "OS-abertas-" + ((unidade && unidade !== "TODAS") ? unidade + "-" : "") + Utilities.formatDate(new Date(), "America/Sao_Paulo", "yyyyMMdd-HHmm") + ".pdf";
+
+  var pasta = DriveApp.getFolderById(PASTA_ANEXOS_OS);
+  var arquivo = pasta.createFile(pdfBlob);
+  arquivo.setName(nomeArquivo);
+
+  return { url: arquivo.getUrl() };
+}
+
 /**
  * Lê a lista de técnicos da aba "Manutenção" (coluna A). Ignora células
  * vazias e uma eventual primeira linha de cabeçalho (ex: "Nome", "Técnico").
