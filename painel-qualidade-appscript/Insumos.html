@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    :root {
+      --bg: #f7f3ee;
+      --card-bg: #ffffff;
+      --border: #e8ddd0;
+      --text: #4b433c;
+      --text-muted: #8a8570;
+      --gold: #b79b6c;
+      --green: #8f9b72;
+      --red: #c07a6c;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      -webkit-tap-highlight-color: transparent;
+    }
+    header {
+      background: var(--text);
+      color: #fff;
+      padding: 1rem 1.1rem;
+      position: sticky;
+      top: 0;
+      z-index: 5;
+    }
+    header h1 { font-size: 1.05rem; margin: 0; font-weight: 700; }
+    header p { margin: 0.15rem 0 0; font-size: 0.78rem; color: #d8d2c6; }
+    .link-menu { display: inline-block; margin-bottom: 0.5rem; font-size: 0.78rem; color: #d8d2c6; text-decoration: none; }
+    main { padding: 1rem; max-width: 900px; margin: 0 auto; padding-bottom: 3rem; }
+
+    .estado-carregando, .estado-vazio {
+      text-align: center;
+      color: var(--text-muted);
+      padding: 2rem 1rem;
+      font-size: 0.95rem;
+    }
+    .alerta {
+      background: #fbe9e7;
+      border: 1px solid var(--red);
+      color: #8c3f33;
+      border-radius: 8px;
+      padding: 0.7rem 0.9rem;
+      font-size: 0.85rem;
+      margin-bottom: 1rem;
+    }
+
+    .grid-insumos { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 1rem; }
+    .insumo-card { background: var(--card-bg); border: 1px solid var(--border); border-radius: 12px; padding: 1rem 1.1rem; border-left: 4px solid var(--green); }
+    .insumo-card.critico { border-left-color: var(--red); }
+    .insumo-topo { display: flex; justify-content: space-between; align-items: flex-start; gap: 0.5rem; }
+    .insumo-nome { font-size: 0.95rem; font-weight: 700; }
+    .insumo-alerta-badge { font-size: 0.7rem; background: rgba(192,122,108,0.15); color: var(--red); padding: 0.15rem 0.5rem; border-radius: 999px; white-space: nowrap; }
+    .insumo-quantidade { margin-top: 0.5rem; font-size: 1.5rem; font-weight: 700; }
+    .insumo-quantidade.critico { color: var(--red); }
+    .insumo-quantidade.ok { color: var(--green); }
+    .insumo-unidade { font-size: 0.82rem; color: var(--text-muted); font-weight: 500; }
+    .insumo-sub { font-size: 0.78rem; color: var(--text-muted); margin-top: 0.2rem; }
+    .insumo-linha-editar { display: flex; gap: 0.4rem; margin-top: 0.75rem; }
+    .insumo-linha-editar input {
+      flex: 1;
+      padding: 0.5rem 0.6rem;
+      font-size: 0.9rem;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: #fff;
+      color: var(--text);
+    }
+    .btn {
+      padding: 0.5rem 0.8rem;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: #fff;
+      color: var(--text);
+      font-size: 0.85rem;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    .btn:disabled { opacity: 0.6; }
+  </style>
+</head>
+<body>
+  <header>
+    <a class="link-menu" href="javascript:history.back()">‹ Voltar</a>
+    <h1>📦 Insumos Críticos</h1>
+    <p>Painel Qualidade — Mamma Mia</p>
+  </header>
+
+  <main id="app">
+    <div class="estado-carregando" id="tela-carregando">Carregando insumos…</div>
+  </main>
+
+  <script>
+    // Mesmas URLs que o Mamma Mia Control já usava pra esse módulo —
+    // nenhuma mudança no backend, só de onde a edição acontece. Ver
+    // docs/superpowers/specs/2026-09-23-painel-qualidade-insumos-design.md.
+    var INSUMOS_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTxAviEilfLLSjTjSznB3EyWWtrHVp6ClhabTSuzu5gQh2aoYbLeYKKoH6CcfRPkBpelcOG9bU2a0b3/pub?output=csv';
+    var INSUMOS_EXEC_URL = 'https://script.google.com/macros/s/AKfycbxtrM875Sb92YmXJRQUyTTW1fYgEIyDYwg_D6FJqlQHcsyiPvg8frozc2nug8WbTJzM/exec';
+
+    function parseCSVLinhas(csvText) {
+      const linhas = [];
+      let campos = [];
+      let atual = '';
+      let dentroAspas = false;
+      const texto = csvText.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+
+      for (let i = 0; i < texto.length; i++) {
+        const char = texto[i];
+        if (dentroAspas) {
+          if (char === '"') {
+            if (texto[i + 1] === '"') { atual += '"'; i++; }
+            else { dentroAspas = false; }
+          } else {
+            atual += char;
+          }
+          continue;
+        }
+        if (char === '"') { dentroAspas = true; }
+        else if (char === ',') { campos.push(atual); atual = ''; }
+        else if (char === '\n') { campos.push(atual); atual = ''; linhas.push(campos); campos = []; }
+        else { atual += char; }
+      }
+      if (atual !== '' || campos.length > 0) { campos.push(atual); linhas.push(campos); }
+
+      return linhas.filter(l => !(l.length === 1 && l[0] === ''));
+    }
+
+    function escaparHtml(texto) {
+      const div = document.createElement('div');
+      div.textContent = texto == null ? '' : String(texto);
+      return div.innerHTML;
+    }
+
+    function carregarInsumos() {
+      document.getElementById('app').innerHTML = '<div class="estado-carregando">Carregando insumos…</div>';
+
+      fetch(INSUMOS_CSV_URL, { cache: 'no-store' })
+        .then(resposta => {
+          if (!resposta.ok) throw new Error('HTTP ' + resposta.status);
+          return resposta.text();
+        })
+        .then(csv => {
+          const linhas = parseCSVLinhas(csv);
+          if (linhas.length < 2) {
+            document.getElementById('app').innerHTML = '<p class="estado-vazio">Nenhum insumo cadastrado.</p>';
+            return;
+          }
+
+          const cabecalho = linhas[0].map(h => h.trim().toUpperCase());
+          const idxItem = cabecalho.findIndex(c => c.includes('ITEM'));
+          const idxQtd  = cabecalho.findIndex(c => c.includes('QUANTIDADEATUAL'));
+          const idxMin  = cabecalho.findIndex(c => c.includes('ALERTAMINIMO'));
+          const idxUnid = cabecalho.findIndex(c => c.includes('UNIDADEMEDIDA'));
+          const idxData = cabecalho.findIndex(c => c.includes('ULTIMAATUALIZACAO'));
+          const idxPor  = cabecalho.findIndex(c => c.includes('ATUALIZADOPOR'));
+
+          const itens = [];
+          for (let i = 1; i < linhas.length; i++) {
+            const cols = linhas[i];
+            if (cols.every(c => !c || !c.trim())) continue;
+            const item = (cols[idxItem] || '').trim();
+            if (!item) continue;
+            itens.push({
+              item,
+              quantidadeAtual: Number((cols[idxQtd] || '0').trim().replace(',', '.')) || 0,
+              alertaMinimo: Number((cols[idxMin] || '0').trim().replace(',', '.')) || 0,
+              unidadeMedida: (cols[idxUnid] || '').trim() || '-',
+              ultimaAtualizacao: (cols[idxData] || '').trim() || '-',
+              atualizadoPor: (cols[idxPor] || '').trim() || '-',
+            });
+          }
+
+          renderizarInsumos(itens);
+        })
+        .catch(erro => {
+          console.error('[INSUMOS]', erro);
+          document.getElementById('app').innerHTML = '<div class="alerta">Não foi possível carregar os insumos.</div>';
+        });
+    }
+
+    function renderizarInsumos(itens) {
+      const app = document.getElementById('app');
+      if (itens.length === 0) {
+        app.innerHTML = '<p class="estado-vazio">Nenhum insumo cadastrado.</p>';
+        return;
+      }
+
+      app.innerHTML =
+        '<div class="grid-insumos">' +
+        itens.map((it, idx) => {
+          const critico = it.quantidadeAtual <= it.alertaMinimo;
+          return (
+            '<div class="insumo-card' + (critico ? ' critico' : '') + '">' +
+              '<div class="insumo-topo">' +
+                '<span class="insumo-nome">' + escaparHtml(it.item) + '</span>' +
+                (critico ? '<span class="insumo-alerta-badge">ALERTA</span>' : '') +
+              '</div>' +
+              '<div class="insumo-quantidade ' + (critico ? 'critico' : 'ok') + '">' +
+                it.quantidadeAtual + ' <span class="insumo-unidade">' + escaparHtml(it.unidadeMedida) + '</span>' +
+              '</div>' +
+              '<div class="insumo-sub">Mínimo: ' + it.alertaMinimo + ' ' + escaparHtml(it.unidadeMedida) + '</div>' +
+              '<div class="insumo-sub">Atualizado: ' + escaparHtml(it.ultimaAtualizacao) + ' — ' + escaparHtml(it.atualizadoPor) + '</div>' +
+              '<div class="insumo-linha-editar">' +
+                '<input type="number" id="insumo-input-' + idx + '" value="' + it.quantidadeAtual + '" min="0" step="1">' +
+                '<button class="btn" data-insumo-item="' + escaparHtml(it.item) + '" data-insumo-idx="' + idx + '">Salvar</button>' +
+              '</div>' +
+            '</div>'
+          );
+        }).join('') +
+        '</div>';
+
+      app.querySelectorAll('[data-insumo-item]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const idx = btn.getAttribute('data-insumo-idx');
+          const item = btn.getAttribute('data-insumo-item');
+          const input = document.getElementById('insumo-input-' + idx);
+          const novaQuantidade = Number(input.value);
+          if (isNaN(novaQuantidade) || novaQuantidade < 0) { alert('Quantidade inválida.'); return; }
+          salvarQuantidadeInsumo(item, novaQuantidade, btn);
+        });
+      });
+    }
+
+    function salvarQuantidadeInsumo(item, novaQuantidade, btn) {
+      const textoOriginal = btn.textContent;
+      btn.disabled = true;
+      btn.textContent = 'Salvando...';
+      fetch(INSUMOS_EXEC_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({ item, novaQuantidade, atualizadoPor: 'Thalita Campos' }),
+      })
+        .then(resposta => resposta.json())
+        .then(resultado => {
+          if (!resultado.ok) throw new Error(resultado.erro || 'Erro desconhecido');
+          carregarInsumos();
+        })
+        .catch(erro => {
+          console.error('[INSUMOS] Erro ao salvar:', erro);
+          alert('Erro ao salvar: ' + erro.message);
+          btn.disabled = false;
+          btn.textContent = textoOriginal;
+        });
+    }
+
+    carregarInsumos();
+  </script>
+</body>
+</html>

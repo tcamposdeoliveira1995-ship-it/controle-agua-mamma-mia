@@ -32,7 +32,8 @@ const CONFIG_RENDIMENTO_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PAC
 // Mesmo projeto Apps Script do webhook de leitura de água (Telegram) —
 // o doPost de lá roteia entre os dois usos pelo formato do corpo.
 const AVISOS_EXEC_URL = 'https://script.google.com/macros/s/AKfycbzHvvPZzBDSB730gShVCl7CPQb23h37w8k8B-cY8n1RI-NkBJzp0eUP5m-rbtj3nGdwpw/exec';
-const INSUMOS_EXEC_URL = 'https://script.google.com/macros/s/AKfycbxtrM875Sb92YmXJRQUyTTW1fYgEIyDYwg_D6FJqlQHcsyiPvg8frozc2nug8WbTJzM/exec';
+// INSUMOS_EXEC_URL não é mais usado aqui — atualizar quantidade agora é
+// feito no Painel Qualidade (painel-qualidade-appscript/Insumos.html).
 const DEDETIZACAO_EXEC_URL = 'https://script.google.com/macros/s/AKfycbzboegVJXJT55v2iOPr51DvgHFRShIN-dLnZzhGdfpTh1pnohV92k9LiIn6M6jE9ekt/exec';
 // MÓDULO COMPRAS (compras-appsscript).
 const COMPRAS_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTQ3-2e6ttLWAuBJq-eDbTFbp5QqTQ9c_h1-JhA4FmZkkmumebbS_wDMDQtT1-LzdSsrPWzrVmNN6sG/pub?output=csv';
@@ -4111,6 +4112,11 @@ function _comprasRenderizar() {
 }
 
 // ================= MÓDULO INSUMOS CRÍTICOS =================
+// Só leitura — desde a migração pro Painel Qualidade (ver
+// docs/superpowers/specs/2026-09-23-painel-qualidade-insumos-design.md),
+// atualizar a quantidade de um insumo é feito na tela própria do Painel
+// Qualidade (painel-qualidade-appscript/Insumos.html), que fala com o
+// mesmo INSUMOS_EXEC_URL direto, sem passar por este painel.
 
 async function carregarInsumos() {
   const conteudo = document.getElementById('insumos-conteudo');
@@ -4180,7 +4186,7 @@ function _renderizarInsumos(itens, conteudo) {
 
   conteudo.innerHTML = `
     <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:1rem;">
-      ${itens.map((it, idx) => {
+      ${itens.map(it => {
         const critico = it.quantidadeAtual <= it.alertaMinimo;
         const cor = critico ? 'var(--color-red)' : 'var(--color-green)';
         return `
@@ -4194,48 +4200,10 @@ function _renderizarInsumos(itens, conteudo) {
           </div>
           <div class="kpi-subtext">Mínimo: ${it.alertaMinimo} ${it.unidadeMedida}</div>
           <div class="kpi-subtext">Atualizado: ${it.ultimaAtualizacao} — ${it.atualizadoPor}</div>
-          <div style="display:flex;gap:0.4rem;margin-top:0.75rem;">
-            <input type="number" id="insumo-input-${idx}" value="${it.quantidadeAtual}" min="0" step="1" style="flex:1;padding:0.35rem 0.5rem;font-size:0.85rem;border-radius:var(--border-radius-sm);border:1px solid var(--card-border);background:rgba(255,255,255,0.6);">
-            <button class="btn btn-sm btn-secondary" data-insumo-item="${it.item}" data-insumo-idx="${idx}">Salvar</button>
-          </div>
         </div>`;
       }).join('')}
     </div>`;
-
-  conteudo.querySelectorAll('[data-insumo-item]').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const idx = btn.getAttribute('data-insumo-idx');
-      const item = btn.getAttribute('data-insumo-item');
-      const input = document.getElementById(`insumo-input-${idx}`);
-      const novaQuantidade = Number(input.value);
-      if (isNaN(novaQuantidade) || novaQuantidade < 0) { showToast('Quantidade inválida.', 'error'); return; }
-      _salvarQuantidadeInsumo(item, novaQuantidade, btn);
-    });
-  });
 }
-
-async function _salvarQuantidadeInsumo(item, novaQuantidade, btn) {
-  const textoOriginal = btn.textContent;
-  btn.disabled = true;
-  btn.textContent = 'Salvando...';
-  try {
-    const resposta = await fetch(INSUMOS_EXEC_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify({ item, novaQuantidade, atualizadoPor: 'Thalita Campos' })
-    });
-    const resultado = await resposta.json();
-    if (!resultado.ok) throw new Error(resultado.erro || 'Erro desconhecido');
-    showToast(`${item} atualizado para ${novaQuantidade}!`, 'success');
-    carregarInsumos();
-  } catch (erro) {
-    console.error('[INSUMOS] Erro ao salvar:', erro);
-    showToast('Erro ao salvar: ' + erro.message, 'error');
-    btn.disabled = false;
-    btn.textContent = textoOriginal;
-  }
-}
-
 
 // ================= AVISOS (post-its fixados no header) =================
 // Mesmo padrão do Insumos Críticos: fetch direto no Apps Script (não CSV

@@ -1,16 +1,23 @@
 /**
- * PAINEL QUALIDADE — tela inicial (hub)
+ * PAINEL QUALIDADE — tela inicial (hub) + módulos que não têm projeto
+ * Apps Script próprio
  * ---------------------------------------------------------------------
- * Ponto de entrada único de onde a usuária lança tudo (Compras, e depois
- * Insumos Críticos, Auditoria, Dedetização, Avisos, conforme cada um for
- * migrado) — o Mamma Mia Control fica só de leitura. Ver
- * docs/superpowers/specs/2026-09-23-painel-qualidade-compras-design.md,
- * no repo controle-agua-mamma-mia.
+ * Ponto de entrada único de onde a usuária lança tudo (Compras, Insumos
+ * Críticos, e depois Auditoria, Dedetização, Avisos, conforme cada um
+ * for migrado) — o Mamma Mia Control fica só de leitura. Ver
+ * docs/superpowers/specs/2026-09-23-painel-qualidade-compras-design.md e
+ * 2026-09-23-painel-qualidade-insumos-design.md, no repo
+ * controle-agua-mamma-mia.
  *
- * Esse projeto não tem dado próprio nenhum — é só uma tela de links, cada
- * link levando pro app Apps Script que já faz o trabalho de verdade (ex.:
- * compras-appsscript). Por isso pode ser criado como projeto AVULSO do
- * Apps Script, sem vincular a nenhuma planilha.
+ * Esse projeto não tem dado próprio nenhum — cada módulo migrado que já
+ * tinha seu próprio projeto Apps Script (ex.: Compras) ganha uma tela
+ * HTML DENTRO DAQUELE projeto, e aqui só entra um link. Já os módulos
+ * que nunca tiveram projeto próprio (ex.: Insumos Críticos, cujo backend
+ * é um Apps Script externo que já existia sem código-fonte neste repo)
+ * ganham a tela HTML AQUI MESMO, roteada por `?tela=`, chamando o mesmo
+ * backend de sempre — nada muda do lado de quem só lê os dados. Por não
+ * ter dado próprio, pode ser criado como projeto AVULSO do Apps Script,
+ * sem vincular a nenhuma planilha.
  *
  * Como instalar (do zero):
  * 1) Acesse script.google.com (fora de qualquer planilha) > Novo projeto.
@@ -21,14 +28,27 @@
  *    pela URL /exec do compras-appsscript (a mesma que termina em /exec,
  *    já configurada como COMPRAS_EXEC_URL — é a mesma URL, só usada aqui
  *    também como link de navegador, não como destino de fetch).
- * 5) Implantar > Nova implantação > tipo "App da Web":
+ * 5) Crie um arquivo novo do tipo HTML chamado exatamente "Insumos" e
+ *    cole o conteúdo de Insumos.html nele — não precisa trocar nada
+ *    dentro dele, já usa a mesma URL (INSUMOS_EXEC_URL/INSUMOS_CSV_URL)
+ *    que o Mamma Mia Control já usava.
+ * 6) Implantar > Nova implantação > tipo "App da Web":
  *      - Executar como: Eu (sua conta)
  *      - Quem pode acessar: Qualquer pessoa
  *    Implantar. Copie a URL que termina em /exec — é o link do Painel
  *    Qualidade. Salve esse link na tela inicial do celular/computador.
+ *    (Se já tinha uma implantação anterior — ex.: só com Compras — não
+ *    precisa criar implantação nova: Implantar > Gerenciar implantações
+ *    > ✏️ editar > Nova versão > Implantar, mesma URL de sempre.)
  */
 
 function doGet(e) {
+  var tela = e.parameter.tela;
+  if (tela === 'insumos') {
+    return HtmlService.createHtmlOutputFromFile('Insumos')
+      .setTitle('Insumos Críticos — Mamma Mia')
+      .addMetaTag('viewport', 'width=device-width, initial-scale=1');
+  }
   return HtmlService.createHtmlOutputFromFile('Menu')
     .setTitle('Painel Qualidade — Mamma Mia')
     .addMetaTag('viewport', 'width=device-width, initial-scale=1');
