@@ -175,6 +175,7 @@
     <div id="tab-content-os" class="tab-panel">
       <section class="panel-card" style="margin-bottom:1.25rem;">
         <div class="panel-header"><h2><i data-lucide="zap"></i> Armadilhas Luminosas</h2></div>
+        <p style="color:var(--text-muted); font-size:0.82rem; margin:0 0 0.5rem;">Só leitura — registrar dedetização e troca de armadilhas agora acontece no Painel Qualidade.</p>
         <div class="documentos-vencimento-bar no-print" id="armadilhas-vencimento-bar" style="margin:0.5rem 0 0 0;"></div>
       </section>
       <section class="panel-card">
@@ -621,38 +622,6 @@
       </div>
       <div id="csv-errors-container-v2" class="import-errors" style="display: none;"><h5>Alguns registros continham problemas:</h5><ul id="csv-errors-list-v2" style="margin-left: 1rem;"></ul></div>
       <div class="modal-footer" style="margin-top: 1.5rem;"><button type="button" id="btn-close-csv-modal-footer-v2" class="btn btn-secondary">Fechar</button></div>
-    </div>
-  </div>
-
-  <!-- MODAL: DEDETIZAÇÃO -->
-  <div id="modal-dedetizacao" class="modal-overlay" aria-hidden="true" role="dialog">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h3 id="dedetizacao-modal-titulo"><i data-lucide="bug-off"></i> Dedetização</h3>
-        <button id="btn-close-dedetizacao-modal" class="modal-close" type="button">&times;</button>
-      </div>
-      <form id="form-dedetizacao">
-        <input type="hidden" id="dedetizacao-unidade">
-        <input type="hidden" id="dedetizacao-tipo" value="DEDETIZACAO">
-        <div class="form-group">
-          <label for="dedetizacao-empresa" class="form-label" id="dedetizacao-empresa-label">Empresa Dedetizadora</label>
-          <input type="text" id="dedetizacao-empresa" class="form-control" placeholder="Ex: Dedetizadora XYZ Ltda" required>
-        </div>
-        <div class="form-group">
-          <label for="dedetizacao-data" class="form-label">Data Realizada</label>
-          <input type="date" id="dedetizacao-data" class="form-control" required>
-          <span class="form-help">O sistema alerta automaticamente quando passar 1 mês desta data (período mensal).</span>
-        </div>
-        <div class="form-group">
-          <label for="dedetizacao-certificado-input" class="form-label">Certificado</label>
-          <input type="file" id="dedetizacao-certificado-input" class="form-control" accept=".pdf,image/*">
-          <span class="form-help" id="dedetizacao-certificado-atual"></span>
-        </div>
-        <div class="modal-footer">
-          <button type="button" id="btn-cancel-dedetizacao" class="btn btn-secondary">Cancelar</button>
-          <button type="submit" id="btn-save-dedetizacao" class="btn btn-primary">Salvar</button>
-        </div>
-      </form>
     </div>
   </div>
 

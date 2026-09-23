@@ -39,6 +39,13 @@
  *    digital, finalizar), já com a mesma URL (APPS_SCRIPT_URL) que o
  *    Mamma Mia Control já usava. Esse arquivo já vem com o link "‹ Menu"
  *    e o logo preenchidos, não precisa editar nada nele.
+ * 5c) Crie um arquivo novo do tipo HTML chamado exatamente "Dedetizacao"
+ *    (sem acento no nome do arquivo) e cole o conteúdo de
+ *    Dedetizacao.html nele — chips de Dedetização (TC/YUKA/CD) e
+ *    Armadilha Luminosa (TC/YUKA), cada um abrindo um formulário de
+ *    registro (empresa, data, certificado), mesma URL
+ *    (DEDETIZACAO_EXEC_URL) de sempre. Já vem com o link "‹ Menu"
+ *    preenchido, não precisa editar nada nele.
  * 6) Implantar > Nova implantação > tipo "App da Web":
  *      - Executar como: Eu (sua conta)
  *      - Quem pode acessar: Qualquer pessoa
@@ -73,6 +80,11 @@ function doGet(e) {
   if (tela === 'auditoria') {
     return HtmlService.createHtmlOutputFromFile('Auditoria')
       .setTitle('Auditoria — Mamma Mia')
+      .addMetaTag('viewport', 'width=device-width, initial-scale=1');
+  }
+  if (tela === 'dedetizacao') {
+    return HtmlService.createHtmlOutputFromFile('Dedetizacao')
+      .setTitle('Dedetização — Mamma Mia')
       .addMetaTag('viewport', 'width=device-width, initial-scale=1');
   }
   return HtmlService.createHtmlOutputFromFile('Menu')

@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    :root {
+      --bg: #f7f3ee;
+      --card-bg: #ffffff;
+      --border: #e8ddd0;
+      --text: #4b433c;
+      --text-muted: #8a8570;
+      --gold: #b79b6c;
+      --green: #8f9b72;
+      --red: #c07a6c;
+      --orange: #d6aa5f;
+      --card-border: var(--border);
+      --text-secondary: var(--text-muted);
+      --text-primary: var(--text);
+      --border-radius-sm: 8px;
+      --border-radius-md: 10px;
+      --font-main: inherit;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      -webkit-tap-highlight-color: transparent;
+    }
+    header {
+      background: var(--text);
+      color: #fff;
+      padding: 1rem 1.1rem;
+      position: sticky;
+      top: 0;
+      z-index: 5;
+    }
+    header h1 { font-size: 1.05rem; margin: 0; font-weight: 700; }
+    header p { margin: 0.15rem 0 0; font-size: 0.78rem; color: #d8d2c6; }
+    .link-menu { display: inline-block; margin-bottom: 0.5rem; font-size: 0.78rem; color: #d8d2c6; text-decoration: none; }
+    main { padding: 1rem; max-width: 640px; margin: 0 auto; padding-bottom: 3rem; }
+
+    .panel-card { background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 14px; padding: 1.25rem; margin-bottom: 1.25rem; }
+    .panel-header { margin-bottom: 0.9rem; }
+    .panel-header h2 { font-size: 1.05rem; font-weight: 700; margin: 0; }
+
+    .estado-carregando { text-align: center; color: var(--text-muted); padding: 1.5rem 1rem; font-size: 0.92rem; }
+
+    .praga-chip {
+      display: flex; justify-content: space-between; align-items: center; gap: 0.75rem;
+      padding: 0.8rem 1rem; border-radius: var(--border-radius-md); border: 1px solid var(--card-border);
+      background: rgba(255,255,255,0.5); margin-bottom: 0.6rem; cursor: pointer;
+    }
+    .praga-chip:active { transform: scale(0.99); }
+    .praga-chip.ok { border-left: 4px solid var(--green); }
+    .praga-chip.atencao { border-left: 4px solid var(--orange); }
+    .praga-chip.alerta { border-left: 4px solid var(--red); background: rgba(192,122,108,0.08); }
+    .praga-chip-label { font-weight: 700; font-size: 0.9rem; }
+    .praga-chip-status { font-size: 0.8rem; color: var(--text-muted); text-align: right; }
+    .praga-chip.alerta .praga-chip-status { color: var(--red); font-weight: 700; }
+    .praga-chip.atencao .praga-chip-status { color: var(--orange); font-weight: 700; }
+
+    .form-group { margin-bottom: 1.1rem; }
+    .form-label { display: block; font-size: 0.82rem; font-weight: 600; color: var(--text-secondary); margin-bottom: 0.4rem; }
+    .form-control {
+      width: 100%; background: #fff; border: 1px solid var(--card-border); color: var(--text-primary);
+      font-family: var(--font-main); padding: 0.65rem 0.85rem; border-radius: var(--border-radius-md);
+      font-size: 0.92rem; outline: none;
+    }
+    .form-help { display: block; font-size: 0.75rem; color: var(--text-muted); margin-top: 0.35rem; }
+
+    .btn {
+      font-family: var(--font-main); padding: 0.6rem 1.1rem; border-radius: var(--border-radius-md);
+      font-weight: 700; font-size: 0.85rem; cursor: pointer; display: inline-flex; align-items: center;
+      justify-content: center; gap: 0.4rem; border: none; text-decoration: none;
+    }
+    .btn-primary { background: var(--green); color: #fff; }
+    .btn-primary:disabled { opacity: 0.6; }
+    .btn-secondary { background: #fff; color: var(--text); border: 1px solid var(--card-border); }
+
+    .modal-overlay-manual {
+      display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(0,0,0,0.5); z-index: 1000; align-items: center; justify-content: center; padding: 1rem;
+    }
+    .modal-content { background: var(--card-bg); border-radius: 14px; width: 100%; max-width: 480px; max-height: 90vh; overflow-y: auto; padding: 1.5rem; }
+    .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.25rem; }
+    .modal-header h3 { font-size: 1.05rem; font-weight: 700; margin: 0; }
+    .modal-close { background: none; border: none; color: var(--text-secondary); font-size: 1.5rem; cursor: pointer; line-height: 1; padding: 0; width: 32px; height: 32px; }
+    .modal-footer { display: flex; justify-content: flex-end; gap: 0.75rem; margin-top: 1.25rem; flex-wrap: wrap; }
+  </style>
+</head>
+<body>
+  <header>
+    <a class="link-menu" href="https://script.google.com/macros/s/AKfycbzAA1-03ZTdzf2c23tQi6uxuM7gHV-bqcBa8wuuwkrzNhzW5vVkEDC1Jbfu15ClFnSmtg/exec">‹ Menu</a>
+    <h1>🐜 Dedetização e Armadilhas</h1>
+    <p>Painel Qualidade — Mamma Mia</p>
+  </header>
+
+  <main id="app">
+    <div class="estado-carregando" id="tela-carregando">Carregando…</div>
+  </main>
+
+  <div id="modal-dedetizacao" class="modal-overlay-manual">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3 id="dedetizacao-modal-titulo">Registrar</h3>
+        <button id="btn-close-dedetizacao-modal" class="modal-close" type="button">&times;</button>
+      </div>
+      <form id="form-dedetizacao">
+        <input type="hidden" id="dedetizacao-unidade">
+        <input type="hidden" id="dedetizacao-tipo" value="DEDETIZACAO">
+        <div class="form-group">
+          <label for="dedetizacao-empresa" class="form-label" id="dedetizacao-empresa-label">Empresa</label>
+          <input type="text" id="dedetizacao-empresa" class="form-control" placeholder="Ex: Dedetizadora XYZ Ltda" required>
+        </div>
+        <div class="form-group">
+          <label for="dedetizacao-data" class="form-label">Data Realizada</label>
+          <input type="date" id="dedetizacao-data" class="form-control" required>
+          <span class="form-help">O sistema alerta automaticamente quando passar 1 mês desta data (período mensal).</span>
+        </div>
+        <div class="form-group">
+          <label for="dedetizacao-certificado-input" class="form-label">Certificado</label>
+          <input type="file" id="dedetizacao-certificado-input" class="form-control" accept=".pdf,image/*">
+          <span class="form-help" id="dedetizacao-certificado-atual"></span>
+        </div>
+        <div class="modal-footer">
+          <button type="button" id="btn-cancel-dedetizacao" class="btn btn-secondary">Cancelar</button>
+          <button type="submit" id="btn-save-dedetizacao" class="btn btn-primary">Salvar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    // Mesma URL que o Mamma Mia Control já usava pra esse módulo — nenhuma
+    // mudança no backend, só de onde o registro acontece. Ver
+    // docs/superpowers/specs/2026-09-23-painel-qualidade-dedetizacao-design.md.
+    var DEDETIZACAO_EXEC_URL = 'https://script.google.com/macros/s/AKfycbzboegVJXJT55v2iOPr51DvgHFRShIN-dLnZzhGdfpTh1pnohV92k9LiIn6M6jE9ekt/exec';
+
+    var PRAGAS_TIPOS = {
+      DEDETIZACAO: { label: 'Dedetização', unidades: ['TC', 'YUKA', 'CD'], icone: '🐜', empresaLabel: 'Empresa Dedetizadora' },
+      ARMADILHA_LUMINOSA: { label: 'Armadilha Luminosa', unidades: ['TC', 'YUKA'], icone: '⚡', empresaLabel: 'Empresa/Responsável pela Troca' }
+    };
+
+    var _registros = {};
+
+    function escaparHtml(texto) {
+      var div = document.createElement('div');
+      div.textContent = texto == null ? '' : String(texto);
+      return div.innerHTML;
+    }
+
+    function formatDate(iso) {
+      if (!iso) return '—';
+      var partes = iso.split('-');
+      if (partes.length !== 3) return iso;
+      return partes[2] + '/' + partes[1] + '/' + partes[0];
+    }
+
+    function carregarDedetizacao() {
+      fetch(DEDETIZACAO_EXEC_URL, { cache: 'no-store' })
+        .then(function(resposta) { return resposta.json(); })
+        .then(function(resultado) {
+          if (!resultado.ok) throw new Error(resultado.erro || 'Erro desconhecido');
+          _registros = resultado.registros || {};
+          renderTudo();
+        })
+        .catch(function(erro) {
+          console.error('[DEDETIZACAO] Erro ao carregar:', erro);
+          document.getElementById('app').innerHTML = '<div class="panel-card"><p style="color:var(--red); text-align:center;">Não foi possível carregar os dados.</p></div>';
+        });
+    }
+
+    function _chipInfo(tipo, unidade) {
+      var config = PRAGAS_TIPOS[tipo];
+      var registro = (_registros[tipo] || {})[unidade] || {};
+      var label = unidade + ' - ' + config.label;
+
+      if (!registro.dataRealizada) {
+        return { classe: 'alerta', label: label, status: '⚠️ SEM ENTRADA' };
+      }
+
+      var partes = registro.dataRealizada.split('-').map(Number);
+      var dataRealizada = new Date(partes[0], partes[1] - 1, partes[2]);
+      var proximaData = new Date(dataRealizada);
+      proximaData.setDate(proximaData.getDate() + 30);
+      var hoje = new Date();
+      hoje.setHours(0, 0, 0, 0);
+      var diffDias = Math.ceil((proximaData - hoje) / (1000 * 60 * 60 * 24));
+
+      var status, classe;
+      if (diffDias < 0) {
+        var diasAtraso = Math.abs(diffDias);
+        status = '🔴 Atrasada há ' + diasAtraso + ' dia' + (diasAtraso === 1 ? '' : 's');
+        classe = 'alerta';
+      } else if (diffDias <= 7) {
+        status = 'Faltam ' + diffDias + ' dia' + (diffDias === 1 ? '' : 's');
+        classe = 'atencao';
+      } else {
+        status = 'Faltam ' + diffDias + ' dias';
+        classe = 'ok';
+      }
+      return { classe: classe, label: label, status: status, sub: (registro.empresa || 'Não informado') + ' — ' + formatDate(registro.dataRealizada) };
+    }
+
+    function renderTudo() {
+      var htmlDedet = PRAGAS_TIPOS.DEDETIZACAO.unidades.map(function(u) { return _renderChip('DEDETIZACAO', u); }).join('');
+      var htmlArmad = PRAGAS_TIPOS.ARMADILHA_LUMINOSA.unidades.map(function(u) { return _renderChip('ARMADILHA_LUMINOSA', u); }).join('');
+
+      document.getElementById('app').innerHTML =
+        '<div class="panel-card">' +
+          '<div class="panel-header"><h2>🐜 Dedetização</h2></div>' +
+          htmlDedet +
+        '</div>' +
+        '<div class="panel-card">' +
+          '<div class="panel-header"><h2>⚡ Armadilhas Luminosas</h2></div>' +
+          htmlArmad +
+        '</div>';
+
+      document.querySelectorAll('[data-praga-tipo]').forEach(function(chip) {
+        chip.addEventListener('click', function() {
+          _abrirModal(chip.getAttribute('data-praga-tipo'), chip.getAttribute('data-praga-unidade'));
+        });
+      });
+    }
+
+    function _renderChip(tipo, unidade) {
+      var info = _chipInfo(tipo, unidade);
+      return '<div class="praga-chip ' + info.classe + '" data-praga-tipo="' + tipo + '" data-praga-unidade="' + unidade + '">' +
+        '<div><div class="praga-chip-label">' + escaparHtml(info.label) + '</div>' +
+        (info.sub ? '<div style="font-size:0.75rem; color:var(--text-muted); margin-top:2px;">' + escaparHtml(info.sub) + '</div>' : '') + '</div>' +
+        '<div class="praga-chip-status">' + info.status + '</div>' +
+      '</div>';
+    }
+
+    function _abrirModal(tipo, unidade) {
+      var config = PRAGAS_TIPOS[tipo];
+      var registro = (_registros[tipo] || {})[unidade] || {};
+
+      document.getElementById('dedetizacao-unidade').value = unidade;
+      document.getElementById('dedetizacao-tipo').value = tipo;
+      document.getElementById('dedetizacao-modal-titulo').textContent = config.icone + ' ' + config.label + ' — ' + unidade;
+      document.getElementById('dedetizacao-empresa-label').textContent = config.empresaLabel;
+      document.getElementById('dedetizacao-empresa').value = registro.empresa || '';
+      document.getElementById('dedetizacao-data').value = registro.dataRealizada || '';
+      document.getElementById('dedetizacao-certificado-input').value = '';
+
+      var spanCertAtual = document.getElementById('dedetizacao-certificado-atual');
+      spanCertAtual.innerHTML = registro.certificadoUrl
+        ? '<a href="' + registro.certificadoUrl + '" target="_blank" rel="noopener">📄 Ver certificado atual (' + escaparHtml(registro.certificadoNome || 'arquivo') + ')</a>'
+        : 'Nenhum certificado anexado ainda.';
+
+      document.getElementById('modal-dedetizacao').style.display = 'flex';
+    }
+
+    function _fecharModal() {
+      document.getElementById('modal-dedetizacao').style.display = 'none';
+    }
+
+    function _lerArquivoComoBase64(arquivo) {
+      return new Promise(function(resolve, reject) {
+        var leitor = new FileReader();
+        leitor.onload = function(e) { resolve(e.target.result); };
+        leitor.onerror = reject;
+        leitor.readAsDataURL(arquivo);
+      });
+    }
+
+    function _toast(msg, tipo) {
+      var cores = { success: 'var(--green)', error: 'var(--red)', info: 'var(--gold)' };
+      var toast = document.createElement('div');
+      toast.style.cssText = 'position:fixed;bottom:1.5rem;right:1.5rem;left:1.5rem;max-width:360px;margin:0 auto;z-index:99999;background:var(--card-bg);border:1px solid ' + (cores[tipo] || cores.info) + ';border-left:4px solid ' + (cores[tipo] || cores.info) + ';border-radius:var(--border-radius-md);padding:0.9rem 1.1rem;box-shadow:0 8px 24px rgba(0,0,0,0.15);font-size:0.88rem;color:var(--text);';
+      toast.textContent = msg;
+      document.body.appendChild(toast);
+      setTimeout(function() { toast.remove(); }, 3500);
+    }
+
+    async function _submeterForm(e) {
+      e.preventDefault();
+      var btnSalvar = document.getElementById('btn-save-dedetizacao');
+      var tipo = document.getElementById('dedetizacao-tipo').value || 'DEDETIZACAO';
+      var unidade = document.getElementById('dedetizacao-unidade').value;
+      var empresa = document.getElementById('dedetizacao-empresa').value.trim();
+      var dataRealizada = document.getElementById('dedetizacao-data').value;
+      var arquivoInput = document.getElementById('dedetizacao-certificado-input');
+      var arquivo = arquivoInput.files && arquivoInput.files[0];
+
+      if (!empresa || !dataRealizada) { _toast('Preencha empresa e data realizada.', 'error'); return; }
+
+      var textoOriginal = btnSalvar.textContent;
+      btnSalvar.disabled = true;
+      btnSalvar.textContent = 'Salvando...';
+
+      try {
+        var payload = { tipo: tipo, unidade: unidade, empresa: empresa, dataRealizada: dataRealizada, registradoPor: 'Thalita Campos' };
+        if (arquivo) {
+          payload.certificadoBase64 = await _lerArquivoComoBase64(arquivo);
+          payload.certificadoNome = arquivo.name;
+        }
+
+        var resposta = await fetch(DEDETIZACAO_EXEC_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+          body: JSON.stringify(payload)
+        });
+        var resultado = await resposta.json();
+        if (!resultado.ok) throw new Error(resultado.erro || 'Erro desconhecido');
+
+        _toast(PRAGAS_TIPOS[tipo].label + ' de ' + unidade + ' registrada!', 'success');
+        _fecharModal();
+        carregarDedetizacao();
+      } catch (erro) {
+        console.error('[DEDETIZACAO] Erro ao salvar:', erro);
+        _toast('Erro ao salvar: ' + erro.message, 'error');
+      } finally {
+        btnSalvar.disabled = false;
+        btnSalvar.textContent = textoOriginal;
+      }
+    }
+
+    document.getElementById('btn-close-dedetizacao-modal').addEventListener('click', _fecharModal);
+    document.getElementById('btn-cancel-dedetizacao').addEventListener('click', _fecharModal);
+    document.getElementById('form-dedetizacao').addEventListener('submit', _submeterForm);
+
+    carregarDedetizacao();
+  </script>
+</body>
+</html>
