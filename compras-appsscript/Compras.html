@@ -1,0 +1,890 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    :root {
+      --bg: #f7f3ee;
+      --card-bg: #ffffff;
+      --border: #e8ddd0;
+      --text: #4b433c;
+      --text-muted: #8a8570;
+      --gold: #b79b6c;
+      --green: #8f9b72;
+      --red: #c07a6c;
+      /* Aliases — o formulário abaixo foi portado quase ao pé da letra do
+         Mamma Mia Control (src/main.js), que usa esses nomes de variável.
+         Em vez de reescrever cada estilo inline, é mais seguro só apontar
+         esses nomes pra paleta já usada nas outras telas deste app
+         (Index.html/AbrirOS.html/Menu.html) — evita qualquer risco de
+         mudar sem querer o comportamento testado do parser/itens ao
+         portar. */
+      --card-border: var(--border);
+      --text-secondary: var(--text-muted);
+      --text-primary: var(--text);
+      --accent-color: var(--gold);
+      --color-red: var(--red);
+      --border-radius-sm: 8px;
+      --font-main: inherit;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      -webkit-tap-highlight-color: transparent;
+    }
+    header {
+      background: var(--text);
+      color: #fff;
+      padding: 1rem 1.1rem;
+      position: sticky;
+      top: 0;
+      z-index: 5;
+    }
+    header h1 { font-size: 1.05rem; margin: 0; font-weight: 700; }
+    header p { margin: 0.15rem 0 0; font-size: 0.78rem; color: #d8d2c6; }
+    .link-menu { display: inline-block; margin-bottom: 0.5rem; font-size: 0.78rem; color: #d8d2c6; text-decoration: none; }
+    main { padding: 1rem; max-width: 640px; margin: 0 auto; padding-bottom: 3rem; }
+
+    .estado-carregando, .estado-vazio {
+      text-align: center;
+      color: var(--text-muted);
+      padding: 2rem 1rem;
+      font-size: 0.95rem;
+    }
+
+    .alerta {
+      background: #fbe9e7;
+      border: 1px solid var(--red);
+      color: #8c3f33;
+      border-radius: 8px;
+      padding: 0.7rem 0.9rem;
+      font-size: 0.85rem;
+      margin-bottom: 1rem;
+    }
+
+    .form-secao {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.2rem;
+      margin-bottom: 1rem;
+    }
+    .form-secao label { display: block; font-size: 0.8rem; font-weight: 600; color: var(--text-muted); margin: 0.9rem 0 0.35rem; }
+    .form-secao label:first-child { margin-top: 0; }
+
+    input[type="text"], input[type="date"], input[type="number"], textarea, select, .form-control {
+      width: 100%;
+      font-size: 0.95rem;
+      padding: 0.65rem 0.75rem;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      font-family: inherit;
+      background: #fff;
+      color: var(--text);
+    }
+    textarea { min-height: 80px; resize: vertical; }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0.65rem 1rem;
+      border-radius: 10px;
+      border: none;
+      font-size: 0.9rem;
+      font-weight: 700;
+      cursor: pointer;
+      text-align: center;
+    }
+    .btn-primary { background: var(--green); color: #fff; }
+    .btn-primary:disabled { opacity: 0.6; }
+    .btn-secondary { background: #fff; color: var(--text); border: 1px solid var(--border); }
+
+    .voltar { display: inline-block; margin-bottom: 0.8rem; color: var(--text-muted); font-size: 0.85rem; cursor: pointer; }
+
+    .compra-card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1rem 1.1rem;
+      margin-bottom: 0.75rem;
+      cursor: pointer;
+    }
+    .compra-card:active { transform: scale(0.99); }
+    .compra-card-topo { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.3rem; }
+    .compra-card-id { font-weight: 700; font-size: 1rem; }
+    .compra-card-valor { font-weight: 700; color: var(--green); }
+    .compra-card-linha { font-size: 0.85rem; color: var(--text-muted); }
+
+    .compra-secao { margin-bottom: 0.5rem; }
+    .compra-campo { margin-bottom: 0.6rem; }
+    .compra-anexo {}
+
+    .modal-footer { display: flex; justify-content: flex-end; gap: 0.6rem; margin-top: 1.2rem; }
+  </style>
+</head>
+<body>
+  <header>
+    <a class="link-menu" href="javascript:history.back()">‹ Voltar</a>
+    <h1>🛒 Compras</h1>
+    <p>Painel Qualidade — Mamma Mia</p>
+  </header>
+
+  <main id="app">
+    <div class="estado-carregando" id="tela-carregando">Carregando compras…</div>
+  </main>
+
+  <script>
+    // ---------- Constantes (mesmas do Mamma Mia Control — nenhum backend novo) ----------
+    var COMPRAS_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTQ3-2e6ttLWAuBJq-eDbTFbp5QqTQ9c_h1-JhA4FmZkkmumebbS_wDMDQtT1-LzdSsrPWzrVmNN6sG/pub?output=csv';
+    var COMPRAS_EXEC_URL = 'https://script.google.com/macros/s/AKfycbxg34g07LP6huO-f9AA4FCyOrg-xgKRTheRWxKrZyJfiTlj3qJCFZCzkl7drhs5jv3b/exec';
+    var COMPRAS_ITENS_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTQ3-2e6ttLWAuBJq-eDbTFbp5QqTQ9c_h1-JhA4FmZkkmumebbS_wDMDQtT1-LzdSsrPWzrVmNN6sG/pub?gid=188433737&single=true&output=csv';
+    // Só pra alimentar o campo "OS relacionada" (Fase 4) — mesma URL
+    // pública que o Mamma Mia Control já lê, nenhuma escrita aqui.
+    var OS_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSyKnl6d4trSwtVru3JQIcoqb_h2gTHKBqn-3zXM1JW7MTzm_Xj01UJh62eDPDNEOYjisMWrGrWfFJt/pub?gid=1728678619&single=true&output=csv';
+
+    // ---------- Parser de CSV genérico (mesmo do Mamma Mia Control) ----------
+    function parseCSVLinhas(csvText) {
+      const linhas = [];
+      let campos = [];
+      let atual = '';
+      let dentroAspas = false;
+      const texto = csvText.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+
+      for (let i = 0; i < texto.length; i++) {
+        const char = texto[i];
+        if (dentroAspas) {
+          if (char === '"') {
+            if (texto[i + 1] === '"') { atual += '"'; i++; }
+            else { dentroAspas = false; }
+          } else {
+            atual += char;
+          }
+          continue;
+        }
+        if (char === '"') { dentroAspas = true; }
+        else if (char === ',') { campos.push(atual); atual = ''; }
+        else if (char === '\n') { campos.push(atual); atual = ''; linhas.push(campos); campos = []; }
+        else { atual += char; }
+      }
+      if (atual !== '' || campos.length > 0) { campos.push(atual); linhas.push(campos); }
+
+      return linhas.filter(l => !(l.length === 1 && l[0] === ''));
+    }
+
+    // ---------- Campos/opções (idênticos ao módulo Compras do Mamma Mia Control) ----------
+    const COMPRAS_CAMPOS_CSV = [
+      { chave: 'id', coluna: 'ID' },
+      { chave: 'timestamp', coluna: 'TIMESTAMP' },
+      { chave: 'unidade', coluna: 'UNIDADE' },
+      { chave: 'osRelacionada', coluna: 'OS RELACIONADA' },
+      { chave: 'categoriaSolicitante', coluna: 'CATEGORIA SOLICITANTE' },
+      { chave: 'nomeSolicitante', coluna: 'NOME SOLICITANTE' },
+      { chave: 'valorTotal', coluna: 'VALOR TOTAL', numero: true },
+      { chave: 'fornecedor', coluna: 'FORNECEDOR' },
+      { chave: 'linkCompra', coluna: 'LINK COMPRA' },
+      { chave: 'formaPagamento', coluna: 'FORMA PAGAMENTO' },
+      { chave: 'pagoPor', coluna: 'PAGO POR' },
+      { chave: 'reembolsoNecessario', coluna: 'REEMBOLSO NECESSÁRIO' },
+      { chave: 'statusReembolso', coluna: 'STATUS REEMBOLSO' },
+      { chave: 'statusCompra', coluna: 'STATUS COMPRA' },
+      { chave: 'dataSolicitacao', coluna: 'DATA SOLICITAÇÃO' },
+      { chave: 'dataCompra', coluna: 'DATA COMPRA' },
+      { chave: 'previsaoEntrega', coluna: 'PREVISÃO ENTREGA' },
+      { chave: 'dataRecebimento', coluna: 'DATA RECEBIMENTO' },
+      { chave: 'recebidoPor', coluna: 'RECEBIDO POR' },
+      { chave: 'conferido', coluna: 'CONFERIDO' },
+      { chave: 'condicaoMaterial', coluna: 'CONDIÇÃO MATERIAL' },
+      { chave: 'nf', coluna: 'NF' },
+      { chave: 'comprovante', coluna: 'COMPROVANTE' },
+      { chave: 'foto', coluna: 'FOTO' },
+    ];
+
+    const COMPRAS_ITENS_CAMPOS_CSV = [
+      { chave: 'idCompra', coluna: 'ID_COMPRA' },
+      { chave: 'categoria', coluna: 'CATEGORIA' },
+      { chave: 'item', coluna: 'ITEM' },
+      { chave: 'descricao', coluna: 'DESCRIÇÃO' },
+      { chave: 'quantidade', coluna: 'QUANTIDADE', numero: true },
+      { chave: 'unidadeMedida', coluna: 'UNIDADE MEDIDA' },
+      { chave: 'valorUnitario', coluna: 'VALOR UNITÁRIO', numero: true },
+      { chave: 'valorTotal', coluna: 'VALOR TOTAL', numero: true },
+    ];
+
+    const COMPRAS_STATUS_OPCOES = [
+      '🟣 Solicitação registrada',
+      '🟠 Cotação',
+      '🟡 Aguardando aprovação',
+      '🛒 Comprado',
+      '🚚 Em transporte',
+      '✅ Entregue',
+      '❌ Cancelado',
+    ];
+
+    const COMPRAS_CATEGORIAS_OPCOES = ['EPI', 'Manutenção', 'Produção', 'Qualidade', 'Higiene e Limpeza', 'Estrutura', 'Refeitório', 'Escritório', 'TI', 'Uniforme', 'Segurança do Trabalho', 'Ferramentas', 'Equipamentos', 'Peças', 'Outros'];
+    const COMPRAS_UNIDADES_MEDIDA_OPCOES = ['UN', 'PCT', 'CX', 'KG', 'L', 'M', 'PAR', 'KIT'];
+
+    const COMPRAS_CAMPOS_FORM = [
+      { chave: 'dataSolicitacao', coluna: 'DATA SOLICITAÇÃO', label: 'Data da solicitação', tipo: 'date', secao: 'Identificação' },
+      { chave: 'unidade', coluna: 'UNIDADE', label: 'Unidade', tipo: 'select', opcoes: ['TC', 'YUKA', 'CD', 'Geral'], secao: 'Identificação' },
+      { chave: 'categoriaSolicitante', coluna: 'CATEGORIA SOLICITANTE', label: 'Origem da necessidade', tipo: 'select', opcoes: ['Qualidade', 'Produção', 'Manutenção', 'RH', 'Administrativo', 'Limpeza', 'Cozinha', 'Outro'], secao: 'Identificação' },
+      { chave: 'osRelacionada', coluna: 'OS RELACIONADA', label: 'OS relacionada (peça de manutenção)', tipo: 'select-os', secao: 'Identificação' },
+      { chave: 'nomeSolicitante', coluna: 'NOME SOLICITANTE', label: 'Nome do solicitante', tipo: 'text', placeholder: 'Ex.: Carlos - Manutenção', secao: 'Identificação' },
+
+      { chave: 'fornecedor', coluna: 'FORNECEDOR', label: 'Fornecedor', tipo: 'text', placeholder: 'Ex.: Mercado Livre, Amazon, loja física...', secao: 'Fornecedor' },
+      { chave: 'linkCompra', coluna: 'LINK COMPRA', label: 'Link da compra', tipo: 'text', placeholder: 'https://...', secao: 'Fornecedor' },
+
+      { chave: 'formaPagamento', coluna: 'FORMA PAGAMENTO', label: 'Forma de pagamento', tipo: 'select', opcoes: ['PIX', 'Boleto', 'Cartão', 'Dinheiro', 'Faturado', 'Outro'], secao: 'Pagamento' },
+      { chave: 'pagoPor', coluna: 'PAGO POR', label: 'Pago por', tipo: 'select', opcoes: ['Empresa', 'Thalita', 'Outro colaborador'], secao: 'Pagamento' },
+      { chave: 'reembolsoNecessario', coluna: 'REEMBOLSO NECESSÁRIO', label: 'Reembolso necessário?', tipo: 'select', opcoes: ['Sim', 'Não'], secao: 'Pagamento', condicional: d => d.pagoPor === 'Thalita' || d.pagoPor === 'Outro colaborador' },
+      { chave: 'statusReembolso', coluna: 'STATUS REEMBOLSO', label: 'Status do reembolso', tipo: 'select', opcoes: ['Pendente', 'Solicitado', 'Reembolsado'], secao: 'Pagamento', condicional: d => (d.pagoPor === 'Thalita' || d.pagoPor === 'Outro colaborador') && d.reembolsoNecessario === 'Sim' },
+
+      { chave: 'statusCompra', coluna: 'STATUS COMPRA', label: 'Status da compra', tipo: 'select', opcoes: COMPRAS_STATUS_OPCOES, secao: 'Status' },
+
+      { chave: 'dataCompra', coluna: 'DATA COMPRA', label: 'Data da compra', tipo: 'date', secao: 'Entrega' },
+      { chave: 'previsaoEntrega', coluna: 'PREVISÃO ENTREGA', label: 'Previsão de entrega', tipo: 'date', secao: 'Entrega' },
+      { chave: 'dataRecebimento', coluna: 'DATA RECEBIMENTO', label: 'Data do recebimento', tipo: 'date', secao: 'Entrega' },
+      { chave: 'recebidoPor', coluna: 'RECEBIDO POR', label: 'Recebido por', tipo: 'text', secao: 'Entrega' },
+      { chave: 'conferido', coluna: 'CONFERIDO', label: 'Conferido?', tipo: 'select', opcoes: ['Sim', 'Não'], secao: 'Entrega' },
+      { chave: 'condicaoMaterial', coluna: 'CONDIÇÃO MATERIAL', label: 'Condição do material', tipo: 'select', opcoes: ['Conforme', 'Divergente', 'Danificado', 'Quantidade incorreta'], secao: 'Entrega' },
+    ];
+
+    const COMPRAS_ANEXOS = [
+      { chave: 'nf', label: '📎 Nota fiscal' },
+      { chave: 'comprovante', label: '📎 Comprovante de pagamento' },
+      { chave: 'foto', label: '📎 Foto do produto' },
+    ];
+
+    // ---------- Estado ----------
+    let comprasCache = [];
+    let comprasItensPorCompra = {};
+    let osRegistros = [];
+    let comprasEditandoId = null;
+    let comprasProximoIndiceItem = 0;
+    let comprasAnexosNovos = {};
+
+    // ---------- Helpers (idênticos ao Mamma Mia Control) ----------
+    function _comprasEscaparHtml(texto) {
+      const div = document.createElement('div');
+      div.textContent = texto == null ? '' : String(texto);
+      return div.innerHTML;
+    }
+
+    function _comprasParseData(dataBR) {
+      const partes = (dataBR || '').split('/');
+      if (partes.length !== 3) return null;
+      return new Date(Number(partes[2]), Number(partes[1]) - 1, Number(partes[0]));
+    }
+
+    function _comprasBRParaIso(dataBR) {
+      const partes = (dataBR || '').split('/');
+      if (partes.length !== 3) return '';
+      return `${partes[2]}-${partes[1].padStart(2, '0')}-${partes[0].padStart(2, '0')}`;
+    }
+
+    function _comprasFormatarMoeda(valor) {
+      return (valor || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+    }
+
+    function _comprasHtmlErro(mensagem) {
+      return `<div style="background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.3);color:var(--color-red);padding:0.6rem 0.9rem;border-radius:8px;font-size:0.85rem;margin-top:0.5rem;">${_comprasEscaparHtml(mensagem)}</div>`;
+    }
+
+    function _comprasParseLinhas(linhas) {
+      if (linhas.length < 2) return [];
+      const cabecalho = linhas[0].map(c => c.trim().toUpperCase());
+      const indices = {};
+      COMPRAS_CAMPOS_CSV.forEach(campo => { indices[campo.chave] = cabecalho.findIndex(c => c === campo.coluna); });
+
+      return linhas.slice(1)
+        .filter(cols => cols.some(c => c.trim() !== ''))
+        .map(cols => {
+          const registro = {};
+          COMPRAS_CAMPOS_CSV.forEach(campo => {
+            const idx = indices[campo.chave];
+            let valor = idx === -1 ? '' : (cols[idx] || '').replace(/"/g, '').trim();
+            if (campo.numero) valor = Number(valor.replace(',', '.')) || 0;
+            registro[campo.chave] = valor;
+          });
+          return registro;
+        })
+        .filter(r => r.id);
+    }
+
+    function _comprasParseItensLinhas(linhas) {
+      if (linhas.length < 2) return [];
+      const cabecalho = linhas[0].map(c => c.trim().toUpperCase());
+      const indices = {};
+      COMPRAS_ITENS_CAMPOS_CSV.forEach(campo => { indices[campo.chave] = cabecalho.findIndex(c => c === campo.coluna); });
+
+      return linhas.slice(1)
+        .filter(cols => cols.some(c => c.trim() !== ''))
+        .map(cols => {
+          const registro = {};
+          COMPRAS_ITENS_CAMPOS_CSV.forEach(campo => {
+            const idx = indices[campo.chave];
+            let valor = idx === -1 ? '' : (cols[idx] || '').replace(/"/g, '').trim();
+            if (campo.numero) valor = Number(valor.replace(',', '.')) || 0;
+            registro[campo.chave] = valor;
+          });
+          return registro;
+        })
+        .filter(r => r.idCompra && r.item);
+    }
+
+    // Só os campos usados pelo select "OS relacionada" — lista as OS não
+    // concluídas, mesma regra do Mamma Mia Control.
+    function _parseOSParaSelect(linhas) {
+      if (linhas.length < 2) return [];
+      const cabecalho = linhas[0].map(c => c.trim().replace(/"/g, '').toUpperCase());
+      const idxOS = cabecalho.indexOf('OS');
+      const idxStatus = cabecalho.indexOf('STATUS');
+      const idxSetor = cabecalho.indexOf('SETOR');
+      const idxEquipamento = cabecalho.indexOf('EQUIPAMENTO OU LOCAL AFETADO');
+      if (idxOS === -1) return [];
+
+      return linhas.slice(1)
+        .filter(cols => cols.some(c => c.trim() !== ''))
+        .map(cols => ({
+          os: (cols[idxOS] || '').replace(/"/g, '').trim(),
+          status: (cols[idxStatus] || '').replace(/"/g, '').trim().toUpperCase(),
+          setor: (cols[idxSetor] || '').replace(/"/g, '').trim(),
+          equipamento: (cols[idxEquipamento] || '').replace(/"/g, '').trim(),
+        }))
+        .filter(r => r.os);
+    }
+
+    // ---------- Carregamento ----------
+    function iniciar() {
+      document.getElementById('app').innerHTML = '<div class="estado-carregando">Carregando compras…</div>';
+
+      Promise.all([
+        fetch(COMPRAS_CSV_URL, { cache: 'no-store' }),
+        fetch(COMPRAS_ITENS_CSV_URL, { cache: 'no-store' }),
+      ]).then(respostas => {
+        if (!respostas[0].ok) throw new Error('HTTP ' + respostas[0].status);
+        if (!respostas[1].ok) throw new Error('HTTP ' + respostas[1].status);
+        return Promise.all([respostas[0].text(), respostas[1].text()]);
+      }).then(textos => {
+        comprasCache = _comprasParseLinhas(parseCSVLinhas(textos[0]));
+        const itens = _comprasParseItensLinhas(parseCSVLinhas(textos[1]));
+        comprasItensPorCompra = {};
+        itens.forEach(item => {
+          if (!comprasItensPorCompra[item.idCompra]) comprasItensPorCompra[item.idCompra] = [];
+          comprasItensPorCompra[item.idCompra].push(item);
+        });
+
+        // OS só alimenta o select "OS relacionada" — falha aqui não
+        // impede ver/editar compras, só deixa esse campo sem opções.
+        return fetch(OS_CSV_URL, { cache: 'no-store' })
+          .then(r => r.ok ? r.text() : '')
+          .catch(() => '');
+      }).then(textoOS => {
+        osRegistros = textoOS ? _parseOSParaSelect(parseCSVLinhas(textoOS)) : [];
+
+        // Veio do botão "Registrar compra" da aba OS do Mamma Mia
+        // Control (link novo, com ?osRelacionada=...&unidade=...) — abre
+        // direto no formulário de Nova compra já vinculado, em vez de
+        // cair na lista.
+        const params = new URLSearchParams(window.location.search);
+        const osRelacionada = params.get('osRelacionada');
+        if (osRelacionada) {
+          abrirFormulario(null, { osRelacionada, unidade: params.get('unidade') || '' });
+        } else {
+          renderizarLista();
+        }
+      }).catch(erro => {
+        console.error('[COMPRAS]', erro);
+        renderizarErroLista();
+      });
+    }
+
+    function renderizarErroLista() {
+      document.getElementById('app').innerHTML =
+        '<div class="alerta">Não foi possível carregar a lista de compras. Você ainda pode registrar uma nova.</div>' +
+        '<button class="btn btn-secondary" id="btn-tentar-de-novo" style="width:100%;margin-bottom:0.6rem;">Tentar de novo</button>' +
+        '<button class="btn btn-primary" id="btn-nova-compra-erro" style="width:100%;">+ Nova compra</button>';
+      document.getElementById('btn-tentar-de-novo').addEventListener('click', iniciar);
+      document.getElementById('btn-nova-compra-erro').addEventListener('click', () => abrirFormulario(null));
+    }
+
+    // ---------- Lista ----------
+    function renderizarLista() {
+      const app = document.getElementById('app');
+      app.innerHTML =
+        '<div class="form-secao" style="margin-bottom:1rem;">' +
+          '<label for="campo-busca" style="margin-top:0;">Buscar</label>' +
+          '<input type="text" id="campo-busca" placeholder="ID ou fornecedor...">' +
+        '</div>' +
+        '<button class="btn btn-primary" id="btn-nova-compra" style="width:100%;margin-bottom:1rem;">+ Nova compra</button>' +
+        '<div id="lista-compras"></div>';
+
+      document.getElementById('campo-busca').addEventListener('input', renderizarCardsCompras);
+      document.getElementById('btn-nova-compra').addEventListener('click', () => abrirFormulario(null));
+      renderizarCardsCompras();
+    }
+
+    function renderizarCardsCompras() {
+      const container = document.getElementById('lista-compras');
+      if (!container) return;
+      const termo = (document.getElementById('campo-busca').value || '').trim().toLowerCase();
+
+      const filtradas = comprasCache
+        .filter(c => !termo || c.id.toLowerCase().indexOf(termo) !== -1 || (c.fornecedor || '').toLowerCase().indexOf(termo) !== -1)
+        .sort((a, b) => (b.id || '').localeCompare(a.id || ''));
+
+      if (filtradas.length === 0) {
+        container.innerHTML = '<p class="estado-vazio">Nenhuma compra encontrada.</p>';
+        return;
+      }
+
+      container.innerHTML = filtradas.map(c => `
+        <div class="compra-card" data-id="${_comprasEscaparHtml(c.id)}">
+          <div class="compra-card-topo">
+            <span class="compra-card-id">${_comprasEscaparHtml(c.id)}</span>
+            <span class="compra-card-valor">${_comprasFormatarMoeda(c.valorTotal)}</span>
+          </div>
+          <div class="compra-card-linha">${_comprasEscaparHtml(c.dataCompra || c.dataSolicitacao || '-')} · ${_comprasEscaparHtml(c.unidade || '-')}</div>
+          <div class="compra-card-linha">${_comprasEscaparHtml(c.fornecedor) || '-'}</div>
+          <div class="compra-card-linha">${_comprasEscaparHtml(c.statusCompra) || '-'}</div>
+        </div>`).join('');
+
+      container.querySelectorAll('.compra-card').forEach(card => {
+        card.addEventListener('click', () => {
+          const registro = comprasCache.find(c => c.id === card.dataset.id);
+          if (registro) abrirFormulario(registro);
+        });
+      });
+    }
+
+    // ---------- Formulário único (criar/editar) — portado do Mamma Mia Control ----------
+
+    function _comprasRenderizarCampo(campo, dados) {
+      const valor = dados[campo.chave] || '';
+      let inputHtml;
+      if (campo.tipo === 'select') {
+        inputHtml = `<select id="compra-campo-${campo.chave}" class="form-control">
+          <option value="">Selecione...</option>
+          ${campo.opcoes.map(o => `<option value="${_comprasEscaparHtml(o)}" ${valor === o ? 'selected' : ''}>${_comprasEscaparHtml(o)}</option>`).join('')}
+        </select>`;
+      } else if (campo.tipo === 'select-os') {
+        const osAbertas = (osRegistros || []).filter(r => r.status !== 'CONCLUÍDO' && r.status !== 'CONCLUIDO');
+        inputHtml = `<select id="compra-campo-${campo.chave}" class="form-control">
+          <option value="">Nenhuma</option>
+          ${osAbertas.map(os => `<option value="${_comprasEscaparHtml(os.os)}" ${valor === os.os ? 'selected' : ''}>${_comprasEscaparHtml(os.os)} — ${_comprasEscaparHtml(os.equipamento || '-')} (${_comprasEscaparHtml(os.setor || '-')})</option>`).join('')}
+        </select>`;
+      } else if (campo.tipo === 'date') {
+        inputHtml = `<input type="date" id="compra-campo-${campo.chave}" class="form-control" value="${_comprasBRParaIso(valor)}">`;
+      } else if (campo.tipo === 'number') {
+        inputHtml = `<input type="number" inputmode="decimal" step="any" min="0" id="compra-campo-${campo.chave}" class="form-control" value="${valor || ''}">`;
+      } else {
+        inputHtml = `<input type="text" id="compra-campo-${campo.chave}" class="form-control" value="${_comprasEscaparHtml(valor)}" placeholder="${_comprasEscaparHtml(campo.placeholder || '')}">`;
+      }
+      return `<div class="compra-campo" data-condicional-chave="${campo.chave}">
+        <label style="display:block;font-size:0.8rem;color:var(--text-secondary);margin-bottom:0.3rem;">${campo.label}${campo.obrigatorio ? ' *' : ''}</label>
+        ${inputHtml}
+      </div>`;
+    }
+
+    function _comprasRenderizarFormulario(dados, itensIniciais) {
+      const historicoPlaceholder = dados.id ? `<div id="compra-historico" style="margin-bottom:1rem;"><p style="color:var(--text-muted);font-size:0.8rem;">Carregando histórico...</p></div>` : '';
+
+      const renderizarGrupo = campos => `
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:0.75rem;">
+          ${campos.map(campo => _comprasRenderizarCampo(campo, dados)).join('')}
+        </div>`;
+
+      const secaoIdentificacao = COMPRAS_CAMPOS_FORM.filter(c => c.secao === 'Identificação');
+      const outrasSecoes = [...new Set(COMPRAS_CAMPOS_FORM.filter(c => c.secao !== 'Identificação').map(c => c.secao))];
+
+      const htmlIdentificacao = `
+        <div class="compra-secao">
+          <h4 style="margin:1rem 0 0.5rem;font-size:0.78rem;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.03em;">Identificação</h4>
+          ${renderizarGrupo(secaoIdentificacao)}
+        </div>`;
+
+      const htmlOutrasSecoes = outrasSecoes.map(secao => `
+        <div class="compra-secao">
+          <h4 style="margin:1rem 0 0.5rem;font-size:0.78rem;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.03em;">${secao}</h4>
+          ${renderizarGrupo(COMPRAS_CAMPOS_FORM.filter(c => c.secao === secao))}
+        </div>`).join('');
+
+      const anexosHtml = COMPRAS_ANEXOS.map(anexo => `
+        <div class="compra-anexo" style="margin-bottom:0.6rem;">
+          <label style="display:block;font-size:0.8rem;color:var(--text-secondary);margin-bottom:0.3rem;">${anexo.label}</label>
+          ${dados[anexo.chave] ? `<div style="margin-bottom:0.3rem;"><a href="${dados[anexo.chave]}" target="_blank" style="color:var(--accent-color);font-size:0.82rem;">📄 Ver arquivo atual</a> — anexar outro abaixo substitui</div>` : ''}
+          <input type="file" accept="image/*,application/pdf" data-anexo-compra="${anexo.chave}">
+        </div>
+      `).join('');
+
+      return `
+        ${historicoPlaceholder}
+        ${htmlIdentificacao}
+        ${_comprasItensRenderizarSecao(itensIniciais)}
+        ${htmlOutrasSecoes}
+        <div class="compra-secao">
+          <h4 style="margin:1rem 0 0.5rem;font-size:0.78rem;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.03em;">Documentos</h4>
+          ${anexosHtml}
+        </div>
+        <div id="compra-form-erro"></div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" id="compra-form-cancelar">Cancelar</button>
+          <button type="button" class="btn btn-primary" id="compra-form-salvar">Salvar</button>
+        </div>
+      `;
+    }
+
+    // ---------- Itens da compra (idêntico ao Mamma Mia Control, mesmo parser testado) ----------
+
+    function _comprasItensLinhaHtml(item) {
+      item = item || {};
+      const idx = comprasProximoIndiceItem++;
+      const categoria = item.categoria || '';
+      const nomeItem = item.item || '';
+      const descricao = item.descricao || '';
+      const quantidade = item.quantidade || '';
+      const unidadeMedida = item.unidadeMedida || '';
+      const valorUnitario = item.valorUnitario || '';
+      const valorTotal = (Number(quantidade) || 0) * (Number(valorUnitario) || 0);
+
+      return `
+        <div class="compra-item-linha" data-item-idx="${idx}" style="display:grid;grid-template-columns:1.3fr 1.6fr 1.2fr 0.7fr 0.8fr 0.9fr 0.9fr auto;gap:0.4rem;align-items:end;padding:0.5rem 0;border-bottom:1px solid var(--card-border);min-width:760px;">
+          <div>
+            <label style="display:block;font-size:0.7rem;color:var(--text-secondary);">Categoria</label>
+            <select id="compra-item-${idx}-categoria" class="form-control" style="font-size:0.82rem;padding:0.4rem;">
+              <option value="">Selecione...</option>
+              ${COMPRAS_CATEGORIAS_OPCOES.map(c => `<option value="${c}" ${categoria === c ? 'selected' : ''}>${c}</option>`).join('')}
+            </select>
+          </div>
+          <div>
+            <label style="display:block;font-size:0.7rem;color:var(--text-secondary);">Item</label>
+            <input type="text" id="compra-item-${idx}-item" class="form-control" style="font-size:0.82rem;padding:0.4rem;" value="${_comprasEscaparHtml(nomeItem)}">
+          </div>
+          <div>
+            <label style="display:block;font-size:0.7rem;color:var(--text-secondary);">Descrição</label>
+            <input type="text" id="compra-item-${idx}-descricao" class="form-control" style="font-size:0.82rem;padding:0.4rem;" value="${_comprasEscaparHtml(descricao)}">
+          </div>
+          <div>
+            <label style="display:block;font-size:0.7rem;color:var(--text-secondary);">Qtd.</label>
+            <input type="number" inputmode="decimal" step="any" min="0" id="compra-item-${idx}-quantidade" class="form-control compra-item-calculo" style="font-size:0.82rem;padding:0.4rem;" value="${quantidade}">
+          </div>
+          <div>
+            <label style="display:block;font-size:0.7rem;color:var(--text-secondary);">Unid.</label>
+            <select id="compra-item-${idx}-unidade" class="form-control" style="font-size:0.82rem;padding:0.4rem;">
+              <option value="">-</option>
+              ${COMPRAS_UNIDADES_MEDIDA_OPCOES.map(u => `<option value="${u}" ${unidadeMedida === u ? 'selected' : ''}>${u}</option>`).join('')}
+            </select>
+          </div>
+          <div>
+            <label style="display:block;font-size:0.7rem;color:var(--text-secondary);">Valor unit.</label>
+            <input type="number" inputmode="decimal" step="any" min="0" id="compra-item-${idx}-valorUnitario" class="form-control compra-item-calculo" style="font-size:0.82rem;padding:0.4rem;" value="${valorUnitario}">
+          </div>
+          <div>
+            <label style="display:block;font-size:0.7rem;color:var(--text-secondary);">Total</label>
+            <div id="compra-item-${idx}-total" style="font-size:0.82rem;padding:0.4rem 0;font-weight:600;">${_comprasFormatarMoeda(valorTotal)}</div>
+          </div>
+          <button type="button" class="btn btn-secondary compra-item-remover" data-item-idx="${idx}" style="padding:0.4rem 0.6rem;font-size:0.8rem;" title="Remover item">✕</button>
+        </div>`;
+    }
+
+    function _comprasItensRenderizarSecao(itensIniciais) {
+      const linhasIniciais = (itensIniciais && itensIniciais.length ? itensIniciais : [{}]).map(_comprasItensLinhaHtml).join('');
+      return `
+        <div class="compra-secao">
+          <h4 style="margin:1rem 0 0.3rem;font-size:0.78rem;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.03em;">Itens da compra</h4>
+          <div style="overflow-x:auto;">
+            <div id="compra-itens-lista">${linhasIniciais}</div>
+          </div>
+          <div style="display:flex;gap:0.5rem;margin-top:0.6rem;flex-wrap:wrap;">
+            <button type="button" class="btn btn-secondary" id="compra-item-add" style="font-size:0.8rem;padding:0.4rem 0.8rem;">+ item</button>
+            <button type="button" class="btn btn-secondary" id="compra-item-colar-toggle" style="font-size:0.8rem;padding:0.4rem 0.8rem;">Colar itens</button>
+          </div>
+          <div id="compra-item-colar-area" hidden style="margin-top:0.6rem;">
+            <p style="font-size:0.78rem;color:var(--text-secondary);margin:0 0 0.3rem;">Cola a lista (um item por linha) — o sistema tenta separar item/quantidade/valor sozinho; revise antes de salvar.</p>
+            <textarea id="compra-item-colar-texto" rows="5" class="form-control" style="font-size:0.82rem;" placeholder="Ex.: Papel Higiênico 2 R$77,80"></textarea>
+            <button type="button" class="btn btn-primary" id="compra-item-colar-processar" style="margin-top:0.4rem;font-size:0.8rem;padding:0.4rem 0.8rem;">Adicionar itens colados</button>
+          </div>
+        </div>`;
+    }
+
+    function _comprasItemAtualizarTotal(linhaEl) {
+      if (!linhaEl) return;
+      const idx = linhaEl.dataset.itemIdx;
+      const campoQtd = document.getElementById(`compra-item-${idx}-quantidade`);
+      const campoValor = document.getElementById(`compra-item-${idx}-valorUnitario`);
+      const quantidade = Number(campoQtd && campoQtd.value) || 0;
+      const valorUnitario = Number(campoValor && campoValor.value) || 0;
+      const totalEl = document.getElementById(`compra-item-${idx}-total`);
+      if (totalEl) totalEl.textContent = _comprasFormatarMoeda(quantidade * valorUnitario);
+    }
+
+    function _comprasItemAdicionarLinha(itemInicial) {
+      const lista = document.getElementById('compra-itens-lista');
+      if (lista) lista.insertAdjacentHTML('beforeend', _comprasItensLinhaHtml(itemInicial));
+    }
+
+    function _comprasItemRemoverLinha(linhaEl) {
+      if (!linhaEl) return;
+      const lista = document.getElementById('compra-itens-lista');
+      if (lista && lista.children.length <= 1) { linhaEl.remove(); _comprasItemAdicionarLinha(); return; }
+      linhaEl.remove();
+    }
+
+    function _comprasItemToggleColar() {
+      const area = document.getElementById('compra-item-colar-area');
+      if (area) area.hidden = !area.hidden;
+    }
+
+    // Mesmo parser testado no Mamma Mia Control, byte a byte — ver
+    // docs/superpowers/specs/2026-09-21-compras-itens-multiplos-design.md.
+    function _comprasParsearItensColados(texto) {
+      const blocos = (texto || '').split(/\n\s*\n/).map(b => b.trim()).filter(Boolean);
+      return blocos.length > 1
+        ? blocos.map(_comprasParsearBlocoItemColado)
+        : _comprasParsearItensColadosPorLinha(texto);
+    }
+
+    function _comprasParsearBlocoItemColado(bloco) {
+      const linhas = bloco.split('\n').map(l => l.trim()).filter(Boolean);
+      let nomeItem = '';
+      let quantidade = '';
+      let valorUnitario = '';
+
+      linhas.forEach(linha => {
+        const matchUnitario = linha.match(/^R\$\s?([\d.]+,\d+)\s*\/\s*\S+$/i);
+        if (matchUnitario) { if (!valorUnitario) valorUnitario = matchUnitario[1].replace(/\./g, '').replace(',', '.'); return; }
+
+        if (/^R\$\s?[\d.]+,\d+$/i.test(linha)) return;
+
+        const matchQtd = linha.match(/^(\d+)[,.]\d*\s*[A-Za-zÀ-ú]*$/);
+        if (matchQtd) { if (!quantidade) quantidade = matchQtd[1]; return; }
+
+        if (!nomeItem) nomeItem = linha;
+      });
+
+      return { categoria: '', item: nomeItem || linhas[0] || '', descricao: '', quantidade, unidadeMedida: '', valorUnitario };
+    }
+
+    function _comprasParsearItensColadosPorLinha(texto) {
+      return (texto || '')
+        .split('\n')
+        .map(l => l.trim())
+        .filter(Boolean)
+        .map(linhaOriginal => {
+          let resto = linhaOriginal;
+          let valorUnitario = '';
+          let quantidade = '';
+
+          const matchValor = resto.match(/R\$?\s?(\d{1,3}(?:\.\d{3})*,\d{2}|\d+,\d{2}|\d+\.\d{2})/);
+          if (matchValor) {
+            valorUnitario = matchValor[1].replace(/\./g, '').replace(',', '.');
+            resto = resto.replace(matchValor[0], ' ');
+          }
+
+          const matchQtd = resto.match(/\b(\d+(?:[.,]\d+)?)\s*(un|und|pct|cx|kg|l|m|par|kit)?\b/i);
+          if (matchQtd) {
+            quantidade = matchQtd[1].replace(',', '.');
+            resto = resto.replace(matchQtd[0], ' ');
+          }
+
+          const nomeItem = resto.replace(/\s{2,}/g, ' ').trim().replace(/^[-•\d.\s]+/, '').trim();
+
+          return { categoria: '', item: nomeItem || linhaOriginal, descricao: '', quantidade, unidadeMedida: '', valorUnitario };
+        });
+    }
+
+    function _comprasItemProcessarColados() {
+      const textarea = document.getElementById('compra-item-colar-texto');
+      if (!textarea || !textarea.value.trim()) return;
+      _comprasParsearItensColados(textarea.value).forEach(item => _comprasItemAdicionarLinha(item));
+      textarea.value = '';
+      const area = document.getElementById('compra-item-colar-area');
+      if (area) area.hidden = true;
+    }
+
+    function _comprasColetarItensFormulario() {
+      return Array.from(document.querySelectorAll('.compra-item-linha'))
+        .map(linhaEl => {
+          const idx = linhaEl.dataset.itemIdx;
+          const el = id => document.getElementById(`compra-item-${idx}-${id}`);
+          return {
+            categoria: (el('categoria') && el('categoria').value) || '',
+            item: (el('item') && el('item').value) || '',
+            descricao: (el('descricao') && el('descricao').value) || '',
+            quantidade: (el('quantidade') && el('quantidade').value) || '',
+            unidadeMedida: (el('unidade') && el('unidade').value) || '',
+            valorUnitario: (el('valorUnitario') && el('valorUnitario').value) || '',
+          };
+        })
+        .filter(item => item.categoria.trim() && item.item.trim());
+    }
+
+    // ---------- Histórico (Fase 2) ----------
+
+    async function _comprasBuscarHistorico(id) {
+      const resposta = await fetch(COMPRAS_EXEC_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({ acao: 'historico', id }),
+      });
+      const resultado = await resposta.json();
+      if (!resultado.ok) throw new Error(resultado.erro || 'Erro ao buscar histórico.');
+      return resultado.historico || [];
+    }
+
+    function _comprasRenderizarHistorico(historico) {
+      const area = document.getElementById('compra-historico');
+      if (!area) return;
+
+      if (!historico.length) {
+        area.innerHTML = '<p style="color:var(--text-muted);font-size:0.8rem;">Sem histórico ainda.</p>';
+        return;
+      }
+
+      const itens = historico.map(h => {
+        const data = new Date(h.timestamp);
+        const dataTexto = isNaN(data.getTime())
+          ? String(h.timestamp)
+          : data.toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+        return `<div style="display:flex;gap:0.6rem;font-size:0.82rem;padding:0.3rem 0;border-bottom:1px solid var(--card-border);">
+          <span style="color:var(--text-secondary);white-space:nowrap;">${_comprasEscaparHtml(dataTexto)}</span>
+          <span>${_comprasEscaparHtml(h.status)}</span>
+        </div>`;
+      }).join('');
+
+      area.innerHTML = `
+        <h4 style="margin:0 0 0.4rem;font-size:0.78rem;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.03em;">Histórico</h4>
+        <div>${itens}</div>
+      `;
+    }
+
+    function _comprasRenderizarHistoricoErro() {
+      const area = document.getElementById('compra-historico');
+      if (area) area.innerHTML = '<p style="color:var(--text-muted);font-size:0.8rem;">Não foi possível carregar o histórico.</p>';
+    }
+
+    function _comprasColetarValoresFormulario() {
+      const dados = {};
+      COMPRAS_CAMPOS_FORM.forEach(campo => {
+        const el = document.getElementById('compra-campo-' + campo.chave);
+        if (el) dados[campo.chave] = el.value;
+      });
+      return dados;
+    }
+
+    function _comprasAtualizarCondicionais() {
+      const dados = _comprasColetarValoresFormulario();
+      COMPRAS_CAMPOS_FORM.forEach(campo => {
+        if (!campo.condicional) return;
+        const wrapper = document.querySelector('[data-condicional-chave="' + campo.chave + '"]');
+        if (wrapper) wrapper.hidden = !campo.condicional(dados);
+      });
+    }
+
+    function _comprasLerArquivoAnexo(inputEl) {
+      const chave = inputEl.dataset.anexoCompra;
+      const arquivo = inputEl.files && inputEl.files[0];
+      if (!arquivo) { delete comprasAnexosNovos[chave]; return; }
+      const leitor = new FileReader();
+      leitor.onload = () => {
+        const base64Completo = leitor.result;
+        comprasAnexosNovos[chave] = { base64: base64Completo.split(',')[1], mimeType: arquivo.type };
+      };
+      leitor.readAsDataURL(arquivo);
+    }
+
+    // ---------- Abrir / salvar formulário ----------
+
+    function abrirFormulario(registro, prefill) {
+      comprasEditandoId = registro ? registro.id : null;
+      comprasAnexosNovos = {};
+      const dados = Object.assign({}, registro || {}, prefill || {});
+      const itensIniciais = registro ? (comprasItensPorCompra[registro.id] || []) : [];
+      comprasProximoIndiceItem = 0;
+
+      const app = document.getElementById('app');
+      app.innerHTML =
+        '<div class="voltar" id="btn-voltar-form">‹ Voltar para a lista</div>' +
+        '<div class="form-secao">' +
+          '<h2 style="margin:0 0 0.5rem;font-size:1.05rem;">' + (registro ? 'Editar ' + _comprasEscaparHtml(registro.id) : 'Nova compra') + '</h2>' +
+          _comprasRenderizarFormulario(dados, itensIniciais) +
+        '</div>';
+
+      document.getElementById('btn-voltar-form').addEventListener('click', renderizarLista);
+      document.getElementById('compra-form-cancelar').addEventListener('click', renderizarLista);
+      document.getElementById('compra-form-salvar').addEventListener('click', comprasSalvar);
+
+      // Delegação attachada só UMA VEZ no #app (que nunca é recriado
+      // como elemento, só seu innerHTML muda) — evita empilhar listener
+      // a cada vez que um formulário é aberto nesta sessão da página.
+      if (!app._wired) {
+        app._wired = true;
+        app.addEventListener('change', ev => {
+          const inputAnexo = ev.target.closest('[data-anexo-compra]');
+          if (inputAnexo) { _comprasLerArquivoAnexo(inputAnexo); return; }
+          _comprasAtualizarCondicionais();
+        });
+        app.addEventListener('input', ev => {
+          const linhaItem = ev.target.closest('.compra-item-calculo') && ev.target.closest('.compra-item-linha');
+          if (linhaItem) _comprasItemAtualizarTotal(linhaItem);
+        });
+        app.addEventListener('click', ev => {
+          if (ev.target.closest('#compra-item-add')) { _comprasItemAdicionarLinha(); return; }
+          if (ev.target.closest('#compra-item-colar-toggle')) { _comprasItemToggleColar(); return; }
+          if (ev.target.closest('#compra-item-colar-processar')) { _comprasItemProcessarColados(); return; }
+          const btnRemover = ev.target.closest('.compra-item-remover');
+          if (btnRemover) _comprasItemRemoverLinha(btnRemover.closest('.compra-item-linha'));
+        });
+      }
+
+      _comprasAtualizarCondicionais();
+
+      if (registro) {
+        _comprasBuscarHistorico(registro.id)
+          .then(_comprasRenderizarHistorico)
+          .catch(_comprasRenderizarHistoricoErro);
+      }
+    }
+
+    async function comprasSalvar() {
+      const areaErro = document.getElementById('compra-form-erro');
+      const botao = document.getElementById('compra-form-salvar');
+      areaErro.innerHTML = '';
+
+      const dadosFormulario = _comprasColetarValoresFormulario();
+      const itens = _comprasColetarItensFormulario();
+      if (itens.length === 0) { areaErro.innerHTML = _comprasHtmlErro('Adicione pelo menos um item com categoria e nome preenchidos.'); return; }
+
+      const corpo = Object.assign({ acao: comprasEditandoId ? 'editar' : 'criar', itens }, dadosFormulario);
+      if (comprasEditandoId) corpo.id = comprasEditandoId;
+      Object.keys(comprasAnexosNovos).forEach(chave => {
+        corpo[chave + 'Base64'] = comprasAnexosNovos[chave].base64;
+        corpo[chave + 'MimeType'] = comprasAnexosNovos[chave].mimeType;
+      });
+
+      botao.disabled = true;
+      botao.textContent = 'Salvando...';
+      try {
+        const resposta = await fetch(COMPRAS_EXEC_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+          body: JSON.stringify(corpo),
+        });
+        const resultado = await resposta.json();
+        if (!resultado.ok) throw new Error(resultado.erro || 'Erro ao salvar.');
+        iniciar(); // recarrega tudo do zero e volta pra lista já atualizada
+      } catch (erro) {
+        areaErro.innerHTML = _comprasHtmlErro(erro.message);
+        botao.disabled = false;
+        botao.textContent = 'Salvar';
+      }
+    }
+
+    iniciar();
+  </script>
+</body>
+</html>

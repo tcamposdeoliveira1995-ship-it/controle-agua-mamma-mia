@@ -1,19 +1,21 @@
 /**
  * MÓDULO COMPRAS — Fase 1 + Fase 2 + reestruturação de itens múltiplos +
- * Fase 4 (integração com OS de Manutenção)
+ * Fase 4 (integração com OS de Manutenção) + Painel Qualidade
  * (ver docs/superpowers/specs/2026-09-18-compras-fase1-design.md,
  * 2026-09-20-compras-fase2-design.md,
- * 2026-09-21-compras-itens-multiplos-design.md e
- * 2026-09-18-compras-fase4-os-design.md, no repo
+ * 2026-09-21-compras-itens-multiplos-design.md,
+ * 2026-09-18-compras-fase4-os-design.md e
+ * 2026-09-23-painel-qualidade-compras-design.md, no repo
  * controle-agua-mamma-mia).
  *
- * Backend puro (sem tela própria) — o registro/edição de compras
- * acontece dentro do próprio Mamma Mia Control (painel Vercel), que
- * escreve aqui via fetch POST no /exec deste projeto (mesmo padrão do
- * mural de Avisos). A leitura (dashboard, lista, KPIs) é pelos CSVs
- * publicados das abas COMPRAS e COMPRAS_ITENS, não passa por este
- * arquivo — só o histórico de uma compra específica (Fase 2) é pedido
- * direto aqui via doPost.
+ * DESDE O PAINEL QUALIDADE: o registro/edição de compras NÃO acontece
+ * mais dentro do Mamma Mia Control (painel Vercel) — esse continua só
+ * lendo os CSVs publicados (dashboard, lista, KPIs, gráficos), sem
+ * nenhum formulário de escrita. Quem registra/edita compras agora é a
+ * tela HTML própria deste projeto (Compras.html — acessada pelo link
+ * /exec deste Apps Script, direto ou pelo hub do Painel Qualidade), que
+ * chama o mesmo doPost abaixo — nenhuma mudança no formato dos dados
+ * trocados, só de ONDE a tela roda.
  *
  * ─────────────────────────── COMO INSTALAR (do zero) ───────────────────────────
  * 1) Crie uma planilha nova no Google Sheets (ex.: "Compras — Mamma Mia Control").
@@ -59,13 +61,22 @@
  *
  * 3) Extensões > Apps Script, apague o conteúdo do Code.gs padrão e cole
  *    este arquivo inteiro no lugar.
+ * 3.1) NO PAINEL QUALIDADE: crie um arquivo novo do tipo HTML chamado
+ *      exatamente "Compras" e cole o conteúdo de Compras.html nele — é a
+ *      tela de registrar/editar compras. Se você já tinha esse projeto
+ *      instalado antes (Fase 1-4), só precisa adicionar esse arquivo
+ *      novo, o resto do Code.gs já existente continua igual.
  * 4) Implantar > Nova implantação > tipo "App da Web":
  *      - Executar como: Eu (sua conta)
  *      - Quem pode acessar: Qualquer pessoa
- *    Implantar. Copie a URL que termina em /exec — é o COMPRAS_EXEC_URL.
+ *    Implantar. Copie a URL que termina em /exec — é o COMPRAS_EXEC_URL
+ *    (usado pelo painel pra ler/gravar) E TAMBÉM o link direto da tela
+ *    de Compras do Painel Qualidade (abrir esse link no navegador mostra
+ *    a lista de compras, não mais um JSON de status).
  *    (Se já tinha uma implantação anterior: Implantar > Gerenciar
  *    implantações > ✏️ editar > Nova versão > Implantar — mesma URL de
- *    antes, não precisa trocar nada no painel.)
+ *    antes, não precisa trocar nada no painel nem no Menu do Painel
+ *    Qualidade.)
  * 5) Arquivo > Compartilhar > Publicar na Web — publique CADA UMA das
  *    abas COMPRAS e COMPRAS_ITENS (uma de cada vez, escolhendo a aba
  *    certa no seletor), formato CSV, Publicar — e marque "Republicar
@@ -765,7 +776,9 @@ function verificarAlertasCompras() {
 // ───────────────────────── Roteamento do Web App ─────────────────────────
 
 function doGet(e) {
-  return respostaJson({ ok: true, mensagem: "Backend de Compras ativo." });
+  return HtmlService.createHtmlOutputFromFile("Compras")
+    .setTitle("Compras — Mamma Mia")
+    .addMetaTag("viewport", "width=device-width, initial-scale=1");
 }
 
 function doPost(e) {

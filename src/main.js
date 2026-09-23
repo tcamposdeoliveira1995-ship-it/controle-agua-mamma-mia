@@ -2372,12 +2372,6 @@ async function carregarPerdas() {
 }
 // ================= MÓDULO OS =================
 
-// Guarda os registros de OS carregados (não só os "visíveis" pelo filtro
-// da tabela) — reaproveitado pelo select "OS relacionada" do formulário
-// de Compras (Fase 4, ver docs/superpowers/specs/2026-09-18-compras-
-// fase4-os-design.md).
-let osRegistros = [];
-
 // Converte "dd/mm/aaaa" ou "dd/mm/aaaa hh:mm" em uma chave "aaaammddhhmm" que
 // ordena corretamente como texto (mais recente > mais antiga). Retorna '' se
 // não reconhecer o formato, para nunca quebrar a ordenação por causa de um
@@ -2444,11 +2438,14 @@ async function _osCarregarComprasVinculadas() {
   }
 }
 
-// Abre o formulário de Compras já com a OS (e a unidade dela) vinculadas
-// — atalho a partir do botão "Registrar compra" na aba OS.
+// Abre a tela de Compras do Painel Qualidade (nova aba) já com a OS e a
+// unidade pré-preenchidas — atalho a partir do botão "Registrar compra"
+// na aba OS. Desde a migração de Compras pro Painel Qualidade, o Mamma
+// Mia Control não tem mais o formulário embutido — ver
+// docs/superpowers/specs/2026-09-23-painel-qualidade-compras-design.md.
 function _osRegistrarCompraParaOS(osId, unidade) {
-  switchTab('compras');
-  comprasAbrirModal(null, { osRelacionada: osId, unidade: unidade || '' });
+  const url = COMPRAS_EXEC_URL + '?osRelacionada=' + encodeURIComponent(osId) + '&unidade=' + encodeURIComponent(unidade || '');
+  window.open(url, '_blank');
 }
 
 async function carregarOS() {
@@ -2512,8 +2509,6 @@ async function carregarOS() {
 
     // Mais recentes primeiro quando há coluna de data reconhecida; senão, mantém a ordem da planilha.
     if (indiceData >= 0) registros.sort((a, b) => b.chaveData.localeCompare(a.chaveData));
-
-    osRegistros = registros;
 
     if (tableBody) {
       const comprasPorOS = await _osCarregarComprasVinculadas();
@@ -3695,10 +3690,12 @@ function previsaoComprarGerarPDF(estado) {
 // ================= MÓDULO COMPRAS =================
 // Fase 1 — ver docs/superpowers/specs/2026-09-18-compras-fase1-design.md.
 // Lê a aba COMPRAS (compras-appsscript, repo próprio) publicada como CSV
-// — mesmo padrão de leitura de OS/Perdas/Refeições. Escrita (criar/editar
-// compra) vai por fetch POST pro /exec desse Apps Script (COMPRAS_EXEC_URL,
-// {acao: "criar"|"editar"}), igual o mural de Avisos — não existe tela
-// separada pra celular, o formulário único mora dentro deste painel.
+// — mesmo padrão de leitura de OS/Perdas/Refeições. SÓ LEITURA (KPIs,
+// lista, gráficos) — desde a migração pro Painel Qualidade (ver
+// docs/superpowers/specs/2026-09-23-painel-qualidade-compras-design.md),
+// registrar/editar uma compra não acontece mais aqui: é feito na tela
+// própria compras-appsscript/Compras.html, que fala com o mesmo backend
+// (COMPRAS_EXEC_URL) direto, sem passar por este painel.
 
 // Campos lidos do CSV de COMPRAS — cabeçalho da compra. Desde a
 // reestruturação de itens múltiplos (ver
@@ -3756,52 +3753,10 @@ const COMPRAS_STATUS_OPCOES = [
   '❌ Cancelado',
 ];
 
-// Compartilhadas entre os itens do formulário e o filtro de Categoria da
-// lista — só existem aqui (não são mais um campo de COMPRAS_CAMPOS_FORM,
-// já que Categoria virou um campo por ITEM, não da compra inteira).
+// Usada só pelo filtro de Categoria da lista — o formulário de registro/
+// edição em si roda no Painel Qualidade (compras-appsscript/Compras.html),
+// que tem sua própria cópia desta lista.
 const COMPRAS_CATEGORIAS_OPCOES = ['EPI', 'Manutenção', 'Produção', 'Qualidade', 'Higiene e Limpeza', 'Estrutura', 'Refeitório', 'Escritório', 'TI', 'Uniforme', 'Segurança do Trabalho', 'Ferramentas', 'Equipamentos', 'Peças', 'Outros'];
-const COMPRAS_UNIDADES_MEDIDA_OPCOES = ['UN', 'PCT', 'CX', 'KG', 'L', 'M', 'PAR', 'KIT'];
-
-// Campos editáveis do CABEÇALHO da compra no formulário único (criar/
-// editar) — fonte única pra montar a tela E coletar os valores no
-// salvar. `secao` agrupa visualmente; `condicional(dados)` esconde o
-// campo quando devolve false (reavaliado a cada mudança no formulário,
-// ver _comprasAtualizarCondicionais). Os itens (Categoria/Item/
-// Descrição/Quantidade/Unidade/Valor) têm sua própria seção — ver
-// _comprasItensRenderizarSecao — não entram nesta lista.
-const COMPRAS_CAMPOS_FORM = [
-  { chave: 'dataSolicitacao', coluna: 'DATA SOLICITAÇÃO', label: 'Data da solicitação', tipo: 'date', secao: 'Identificação' },
-  { chave: 'unidade', coluna: 'UNIDADE', label: 'Unidade', tipo: 'select', opcoes: ['TC', 'YUKA', 'CD', 'Geral'], secao: 'Identificação' },
-  { chave: 'categoriaSolicitante', coluna: 'CATEGORIA SOLICITANTE', label: 'Origem da necessidade', tipo: 'select', opcoes: ['Qualidade', 'Produção', 'Manutenção', 'RH', 'Administrativo', 'Limpeza', 'Cozinha', 'Outro'], secao: 'Identificação' },
-  // Fase 4 (integração com OS de Manutenção) — opções montadas na hora,
-  // a partir de osRegistros (módulo OS), não uma lista fixa como os
-  // outros selects — ver tipo 'select-os' em _comprasRenderizarCampo.
-  { chave: 'osRelacionada', coluna: 'OS RELACIONADA', label: 'OS relacionada (peça de manutenção)', tipo: 'select-os', secao: 'Identificação' },
-  { chave: 'nomeSolicitante', coluna: 'NOME SOLICITANTE', label: 'Nome do solicitante', tipo: 'text', placeholder: 'Ex.: Carlos - Manutenção', secao: 'Identificação' },
-
-  { chave: 'fornecedor', coluna: 'FORNECEDOR', label: 'Fornecedor', tipo: 'text', placeholder: 'Ex.: Mercado Livre, Amazon, loja física...', secao: 'Fornecedor' },
-  { chave: 'linkCompra', coluna: 'LINK COMPRA', label: 'Link da compra', tipo: 'text', placeholder: 'https://...', secao: 'Fornecedor' },
-
-  { chave: 'formaPagamento', coluna: 'FORMA PAGAMENTO', label: 'Forma de pagamento', tipo: 'select', opcoes: ['PIX', 'Boleto', 'Cartão', 'Dinheiro', 'Faturado', 'Outro'], secao: 'Pagamento' },
-  { chave: 'pagoPor', coluna: 'PAGO POR', label: 'Pago por', tipo: 'select', opcoes: ['Empresa', 'Thalita', 'Outro colaborador'], secao: 'Pagamento' },
-  { chave: 'reembolsoNecessario', coluna: 'REEMBOLSO NECESSÁRIO', label: 'Reembolso necessário?', tipo: 'select', opcoes: ['Sim', 'Não'], secao: 'Pagamento', condicional: d => d.pagoPor === 'Thalita' || d.pagoPor === 'Outro colaborador' },
-  { chave: 'statusReembolso', coluna: 'STATUS REEMBOLSO', label: 'Status do reembolso', tipo: 'select', opcoes: ['Pendente', 'Solicitado', 'Reembolsado'], secao: 'Pagamento', condicional: d => (d.pagoPor === 'Thalita' || d.pagoPor === 'Outro colaborador') && d.reembolsoNecessario === 'Sim' },
-
-  { chave: 'statusCompra', coluna: 'STATUS COMPRA', label: 'Status da compra', tipo: 'select', opcoes: COMPRAS_STATUS_OPCOES, secao: 'Status' },
-
-  { chave: 'dataCompra', coluna: 'DATA COMPRA', label: 'Data da compra', tipo: 'date', secao: 'Entrega' },
-  { chave: 'previsaoEntrega', coluna: 'PREVISÃO ENTREGA', label: 'Previsão de entrega', tipo: 'date', secao: 'Entrega' },
-  { chave: 'dataRecebimento', coluna: 'DATA RECEBIMENTO', label: 'Data do recebimento', tipo: 'date', secao: 'Entrega' },
-  { chave: 'recebidoPor', coluna: 'RECEBIDO POR', label: 'Recebido por', tipo: 'text', secao: 'Entrega' },
-  { chave: 'conferido', coluna: 'CONFERIDO', label: 'Conferido?', tipo: 'select', opcoes: ['Sim', 'Não'], secao: 'Entrega' },
-  { chave: 'condicaoMaterial', coluna: 'CONDIÇÃO MATERIAL', label: 'Condição do material', tipo: 'select', opcoes: ['Conforme', 'Divergente', 'Danificado', 'Quantidade incorreta'], secao: 'Entrega' },
-];
-
-const COMPRAS_ANEXOS = [
-  { chave: 'nf', label: '📎 Nota fiscal' },
-  { chave: 'comprovante', label: '📎 Comprovante de pagamento' },
-  { chave: 'foto', label: '📎 Foto do produto' },
-];
 
 let comprasRegistros = [];
 // Itens de todas as compras, e o mesmo indexado por ID da compra (ver
@@ -3810,16 +3765,6 @@ let comprasRegistros = [];
 let comprasItensRegistros = [];
 let comprasItensPorCompra = {};
 let comprasFiltros = { unidade: 'TODAS', periodo: 'MES_ATUAL', dataDe: '', dataAte: '', categoria: 'TODAS', status: 'TODAS', fornecedor: 'TODOS' };
-// null = criando uma compra nova; senão, ID da compra sendo editada.
-let comprasEditandoId = null;
-// Contador pra gerar IDs únicos de linha de item dentro do formulário
-// aberto no momento (ver _comprasItensLinhaHtml) — reiniciado a cada
-// abertura do modal (comprasAbrirModal).
-let comprasProximoIndiceItem = 0;
-// Só os anexos TROCADOS na sessão atual de criar/editar (ver
-// _comprasLerArquivoAnexo) — os que não mudam ficam de fora daqui e o
-// backend mantém o que já existia (ver preencherAnexosNovos no Code.gs).
-let comprasAnexosNovos = {};
 
 function _comprasEscaparHtml(texto) {
   const div = document.createElement('div');
@@ -3835,20 +3780,8 @@ function _comprasParseData(dataBR) {
   return new Date(Number(partes[2]), Number(partes[1]) - 1, Number(partes[0]));
 }
 
-// "dd/mm/aaaa" -> "aaaa-mm-dd" (o que <input type="date"> espera no
-// value ao pré-preencher o formulário de edição).
-function _comprasBRParaIso(dataBR) {
-  const partes = (dataBR || '').split('/');
-  if (partes.length !== 3) return '';
-  return `${partes[2]}-${partes[1].padStart(2, '0')}-${partes[0].padStart(2, '0')}`;
-}
-
 function _comprasFormatarMoeda(valor) {
   return (valor || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-}
-
-function _comprasHtmlErro(mensagem) {
-  return `<div style="background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.3);color:var(--color-red);padding:0.6rem 0.9rem;border-radius:8px;font-size:0.85rem;margin-top:0.5rem;">${_comprasEscaparHtml(mensagem)}</div>`;
 }
 
 function _comprasParseLinhas(linhas) {
@@ -4032,11 +3965,6 @@ async function carregarCompras() {
   const conteudo = document.getElementById('compras-conteudo');
   if (!conteudo) return;
 
-  const btnNova = document.getElementById('compras-btn-nova');
-  if (btnNova && !btnNova._wired) { btnNova._wired = true; btnNova.addEventListener('click', () => comprasAbrirModal(null)); }
-  const btnFecharModal = document.getElementById('btn-close-compra-modal');
-  if (btnFecharModal && !btnFecharModal._wired) { btnFecharModal._wired = true; btnFecharModal.addEventListener('click', () => closeModal(document.getElementById('modal-compra'))); }
-
   const faltaConfigurar = [COMPRAS_CSV_URL, COMPRAS_ITENS_CSV_URL].some(url => !url || url.indexOf('COLE_AQUI') === 0);
   if (faltaConfigurar) {
     conteudo.innerHTML = '<p style="color:var(--text-muted);">Compras ainda não configurado — falta publicar as abas COMPRAS e COMPRAS_ITENS como CSV e colar os links em src/main.js (COMPRAS_CSV_URL/COMPRAS_ITENS_CSV_URL/COMPRAS_EXEC_URL). Ver instruções no topo de compras-appsscript/Code.gs.</p>';
@@ -4088,7 +4016,7 @@ function _comprasRenderizar() {
         const categoriaExibida = categoriasUnicas.length === 1 ? categoriasUnicas[0] : (categoriasUnicas.length > 1 ? 'Várias' : '-');
         const itensExibido = itensDaCompra.length ? `${itensDaCompra.length} ${itensDaCompra.length === 1 ? 'item' : 'itens'}` : '-';
         return `
-        <tr class="compra-linha" data-id="${r.id}" style="cursor:pointer;">
+        <tr>
           <td>${r.id}</td>
           <td>${r.dataCompra || r.dataSolicitacao || '-'}</td>
           <td>${r.unidade || '-'}</td>
@@ -4166,13 +4094,6 @@ function _comprasRenderizar() {
   document.getElementById('compras-filtro-status').addEventListener('change', e => { comprasFiltros.status = e.target.value; _comprasRenderizar(); });
   document.getElementById('compras-filtro-fornecedor').addEventListener('change', e => { comprasFiltros.fornecedor = e.target.value; _comprasRenderizar(); });
 
-  document.querySelectorAll('.compra-linha').forEach(tr => {
-    tr.addEventListener('click', () => {
-      const registro = comprasRegistros.find(r => r.id === tr.dataset.id);
-      if (registro) comprasAbrirModal(registro);
-    });
-  });
-
   const registrosPeriodo = _comprasFiltrarPorPeriodo(comprasRegistros);
   const dadosGraficos = _comprasDadosGraficos(registrosPeriodo, comprasRegistros);
 
@@ -4187,484 +4108,6 @@ function _comprasRenderizar() {
 
   const ctxEvolucao = document.getElementById('grafico-compras-evolucao');
   if (ctxEvolucao) new Chart(ctxEvolucao, { type: 'bar', data: { labels: dadosGraficos.evolucaoMensal.map(m => m.label), datasets: [{ label: 'Gasto', data: dadosGraficos.evolucaoMensal.map(m => m.valor) }] }, options: { responsive: true, maintainAspectRatio: false } });
-}
-
-// ---------- Formulário único (criar/editar) ----------
-
-function _comprasRenderizarCampo(campo, dados) {
-  const valor = dados[campo.chave] || '';
-  let inputHtml;
-  if (campo.tipo === 'select') {
-    inputHtml = `<select id="compra-campo-${campo.chave}" class="form-control">
-      <option value="">Selecione...</option>
-      ${campo.opcoes.map(o => `<option value="${_comprasEscaparHtml(o)}" ${valor === o ? 'selected' : ''}>${_comprasEscaparHtml(o)}</option>`).join('')}
-    </select>`;
-  } else if (campo.tipo === 'select-os') {
-    // OS ainda não concluídas — permite vincular a compra a qualquer OS
-    // em andamento, não só as "Aguardando peça" (essas só ganham o botão
-    // de atalho "Registrar compra" na aba OS, ver _osStatusPecaCelula).
-    const osAbertas = (osRegistros || []).filter(r => r.status !== 'CONCLUÍDO' && r.status !== 'CONCLUIDO');
-    inputHtml = `<select id="compra-campo-${campo.chave}" class="form-control">
-      <option value="">Nenhuma</option>
-      ${osAbertas.map(os => `<option value="${_comprasEscaparHtml(os.os)}" ${valor === os.os ? 'selected' : ''}>${_comprasEscaparHtml(os.os)} — ${_comprasEscaparHtml(os.equipamento || '-')} (${_comprasEscaparHtml(os.setor || '-')})</option>`).join('')}
-    </select>`;
-  } else if (campo.tipo === 'date') {
-    inputHtml = `<input type="date" id="compra-campo-${campo.chave}" class="form-control" value="${_comprasBRParaIso(valor)}">`;
-  } else if (campo.tipo === 'number') {
-    inputHtml = `<input type="number" inputmode="decimal" step="any" min="0" id="compra-campo-${campo.chave}" class="form-control" value="${valor || ''}">`;
-  } else {
-    inputHtml = `<input type="text" id="compra-campo-${campo.chave}" class="form-control" value="${_comprasEscaparHtml(valor)}" placeholder="${_comprasEscaparHtml(campo.placeholder || '')}">`;
-  }
-  return `<div class="compra-campo" data-condicional-chave="${campo.chave}">
-    <label style="display:block;font-size:0.8rem;color:var(--text-secondary);margin-bottom:0.3rem;">${campo.label}${campo.obrigatorio ? ' *' : ''}</label>
-    ${inputHtml}
-  </div>`;
-}
-
-function _comprasRenderizarFormulario(dados, itensIniciais) {
-  // Só compra já existente (tem ID) pode ter histórico — "Nova compra"
-  // não tem nada ainda pra buscar. Preenchido depois, de forma
-  // assíncrona, por comprasAbrirModal (ver _comprasBuscarHistorico).
-  const historicoPlaceholder = dados.id ? `<div id="compra-historico" style="margin-bottom:1rem;"><p style="color:var(--text-muted);font-size:0.8rem;">Carregando histórico...</p></div>` : '';
-
-  const renderizarGrupo = campos => `
-    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:0.75rem;">
-      ${campos.map(campo => _comprasRenderizarCampo(campo, dados)).join('')}
-    </div>`;
-
-  // "Identificação" vem primeiro, a seção de Itens logo depois (onde
-  // antes ficavam Categoria/Item/Quantidade/Valores, antes da
-  // reestruturação de itens múltiplos), e o resto das seções do
-  // cabeçalho (Fornecedor, Pagamento, Status, Entrega) continua depois.
-  const secaoIdentificacao = COMPRAS_CAMPOS_FORM.filter(c => c.secao === 'Identificação');
-  const outrasSecoes = [...new Set(COMPRAS_CAMPOS_FORM.filter(c => c.secao !== 'Identificação').map(c => c.secao))];
-
-  const htmlIdentificacao = `
-    <div class="compra-secao">
-      <h4 style="margin:1rem 0 0.5rem;font-size:0.78rem;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.03em;">Identificação</h4>
-      ${renderizarGrupo(secaoIdentificacao)}
-    </div>`;
-
-  const htmlOutrasSecoes = outrasSecoes.map(secao => `
-    <div class="compra-secao">
-      <h4 style="margin:1rem 0 0.5rem;font-size:0.78rem;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.03em;">${secao}</h4>
-      ${renderizarGrupo(COMPRAS_CAMPOS_FORM.filter(c => c.secao === secao))}
-    </div>`).join('');
-
-  const anexosHtml = COMPRAS_ANEXOS.map(anexo => `
-    <div class="compra-anexo" style="margin-bottom:0.6rem;">
-      <label style="display:block;font-size:0.8rem;color:var(--text-secondary);margin-bottom:0.3rem;">${anexo.label}</label>
-      ${dados[anexo.chave] ? `<div style="margin-bottom:0.3rem;"><a href="${dados[anexo.chave]}" target="_blank" style="color:var(--accent-color);font-size:0.82rem;">📄 Ver arquivo atual</a> — anexar outro abaixo substitui</div>` : ''}
-      <input type="file" accept="image/*,application/pdf" data-anexo-compra="${anexo.chave}">
-    </div>
-  `).join('');
-
-  return `
-    ${historicoPlaceholder}
-    ${htmlIdentificacao}
-    ${_comprasItensRenderizarSecao(itensIniciais)}
-    ${htmlOutrasSecoes}
-    <div class="compra-secao">
-      <h4 style="margin:1rem 0 0.5rem;font-size:0.78rem;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.03em;">Documentos</h4>
-      ${anexosHtml}
-    </div>
-    <div id="compra-form-erro"></div>
-    <div class="modal-footer">
-      <button type="button" class="btn btn-secondary" id="compra-form-cancelar">Cancelar</button>
-      <button type="button" class="btn btn-primary" id="compra-form-salvar">Salvar</button>
-    </div>
-  `;
-}
-
-// ---------- Itens da compra (reestruturação pra itens múltiplos) ----------
-// Ver docs/superpowers/specs/2026-09-21-compras-itens-multiplos-design.md.
-// Diferente do resto do formulário, as linhas de item NÃO são recriadas
-// a cada tecla digitada — cada linha é um pedaço de HTML estável
-// (renderizado uma vez, ao abrir o modal / adicionar / colar) e só o
-// "Total" daquela linha é atualizado ao vivo via listener delegado, lendo
-// direto do DOM. Evita perder o foco/cursor do campo sendo digitado, que
-// aconteceria se a tabela inteira fosse redesenhada a cada input.
-
-function _comprasItensLinhaHtml(item) {
-  item = item || {};
-  const idx = comprasProximoIndiceItem++;
-  const categoria = item.categoria || '';
-  const nomeItem = item.item || '';
-  const descricao = item.descricao || '';
-  const quantidade = item.quantidade || '';
-  const unidadeMedida = item.unidadeMedida || '';
-  const valorUnitario = item.valorUnitario || '';
-  const valorTotal = (Number(quantidade) || 0) * (Number(valorUnitario) || 0);
-
-  return `
-    <div class="compra-item-linha" data-item-idx="${idx}" style="display:grid;grid-template-columns:1.3fr 1.6fr 1.2fr 0.7fr 0.8fr 0.9fr 0.9fr auto;gap:0.4rem;align-items:end;padding:0.5rem 0;border-bottom:1px solid var(--card-border);min-width:760px;">
-      <div>
-        <label style="display:block;font-size:0.7rem;color:var(--text-secondary);">Categoria</label>
-        <select id="compra-item-${idx}-categoria" class="form-control" style="font-size:0.82rem;padding:0.4rem;">
-          <option value="">Selecione...</option>
-          ${COMPRAS_CATEGORIAS_OPCOES.map(c => `<option value="${c}" ${categoria === c ? 'selected' : ''}>${c}</option>`).join('')}
-        </select>
-      </div>
-      <div>
-        <label style="display:block;font-size:0.7rem;color:var(--text-secondary);">Item</label>
-        <input type="text" id="compra-item-${idx}-item" class="form-control" style="font-size:0.82rem;padding:0.4rem;" value="${_comprasEscaparHtml(nomeItem)}">
-      </div>
-      <div>
-        <label style="display:block;font-size:0.7rem;color:var(--text-secondary);">Descrição</label>
-        <input type="text" id="compra-item-${idx}-descricao" class="form-control" style="font-size:0.82rem;padding:0.4rem;" value="${_comprasEscaparHtml(descricao)}">
-      </div>
-      <div>
-        <label style="display:block;font-size:0.7rem;color:var(--text-secondary);">Qtd.</label>
-        <input type="number" inputmode="decimal" step="any" min="0" id="compra-item-${idx}-quantidade" class="form-control compra-item-calculo" style="font-size:0.82rem;padding:0.4rem;" value="${quantidade}">
-      </div>
-      <div>
-        <label style="display:block;font-size:0.7rem;color:var(--text-secondary);">Unid.</label>
-        <select id="compra-item-${idx}-unidade" class="form-control" style="font-size:0.82rem;padding:0.4rem;">
-          <option value="">-</option>
-          ${COMPRAS_UNIDADES_MEDIDA_OPCOES.map(u => `<option value="${u}" ${unidadeMedida === u ? 'selected' : ''}>${u}</option>`).join('')}
-        </select>
-      </div>
-      <div>
-        <label style="display:block;font-size:0.7rem;color:var(--text-secondary);">Valor unit.</label>
-        <input type="number" inputmode="decimal" step="any" min="0" id="compra-item-${idx}-valorUnitario" class="form-control compra-item-calculo" style="font-size:0.82rem;padding:0.4rem;" value="${valorUnitario}">
-      </div>
-      <div>
-        <label style="display:block;font-size:0.7rem;color:var(--text-secondary);">Total</label>
-        <div id="compra-item-${idx}-total" style="font-size:0.82rem;padding:0.4rem 0;font-weight:600;">${_comprasFormatarMoeda(valorTotal)}</div>
-      </div>
-      <button type="button" class="btn btn-secondary compra-item-remover" data-item-idx="${idx}" style="padding:0.4rem 0.6rem;font-size:0.8rem;" title="Remover item">✕</button>
-    </div>`;
-}
-
-function _comprasItensRenderizarSecao(itensIniciais) {
-  const linhasIniciais = (itensIniciais && itensIniciais.length ? itensIniciais : [{}]).map(_comprasItensLinhaHtml).join('');
-  return `
-    <div class="compra-secao">
-      <h4 style="margin:1rem 0 0.3rem;font-size:0.78rem;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.03em;">Itens da compra</h4>
-      <div style="overflow-x:auto;">
-        <div id="compra-itens-lista">${linhasIniciais}</div>
-      </div>
-      <div style="display:flex;gap:0.5rem;margin-top:0.6rem;flex-wrap:wrap;">
-        <button type="button" class="btn btn-secondary" id="compra-item-add" style="font-size:0.8rem;padding:0.4rem 0.8rem;">+ item</button>
-        <button type="button" class="btn btn-secondary" id="compra-item-colar-toggle" style="font-size:0.8rem;padding:0.4rem 0.8rem;">Colar itens</button>
-      </div>
-      <div id="compra-item-colar-area" hidden style="margin-top:0.6rem;">
-        <p style="font-size:0.78rem;color:var(--text-secondary);margin:0 0 0.3rem;">Cola a lista (um item por linha) — o sistema tenta separar item/quantidade/valor sozinho; revise antes de salvar.</p>
-        <textarea id="compra-item-colar-texto" rows="5" class="form-control" style="font-size:0.82rem;" placeholder="Ex.: Papel Higiênico 2 R$77,80"></textarea>
-        <button type="button" class="btn btn-primary" id="compra-item-colar-processar" style="margin-top:0.4rem;font-size:0.8rem;padding:0.4rem 0.8rem;">Adicionar itens colados</button>
-      </div>
-    </div>`;
-}
-
-// Recalcula só o "Total" da linha de item que mudou (não redesenha a
-// tabela inteira — ver comentário no topo desta seção).
-function _comprasItemAtualizarTotal(linhaEl) {
-  if (!linhaEl) return;
-  const idx = linhaEl.dataset.itemIdx;
-  const quantidade = Number(document.getElementById(`compra-item-${idx}-quantidade`)?.value) || 0;
-  const valorUnitario = Number(document.getElementById(`compra-item-${idx}-valorUnitario`)?.value) || 0;
-  const totalEl = document.getElementById(`compra-item-${idx}-total`);
-  if (totalEl) totalEl.textContent = _comprasFormatarMoeda(quantidade * valorUnitario);
-}
-
-function _comprasItemAdicionarLinha(itemInicial) {
-  const lista = document.getElementById('compra-itens-lista');
-  if (lista) lista.insertAdjacentHTML('beforeend', _comprasItensLinhaHtml(itemInicial));
-}
-
-function _comprasItemRemoverLinha(linhaEl) {
-  if (!linhaEl) return;
-  const lista = document.getElementById('compra-itens-lista');
-  // Nunca deixa a tabela sem nenhuma linha — sempre sobra pelo menos 1
-  // pra editar, em vez de sumir com o jeito de adicionar item de novo.
-  if (lista && lista.children.length <= 1) { linhaEl.remove(); _comprasItemAdicionarLinha(); return; }
-  linhaEl.remove();
-}
-
-function _comprasItemToggleColar() {
-  const area = document.getElementById('compra-item-colar-area');
-  if (area) area.hidden = !area.hidden;
-}
-
-// Best-effort: sempre revisável na tabela antes de salvar, nunca é a
-// fonte final da verdade (mesma cautela já usada com texto livre no
-// resto do projeto, ex. Pão de Queijo em kg — nunca confiar cegamente
-// em parse de texto sem estrutura garantida). Dois modos, escolhidos
-// automaticamente pelo formato do texto colado:
-//
-// 1) POR BLOCO — quando o texto tem linhas em branco separando os
-//    itens. É o formato real de copiar a tabela de itens do CMV Fácil:
-//    cada bloco tem o nome (às vezes repetido), a quantidade
-//    ("2,000Und"), às vezes uma linha extra de unidade secundária que a
-//    gente ignora, o subtotal ("R$77,80" — também ignorado, o
-//    formulário calcula o total sozinho) e o valor UNITÁRIO, que vem
-//    com 3 casas decimais e uma barra no fim ("R$38,900/Und" = 38,90).
-// 2) POR LINHA — quando não tem nenhuma linha em branco (lista digitada
-//    à mão ou colada de outro lugar, 1 item por linha) — tenta achar
-//    quantidade e valor dentro da própria linha.
-function _comprasParsearItensColados(texto) {
-  const blocos = (texto || '').split(/\n\s*\n/).map(b => b.trim()).filter(Boolean);
-  return blocos.length > 1
-    ? blocos.map(_comprasParsearBlocoItemColado)
-    : _comprasParsearItensColadosPorLinha(texto);
-}
-
-function _comprasParsearBlocoItemColado(bloco) {
-  const linhas = bloco.split('\n').map(l => l.trim()).filter(Boolean);
-  let nomeItem = '';
-  let quantidade = '';
-  let valorUnitario = '';
-
-  linhas.forEach(linha => {
-    // Valor unitário: "R$38,900/Und" — 3 casas decimais, termina com
-    // "/algo" (a unidade). Diferente do subtotal, que não tem barra.
-    const matchUnitario = linha.match(/^R\$\s?([\d.]+,\d+)\s*\/\s*\S+$/i);
-    if (matchUnitario) { if (!valorUnitario) valorUnitario = matchUnitario[1].replace(/\./g, '').replace(',', '.'); return; }
-
-    // Subtotal — "R$77,80", sem barra — ignorado de propósito.
-    if (/^R\$\s?[\d.]+,\d+$/i.test(linha)) return;
-
-    // Quantidade — "2,000Und" (a PRIMEIRA linha nesse formato do bloco;
-    // uma segunda linha parecida, tipo "1,000 L", é uma unidade
-    // secundária que a gente ignora, mantendo só a primeira).
-    const matchQtd = linha.match(/^(\d+)[,.]\d*\s*[A-Za-zÀ-ú]*$/);
-    if (matchQtd) { if (!quantidade) quantidade = matchQtd[1]; return; }
-
-    // Sobrou: nome do item (primeira ocorrência — a repetição do nome,
-    // comum nesse formato, fica ignorada por já ter sido capturada).
-    if (!nomeItem) nomeItem = linha;
-  });
-
-  return { categoria: '', item: nomeItem || linhas[0] || '', descricao: '', quantidade, unidadeMedida: '', valorUnitario };
-}
-
-function _comprasParsearItensColadosPorLinha(texto) {
-  return (texto || '')
-    .split('\n')
-    .map(l => l.trim())
-    .filter(Boolean)
-    .map(linhaOriginal => {
-      let resto = linhaOriginal;
-      let valorUnitario = '';
-      let quantidade = '';
-
-      const matchValor = resto.match(/R\$?\s?(\d{1,3}(?:\.\d{3})*,\d{2}|\d+,\d{2}|\d+\.\d{2})/);
-      if (matchValor) {
-        valorUnitario = matchValor[1].replace(/\./g, '').replace(',', '.');
-        resto = resto.replace(matchValor[0], ' ');
-      }
-
-      const matchQtd = resto.match(/\b(\d+(?:[.,]\d+)?)\s*(un|und|pct|cx|kg|l|m|par|kit)?\b/i);
-      if (matchQtd) {
-        quantidade = matchQtd[1].replace(',', '.');
-        resto = resto.replace(matchQtd[0], ' ');
-      }
-
-      const nomeItem = resto.replace(/\s{2,}/g, ' ').trim().replace(/^[-•\d.\s]+/, '').trim();
-
-      return { categoria: '', item: nomeItem || linhaOriginal, descricao: '', quantidade, unidadeMedida: '', valorUnitario };
-    });
-}
-
-function _comprasItemProcessarColados() {
-  const textarea = document.getElementById('compra-item-colar-texto');
-  if (!textarea || !textarea.value.trim()) return;
-  _comprasParsearItensColados(textarea.value).forEach(item => _comprasItemAdicionarLinha(item));
-  textarea.value = '';
-  const area = document.getElementById('compra-item-colar-area');
-  if (area) area.hidden = true;
-}
-
-// Lê os itens direto do DOM na hora de salvar (mesmo espírito de
-// _comprasColetarValoresFormulario pro resto do formulário) — linha sem
-// Categoria ou sem Item preenchidos é descartada, não impede salvar as
-// outras (a validação de "pelo menos 1 item válido" é feita em
-// comprasSalvar, sobre o resultado desta função).
-function _comprasColetarItensFormulario() {
-  return Array.from(document.querySelectorAll('.compra-item-linha'))
-    .map(linhaEl => {
-      const idx = linhaEl.dataset.itemIdx;
-      return {
-        categoria: document.getElementById(`compra-item-${idx}-categoria`)?.value || '',
-        item: document.getElementById(`compra-item-${idx}-item`)?.value || '',
-        descricao: document.getElementById(`compra-item-${idx}-descricao`)?.value || '',
-        quantidade: document.getElementById(`compra-item-${idx}-quantidade`)?.value || '',
-        unidadeMedida: document.getElementById(`compra-item-${idx}-unidade`)?.value || '',
-        valorUnitario: document.getElementById(`compra-item-${idx}-valorUnitario`)?.value || '',
-      };
-    })
-    .filter(item => item.categoria.trim() && item.item.trim());
-}
-
-// ---------- Histórico / Timeline (Fase 2) ----------
-
-async function _comprasBuscarHistorico(id) {
-  const resposta = await fetch(COMPRAS_EXEC_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-    body: JSON.stringify({ acao: 'historico', id }),
-  });
-  const resultado = await resposta.json();
-  if (!resultado.ok) throw new Error(resultado.erro || 'Erro ao buscar histórico.');
-  return resultado.historico || [];
-}
-
-function _comprasRenderizarHistorico(historico) {
-  const area = document.getElementById('compra-historico');
-  if (!area) return; // modal já foi fechado/trocado antes da resposta chegar
-
-  if (!historico.length) {
-    area.innerHTML = '<p style="color:var(--text-muted);font-size:0.8rem;">Sem histórico ainda.</p>';
-    return;
-  }
-
-  const itens = historico.map(h => {
-    const data = new Date(h.timestamp);
-    const dataTexto = isNaN(data.getTime())
-      ? String(h.timestamp)
-      : data.toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
-    return `<div style="display:flex;gap:0.6rem;font-size:0.82rem;padding:0.3rem 0;border-bottom:1px solid var(--card-border);">
-      <span style="color:var(--text-secondary);white-space:nowrap;">${_comprasEscaparHtml(dataTexto)}</span>
-      <span>${_comprasEscaparHtml(h.status)}</span>
-    </div>`;
-  }).join('');
-
-  area.innerHTML = `
-    <h4 style="margin:0 0 0.4rem;font-size:0.78rem;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.03em;">Histórico</h4>
-    <div>${itens}</div>
-  `;
-}
-
-function _comprasRenderizarHistoricoErro() {
-  const area = document.getElementById('compra-historico');
-  if (area) area.innerHTML = '<p style="color:var(--text-muted);font-size:0.8rem;">Não foi possível carregar o histórico.</p>';
-}
-
-function _comprasColetarValoresFormulario() {
-  const dados = {};
-  COMPRAS_CAMPOS_FORM.forEach(campo => {
-    const el = document.getElementById('compra-campo-' + campo.chave);
-    if (el) dados[campo.chave] = el.value;
-  });
-  return dados;
-}
-
-// Reavalia todo campo com `condicional` contra o estado atual do
-// formulário e esconde/mostra o wrapper dele — chamado a cada mudança
-// (delegação em #compra-form-conteudo, ver comprasAbrirModal) e uma vez
-// na abertura, pra já nascer coerente com o que veio pré-preenchido.
-function _comprasAtualizarCondicionais() {
-  const dados = _comprasColetarValoresFormulario();
-  COMPRAS_CAMPOS_FORM.forEach(campo => {
-    if (!campo.condicional) return;
-    const wrapper = document.querySelector('[data-condicional-chave="' + campo.chave + '"]');
-    if (wrapper) wrapper.hidden = !campo.condicional(dados);
-  });
-}
-
-function _comprasLerArquivoAnexo(inputEl) {
-  const chave = inputEl.dataset.anexoCompra;
-  const arquivo = inputEl.files && inputEl.files[0];
-  if (!arquivo) { delete comprasAnexosNovos[chave]; return; }
-  const leitor = new FileReader();
-  leitor.onload = () => {
-    const base64Completo = leitor.result; // "data:image/jpeg;base64,AAAA..."
-    comprasAnexosNovos[chave] = { base64: base64Completo.split(',')[1], mimeType: arquivo.type };
-  };
-  leitor.readAsDataURL(arquivo);
-}
-
-function comprasAbrirModal(registro, prefill) {
-  comprasEditandoId = registro ? registro.id : null;
-  comprasAnexosNovos = {};
-  const dados = Object.assign({}, registro || {}, prefill || {});
-  const itensIniciais = registro ? (comprasItensPorCompra[registro.id] || []) : [];
-
-  document.getElementById('compra-modal-titulo').textContent = registro ? `Editar ${registro.id}` : 'Nova compra';
-
-  comprasProximoIndiceItem = 0; // reinicia a contagem de índices a cada abertura de modal
-  const container = document.getElementById('compra-form-conteudo');
-  container.innerHTML = _comprasRenderizarFormulario(dados, itensIniciais);
-
-  // Delegação attachada só UMA VEZ no container (que nunca é recriado,
-  // só seu innerHTML muda) — evita empilhar um listener novo a cada
-  // vez que o modal abre (criaria eco/duplicidade nos cliques).
-  if (!container._wired) {
-    container._wired = true;
-    container.addEventListener('change', ev => {
-      const inputAnexo = ev.target.closest('[data-anexo-compra]');
-      if (inputAnexo) { _comprasLerArquivoAnexo(inputAnexo); return; }
-      _comprasAtualizarCondicionais();
-    });
-    container.addEventListener('input', ev => {
-      const linhaItem = ev.target.closest('.compra-item-calculo') && ev.target.closest('.compra-item-linha');
-      if (linhaItem) _comprasItemAtualizarTotal(linhaItem);
-    });
-    container.addEventListener('click', ev => {
-      if (ev.target.closest('#compra-item-add')) { _comprasItemAdicionarLinha(); return; }
-      if (ev.target.closest('#compra-item-colar-toggle')) { _comprasItemToggleColar(); return; }
-      if (ev.target.closest('#compra-item-colar-processar')) { _comprasItemProcessarColados(); return; }
-      const btnRemover = ev.target.closest('.compra-item-remover');
-      if (btnRemover) _comprasItemRemoverLinha(btnRemover.closest('.compra-item-linha'));
-    });
-  }
-
-  // Cancelar/Salvar SÃO recriados a cada abertura (fazem parte do
-  // innerHTML acima), então precisam de listener novo toda vez — sem
-  // acúmulo, porque o botão antigo (e o listener dele) já foi destruído
-  // junto com o innerHTML anterior.
-  document.getElementById('compra-form-cancelar').addEventListener('click', () => closeModal(document.getElementById('modal-compra')));
-  document.getElementById('compra-form-salvar').addEventListener('click', comprasSalvar);
-
-  _comprasAtualizarCondicionais();
-  openModal(document.getElementById('modal-compra'));
-
-  // Histórico busca depois de abrir o modal (não trava a abertura
-  // esperando rede) — só pra compra já existente, e o resultado só é
-  // aplicado se o placeholder #compra-historico ainda existir na tela
-  // (ver _comprasRenderizarHistorico) — evita escrever num modal que já
-  // foi fechado ou trocado por outra compra antes da resposta voltar.
-  if (registro) {
-    _comprasBuscarHistorico(registro.id)
-      .then(_comprasRenderizarHistorico)
-      .catch(_comprasRenderizarHistoricoErro);
-  }
-}
-
-async function comprasSalvar() {
-  const areaErro = document.getElementById('compra-form-erro');
-  const botao = document.getElementById('compra-form-salvar');
-  areaErro.innerHTML = '';
-
-  const dadosFormulario = _comprasColetarValoresFormulario();
-  const itens = _comprasColetarItensFormulario();
-  if (itens.length === 0) { areaErro.innerHTML = _comprasHtmlErro('Adicione pelo menos um item com categoria e nome preenchidos.'); return; }
-
-  const corpo = Object.assign({ acao: comprasEditandoId ? 'editar' : 'criar', itens }, dadosFormulario);
-  if (comprasEditandoId) corpo.id = comprasEditandoId;
-  Object.keys(comprasAnexosNovos).forEach(chave => {
-    corpo[chave + 'Base64'] = comprasAnexosNovos[chave].base64;
-    corpo[chave + 'MimeType'] = comprasAnexosNovos[chave].mimeType;
-  });
-
-  botao.disabled = true;
-  botao.textContent = 'Salvando...';
-  try {
-    const resposta = await fetch(COMPRAS_EXEC_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify(corpo),
-    });
-    const resultado = await resposta.json();
-    if (!resultado.ok) throw new Error(resultado.erro || 'Erro ao salvar.');
-    closeModal(document.getElementById('modal-compra'));
-    carregarCompras();
-  } catch (erro) {
-    areaErro.innerHTML = _comprasHtmlErro(erro.message);
-  } finally {
-    botao.disabled = false;
-    botao.textContent = 'Salvar';
-  }
 }
 
 // ================= MÓDULO INSUMOS CRÍTICOS =================
