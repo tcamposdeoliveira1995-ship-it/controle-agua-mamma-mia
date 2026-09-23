@@ -944,6 +944,10 @@ function listarOSAbertas() {
       equipamento: linha[cols.equipamentoLocal - 1],
       descricao: linha[cols.descricao - 1],
       necessidadePeca: linha[cols.necessidadePeca - 1],
+      // Usado pela busca de "já existe uma OS parecida?" na tela de
+      // abrir OS (AbrirOS.html) — não era retornado antes por falta de
+      // uso, o campo em si já existia em obterMapaColunas.
+      solicitante: linha[cols.solicitante - 1],
     });
   }
 

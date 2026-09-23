@@ -132,6 +132,7 @@
   <main id="app"></main>
 
   <script>
+    var osAbertasCache = [];
     var OPCOES_SETOR = ["Produção", "Cozinha", "Limpeza", "Manutenção", "Outro"];
     var OPCOES_TIPO_OCORRENCIA = ["Equipamento", "Estrutura", "Elétrica", "Hidráulica", "Outro"];
     var OPCOES_PAROU = ["Sim", "Não", "Parcialmente"];
@@ -158,9 +159,63 @@
       return agora.toISOString().slice(0, 16);
     }
 
+    // Busca informativa entre as OS já abertas (não bloqueia o envio do
+    // formulário) — ajuda a evitar abrir uma OS duplicada de algo que já
+    // está sendo tratado. Procura por número da OS, equipamento/local,
+    // solicitante ou setor.
+    function renderizarSecaoBusca() {
+      return (
+        '<div class="form-secao" id="secao-busca" style="margin-bottom:1rem;">' +
+          '<label for="campo-busca-existente" style="margin-top:0;">🔍 Já existe uma OS parecida? Busque antes de abrir uma nova</label>' +
+          '<input type="text" id="campo-busca-existente" placeholder="Nome, equipamento, setor ou número da OS...">' +
+          '<div id="resultado-busca-existente" style="margin-top:0.7rem;"></div>' +
+        '</div>'
+      );
+    }
+
+    function carregarOSAbertasParaBusca() {
+      google.script.run
+        .withSuccessHandler(function (osAbertas) { osAbertasCache = osAbertas || []; })
+        // Falha na busca não trava o formulário de abrir OS — só a busca
+        // fica sem resultado até recarregar a página.
+        .withFailureHandler(function () { osAbertasCache = []; })
+        .listarOSAbertas();
+    }
+
+    function renderizarResultadoBusca() {
+      var termo = document.getElementById('campo-busca-existente').value.trim().toLowerCase();
+      var resultado = document.getElementById('resultado-busca-existente');
+      if (!termo) { resultado.innerHTML = ''; return; }
+
+      var encontradas = osAbertasCache.filter(function (os) {
+        return (
+          (os.os || '').toLowerCase().indexOf(termo) !== -1 ||
+          (os.equipamento || '').toLowerCase().indexOf(termo) !== -1 ||
+          (os.solicitante || '').toLowerCase().indexOf(termo) !== -1 ||
+          (os.setor || '').toLowerCase().indexOf(termo) !== -1
+        );
+      });
+
+      if (encontradas.length === 0) {
+        resultado.innerHTML = '<p style="font-size:0.82rem;color:var(--text-muted);margin:0;">Nenhuma OS aberta encontrada com esse termo.</p>';
+        return;
+      }
+
+      resultado.innerHTML = encontradas.map(function (os) {
+        return (
+          '<div style="border:1px solid var(--border);border-radius:8px;padding:0.6rem 0.8rem;margin-bottom:0.5rem;font-size:0.82rem;">' +
+            '<div style="font-weight:700;">' + escaparHtml(os.os) + ' · ' + escaparHtml(os.status) + '</div>' +
+            '<div style="color:var(--text-muted);">' + escaparHtml(os.setor || '-') + ' · ' + escaparHtml(os.equipamento || '-') + '</div>' +
+            '<div style="color:var(--text-muted);">Solicitante: ' + escaparHtml(os.solicitante || '-') + '</div>' +
+          '</div>'
+        );
+      }).join('');
+    }
+
     function renderizarFormulario() {
       var app = document.getElementById('app');
       app.innerHTML =
+        renderizarSecaoBusca() +
         '<div class="form-secao">' +
           '<label for="campo-solicitante">Nome do solicitante <span class="obrigatorio">*</span></label>' +
           '<input type="text" id="campo-solicitante" placeholder="Seu nome">' +
@@ -227,6 +282,7 @@
       });
       document.getElementById('campo-foto').addEventListener('change', mostrarPreviewFoto);
       document.getElementById('btn-enviar').addEventListener('click', enviarOS);
+      document.getElementById('campo-busca-existente').addEventListener('input', renderizarResultadoBusca);
     }
 
     function mostrarOuEsconderOutro(idSelect, idCampoOutro) {
@@ -348,10 +404,14 @@
           '<h2>' + escaparHtml(resultado.os) + ' aberta</h2>' +
           '<p>A manutenção já foi avisada.</p>' +
         '</div>';
-      setTimeout(renderizarFormulario, 2200);
+      setTimeout(function () {
+        renderizarFormulario();
+        carregarOSAbertasParaBusca(); // atualiza a busca com a OS recém-aberta
+      }, 2200);
     }
 
     renderizarFormulario();
+    carregarOSAbertasParaBusca();
   </script>
 </body>
 </html>
