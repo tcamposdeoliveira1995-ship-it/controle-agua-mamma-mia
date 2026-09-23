@@ -29,9 +29,10 @@
  *    já configurada como COMPRAS_EXEC_URL — é a mesma URL, só usada aqui
  *    também como link de navegador, não como destino de fetch).
  * 5) Crie um arquivo novo do tipo HTML chamado exatamente "Insumos" e
- *    cole o conteúdo de Insumos.html nele — não precisa trocar nada
- *    dentro dele, já usa a mesma URL (INSUMOS_EXEC_URL/INSUMOS_CSV_URL)
- *    que o Mamma Mia Control já usava.
+ *    cole o conteúdo de Insumos.html nele — já usa a mesma URL
+ *    (INSUMOS_EXEC_URL/INSUMOS_CSV_URL) que o Mamma Mia Control já
+ *    usava, só o link "‹ Menu" no topo dele precisa ser preenchido (ver
+ *    passo 7 abaixo, mesma URL usada lá).
  * 6) Implantar > Nova implantação > tipo "App da Web":
  *      - Executar como: Eu (sua conta)
  *      - Quem pode acessar: Qualquer pessoa
@@ -40,18 +41,20 @@
  *    (Se já tinha uma implantação anterior — ex.: só com Compras — não
  *    precisa criar implantação nova: Implantar > Gerenciar implantações
  *    > ✏️ editar > Nova versão > Implantar, mesma URL de sempre.)
- * 7) IMPORTANTE — o link do card "Insumos Críticos" no Menu.html precisa
- *    ser a URL COMPLETA deste MESMO projeto (não um atalho tipo
- *    "?tela=insumos" sozinho): esse projeto não tem aba própria, então
- *    volte no Menu.html e troque
- *    "COLE_AQUI_A_URL_DESTE_PROPRIO_PAINEL_QUALIDADE?tela=insumos" pela
- *    URL /exec que você acabou de copiar no passo 6, mantendo o
- *    "?tela=insumos" no final (ex.: ".../exec?tela=insumos"). Depois de
- *    trocar, reimplante de novo (Nova versão) pra essa correção valer.
- *    Um link relativo aqui não funciona: o Google às vezes navega por
- *    dentro de um domínio de conteúdo temporário
- *    (algo.script.googleusercontent.com) que não reconhece "?tela=",
- *    e a tela fica em branco.
+ * 7) IMPORTANTE — os links abaixo precisam ser a URL COMPLETA deste
+ *    MESMO projeto (não um atalho tipo "?tela=insumos" ou
+ *    "javascript:history.back()" sozinho) — um link relativo ou de
+ *    histórico não funciona aqui: o Google às vezes navega por dentro de
+ *    um domínio de conteúdo temporário (algo.script.googleusercontent.com)
+ *    que não reconhece rotas nem histórico de navegação direito, e a
+ *    tela fica em branco ou o botão simplesmente não faz nada. Depois de
+ *    copiar a URL /exec do passo 6, troque em:
+ *      - Menu.html: "COLE_AQUI_A_URL_DESTE_PROPRIO_PAINEL_QUALIDADE?tela=insumos"
+ *        (card "Insumos Críticos") — mantém o "?tela=insumos" no final.
+ *      - Insumos.html: "COLE_AQUI_A_URL_DESTE_PROPRIO_PAINEL_QUALIDADE"
+ *        (link "‹ Menu" no topo) — sem "?tela=" nenhum, volta pro Menu.
+ *    Depois de trocar os dois, reimplante de novo (Nova versão) pra essa
+ *    correção valer.
  */
 
 function doGet(e) {

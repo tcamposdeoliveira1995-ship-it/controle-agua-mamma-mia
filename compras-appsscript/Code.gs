@@ -65,7 +65,12 @@
  *      exatamente "Compras" e cole o conteúdo de Compras.html nele — é a
  *      tela de registrar/editar compras. Se você já tinha esse projeto
  *      instalado antes (Fase 1-4), só precisa adicionar esse arquivo
- *      novo, o resto do Code.gs já existente continua igual.
+ *      novo, o resto do Code.gs já existente continua igual. Dentro de
+ *      Compras.html, troque "COLE_AQUI_A_URL_DO_PAINEL_QUALIDADE" (link
+ *      "‹ Menu" no topo) pela URL /exec do painel-qualidade-appscript —
+ *      tem que ser a URL completa, um atalho relativo não funciona
+ *      dentro do domínio de conteúdo temporário que o Apps Script usa
+ *      pra servir essa tela.
  * 4) Implantar > Nova implantação > tipo "App da Web":
  *      - Executar como: Eu (sua conta)
  *      - Quem pode acessar: Qualquer pessoa
