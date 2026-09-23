@@ -33,6 +33,12 @@
  *    (INSUMOS_EXEC_URL/INSUMOS_CSV_URL) que o Mamma Mia Control já
  *    usava, só o link "‹ Menu" no topo dele precisa ser preenchido (ver
  *    passo 7 abaixo, mesma URL usada lá).
+ * 5b) Crie um arquivo novo do tipo HTML chamado exatamente "Auditoria" e
+ *    cole o conteúdo de Auditoria.html nele — formulário completo
+ *    (checklist, não conformidade com foto obrigatória, assinatura
+ *    digital, finalizar), já com a mesma URL (APPS_SCRIPT_URL) que o
+ *    Mamma Mia Control já usava. Esse arquivo já vem com o link "‹ Menu"
+ *    e o logo preenchidos, não precisa editar nada nele.
  * 6) Implantar > Nova implantação > tipo "App da Web":
  *      - Executar como: Eu (sua conta)
  *      - Quem pode acessar: Qualquer pessoa
@@ -62,6 +68,11 @@ function doGet(e) {
   if (tela === 'insumos') {
     return HtmlService.createHtmlOutputFromFile('Insumos')
       .setTitle('Insumos Críticos — Mamma Mia')
+      .addMetaTag('viewport', 'width=device-width, initial-scale=1');
+  }
+  if (tela === 'auditoria') {
+    return HtmlService.createHtmlOutputFromFile('Auditoria')
+      .setTitle('Auditoria — Mamma Mia')
       .addMetaTag('viewport', 'width=device-width, initial-scale=1');
   }
   return HtmlService.createHtmlOutputFromFile('Menu')
