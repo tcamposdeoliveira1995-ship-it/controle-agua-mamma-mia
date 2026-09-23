@@ -78,9 +78,63 @@
       text-align: center;
       line-height: 1.5;
     }
+
+    .tela-login {
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 1.2rem;
+    }
+    .login-card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 2rem 1.6rem;
+      max-width: 340px;
+      width: 100%;
+      text-align: center;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.06);
+    }
+    .login-card h1 { font-size: 1.1rem; margin: 0 0 0.3rem; }
+    .login-card p { font-size: 0.82rem; color: var(--text-muted); margin: 0 0 1.2rem; }
+    .login-card input {
+      width: 100%;
+      font-size: 0.95rem;
+      padding: 0.7rem 0.85rem;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      background: var(--bg);
+      color: var(--text);
+      margin-bottom: 0.9rem;
+      text-align: center;
+    }
+    .login-card button {
+      width: 100%;
+      padding: 0.7rem;
+      border-radius: 10px;
+      border: none;
+      background: var(--gold);
+      color: #fff;
+      font-weight: 700;
+      font-size: 0.9rem;
+      cursor: pointer;
+    }
+    .login-erro { color: #c0402a; font-size: 0.8rem; margin-top: 0.7rem; display: none; }
   </style>
 </head>
 <body>
+  <div class="tela-login" id="tela-login">
+    <div class="login-card">
+      <h1>🔒 Painel Qualidade</h1>
+      <p>Digite a senha de acesso.</p>
+      <input type="password" id="input-senha" placeholder="Senha" autocomplete="current-password">
+      <button id="btn-entrar" type="button">Entrar</button>
+      <p class="login-erro" id="login-erro">Senha incorreta.</p>
+    </div>
+  </div>
+
+  <div id="conteudo-principal" style="display:none;">
   <header>
     <h1>Painel Qualidade</h1>
     <p>De onde você lança os dados — o Mamma Mia Control só exibe.</p>
@@ -152,5 +206,46 @@
 
     <p class="dica">Todos os módulos previstos já estão ligados aqui.</p>
   </main>
+  </div>
+
+  <script>
+    // Porta de entrada do Painel Qualidade — senha única compartilhada,
+    // guardada só neste arquivo (Menu.html), não protege os links
+    // individuais de cada módulo se alguém já tiver o link direto. Ver
+    // docs/superpowers/specs/2026-09-23-painel-qualidade-senha-design.md.
+    //
+    // TROQUE a senha abaixo antes de reimplantar — escolha algo fácil de
+    // passar pra sua equipe, mas que não seja óbvio.
+    var SENHA_PAINEL = 'TROQUE_ESSA_SENHA';
+
+    function mostrarConteudo() {
+      document.getElementById('tela-login').style.display = 'none';
+      document.getElementById('conteudo-principal').style.display = '';
+    }
+
+    function tentarEntrar() {
+      var valor = document.getElementById('input-senha').value;
+      if (valor === SENHA_PAINEL) {
+        try { sessionStorage.setItem('pq_autenticado', 'sim'); } catch (e) {}
+        mostrarConteudo();
+      } else {
+        document.getElementById('login-erro').style.display = '';
+        document.getElementById('input-senha').value = '';
+        document.getElementById('input-senha').focus();
+      }
+    }
+
+    document.getElementById('btn-entrar').addEventListener('click', tentarEntrar);
+    document.getElementById('input-senha').addEventListener('keydown', function (e) {
+      if (e.key === 'Enter') tentarEntrar();
+    });
+
+    try {
+      if (sessionStorage.getItem('pq_autenticado') === 'sim') mostrarConteudo();
+      else document.getElementById('input-senha').focus();
+    } catch (e) {
+      document.getElementById('input-senha').focus();
+    }
+  </script>
 </body>
 </html>
