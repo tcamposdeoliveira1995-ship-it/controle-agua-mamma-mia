@@ -40,6 +40,18 @@
  *    (Se já tinha uma implantação anterior — ex.: só com Compras — não
  *    precisa criar implantação nova: Implantar > Gerenciar implantações
  *    > ✏️ editar > Nova versão > Implantar, mesma URL de sempre.)
+ * 7) IMPORTANTE — o link do card "Insumos Críticos" no Menu.html precisa
+ *    ser a URL COMPLETA deste MESMO projeto (não um atalho tipo
+ *    "?tela=insumos" sozinho): esse projeto não tem aba própria, então
+ *    volte no Menu.html e troque
+ *    "COLE_AQUI_A_URL_DESTE_PROPRIO_PAINEL_QUALIDADE?tela=insumos" pela
+ *    URL /exec que você acabou de copiar no passo 6, mantendo o
+ *    "?tela=insumos" no final (ex.: ".../exec?tela=insumos"). Depois de
+ *    trocar, reimplante de novo (Nova versão) pra essa correção valer.
+ *    Um link relativo aqui não funciona: o Google às vezes navega por
+ *    dentro de um domínio de conteúdo temporário
+ *    (algo.script.googleusercontent.com) que não reconhece "?tela=",
+ *    e a tela fica em branco.
  */
 
 function doGet(e) {
