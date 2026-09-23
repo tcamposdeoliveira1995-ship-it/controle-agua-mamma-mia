@@ -4113,10 +4113,11 @@ function _renderizarInsumos(itens, conteudo) {
 }
 
 // ================= AVISOS (post-its fixados no header) =================
-// Mesmo padrão do Insumos Críticos: fetch direto no Apps Script (não CSV
-// publicado, pra editar/ver refletido na hora, sem esperar o cache do
-// Google atualizar). Content-Type text/plain no POST evita preflight CORS
-// (Apps Script não trata OPTIONS).
+// Só leitura — criar/editar/remover aviso agora é feito no Painel
+// Qualidade (painel-qualidade-appscript/Avisos.html). Ver
+// docs/superpowers/specs/2026-09-23-painel-qualidade-avisos-design.md.
+// Fetch direto no Apps Script (não CSV publicado, pra refletir na hora
+// o que foi editado no Painel Qualidade, sem esperar cache do Google).
 
 function escaparHtmlAviso(texto) {
   const div = document.createElement('div');
@@ -4150,119 +4151,9 @@ function renderizarAvisos() {
   container.innerHTML = avisos.map(aviso => `
     <div class="postit" data-id="${aviso.id}">
       <div class="postit-texto">${escaparHtmlAviso(aviso.texto)}</div>
-      <div class="postit-acoes">
-        <button class="postit-btn" onclick="editarAvisoUI('${aviso.id}')" title="Editar"><i data-lucide="pencil"></i></button>
-        <button class="postit-btn" onclick="removerAvisoUI('${aviso.id}')" title="Remover"><i data-lucide="x"></i></button>
-      </div>
     </div>
-  `).join('') + '<button class="postit-add" id="btn-novo-aviso" title="Novo aviso">+</button>';
-
-  const btnNovo = document.getElementById('btn-novo-aviso');
-  if (btnNovo) btnNovo.addEventListener('click', novoAvisoUI);
-
-  if (typeof lucide !== 'undefined') lucide.createIcons();
+  `).join('');
 }
-
-function novoAvisoUI() {
-  const botaoAdd = document.getElementById('btn-novo-aviso');
-  if (!botaoAdd) return;
-
-  const form = document.createElement('div');
-  form.className = 'postit';
-  form.innerHTML = `
-    <textarea placeholder="Escreva o aviso..."></textarea>
-    <div class="postit-form-acoes">
-      <button class="postit-salvar">Salvar</button>
-      <button class="postit-cancelar">Cancelar</button>
-    </div>
-  `;
-  botaoAdd.replaceWith(form);
-  const textarea = form.querySelector('textarea');
-  textarea.focus();
-
-  form.querySelector('.postit-cancelar').addEventListener('click', renderizarAvisos);
-  form.querySelector('.postit-salvar').addEventListener('click', (e) => salvarNovoAviso(textarea.value, e.target));
-}
-
-async function salvarNovoAviso(texto, btn) {
-  texto = (texto || '').trim();
-  if (!texto) { showToast('Digite o texto do aviso.', 'warning'); return; }
-  btn.disabled = true;
-  btn.textContent = 'Salvando...';
-  try {
-    const resposta = await fetch(AVISOS_EXEC_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify({ acao: 'criar', texto }),
-    });
-    const resultado = await resposta.json();
-    if (!resultado.ok) throw new Error(resultado.erro || 'Erro desconhecido');
-    await carregarAvisos();
-  } catch (erro) {
-    showToast('Erro ao salvar aviso: ' + erro.message, 'error');
-    btn.disabled = false;
-    btn.textContent = 'Salvar';
-  }
-}
-
-function editarAvisoUI(id) {
-  const card = document.querySelector(`.postit[data-id="${id}"]`);
-  const aviso = (state.avisos || []).find(a => a.id === id);
-  if (!card || !aviso) return;
-
-  card.innerHTML = `
-    <textarea>${escaparHtmlAviso(aviso.texto)}</textarea>
-    <div class="postit-form-acoes">
-      <button class="postit-salvar">Salvar</button>
-      <button class="postit-cancelar">Cancelar</button>
-    </div>
-  `;
-  const textarea = card.querySelector('textarea');
-  textarea.focus();
-  card.querySelector('.postit-cancelar').addEventListener('click', renderizarAvisos);
-  card.querySelector('.postit-salvar').addEventListener('click', (e) => salvarEdicaoAviso(id, textarea.value, e.target));
-}
-
-async function salvarEdicaoAviso(id, texto, btn) {
-  texto = (texto || '').trim();
-  if (!texto) { showToast('Digite o texto do aviso.', 'warning'); return; }
-  btn.disabled = true;
-  btn.textContent = 'Salvando...';
-  try {
-    const resposta = await fetch(AVISOS_EXEC_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify({ acao: 'editar', id, texto }),
-    });
-    const resultado = await resposta.json();
-    if (!resultado.ok) throw new Error(resultado.erro || 'Erro desconhecido');
-    await carregarAvisos();
-  } catch (erro) {
-    showToast('Erro ao salvar aviso: ' + erro.message, 'error');
-    btn.disabled = false;
-    btn.textContent = 'Salvar';
-  }
-}
-
-async function removerAvisoUI(id) {
-  if (!confirm('Remover esse aviso?')) return;
-  try {
-    const resposta = await fetch(AVISOS_EXEC_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify({ acao: 'remover', id }),
-    });
-    const resultado = await resposta.json();
-    if (!resultado.ok) throw new Error(resultado.erro || 'Erro desconhecido');
-    await carregarAvisos();
-  } catch (erro) {
-    showToast('Erro ao remover aviso: ' + erro.message, 'error');
-  }
-}
-
-window.editarAvisoUI = editarAvisoUI;
-window.removerAvisoUI = removerAvisoUI;
-
 
 // ================= TOAST =================
 

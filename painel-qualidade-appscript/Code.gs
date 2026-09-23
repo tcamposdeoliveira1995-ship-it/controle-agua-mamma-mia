@@ -46,6 +46,10 @@
  *    registro (empresa, data, certificado), mesma URL
  *    (DEDETIZACAO_EXEC_URL) de sempre. Já vem com o link "‹ Menu"
  *    preenchido, não precisa editar nada nele.
+ * 5d) Crie um arquivo novo do tipo HTML chamado exatamente "Avisos" e
+ *    cole o conteúdo de Avisos.html nele — mural de post-its (criar,
+ *    editar, remover), mesma URL (AVISOS_EXEC_URL) de sempre. Já vem
+ *    com o link "‹ Menu" preenchido, não precisa editar nada nele.
  * 6) Implantar > Nova implantação > tipo "App da Web":
  *      - Executar como: Eu (sua conta)
  *      - Quem pode acessar: Qualquer pessoa
@@ -85,6 +89,11 @@ function doGet(e) {
   if (tela === 'dedetizacao') {
     return HtmlService.createHtmlOutputFromFile('Dedetizacao')
       .setTitle('Dedetização — Mamma Mia')
+      .addMetaTag('viewport', 'width=device-width, initial-scale=1');
+  }
+  if (tela === 'avisos') {
+    return HtmlService.createHtmlOutputFromFile('Avisos')
+      .setTitle('Avisos — Mamma Mia')
       .addMetaTag('viewport', 'width=device-width, initial-scale=1');
   }
   return HtmlService.createHtmlOutputFromFile('Menu')

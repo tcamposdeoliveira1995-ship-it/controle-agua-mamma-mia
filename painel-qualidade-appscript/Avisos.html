@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    :root {
+      --bg: #f7f3ee;
+      --card-bg: #ffffff;
+      --border: #e8ddd0;
+      --text: #4b433c;
+      --text-muted: #8a8570;
+      --gold: #b79b6c;
+      --green: #8f9b72;
+      --red: #c07a6c;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      -webkit-tap-highlight-color: transparent;
+    }
+    header {
+      background: var(--text);
+      color: #fff;
+      padding: 1rem 1.1rem;
+      position: sticky;
+      top: 0;
+      z-index: 5;
+    }
+    header h1 { font-size: 1.05rem; margin: 0; font-weight: 700; }
+    header p { margin: 0.15rem 0 0; font-size: 0.78rem; color: #d8d2c6; }
+    .link-menu { display: inline-block; margin-bottom: 0.5rem; font-size: 0.78rem; color: #d8d2c6; text-decoration: none; }
+    main { padding: 1rem; max-width: 640px; margin: 0 auto; padding-bottom: 3rem; }
+
+    .estado-carregando { text-align: center; color: var(--text-muted); padding: 1.5rem 1rem; font-size: 0.92rem; }
+
+    .mural { display: flex; flex-wrap: wrap; gap: 0.85rem; }
+    .postit {
+      background: #fdf0bd;
+      border: 1px solid rgba(183, 155, 108, 0.35);
+      border-radius: 4px;
+      box-shadow: 0 3px 8px rgba(0,0,0,0.12);
+      padding: 0.75rem 0.85rem;
+      width: 160px;
+      font-size: 0.85rem;
+      line-height: 1.4;
+      color: #5c4f2a;
+      transform: rotate(-1.2deg);
+    }
+    .postit:nth-child(even) { transform: rotate(1.2deg); background: #fde4c4; }
+    .postit-texto { white-space: pre-wrap; word-break: break-word; margin-bottom: 0.5rem; }
+    .postit-acoes { display: flex; gap: 0.6rem; justify-content: flex-end; }
+    .postit-btn { background: none; border: none; cursor: pointer; padding: 0; color: #8a7a45; font-size: 1rem; }
+    .postit-btn:active { opacity: 0.6; }
+    .postit textarea {
+      width: 100%;
+      font-family: inherit;
+      font-size: 0.85rem;
+      border: 1px solid rgba(183, 155, 108, 0.4);
+      border-radius: 4px;
+      padding: 0.4rem;
+      resize: vertical;
+      min-height: 4rem;
+      background: rgba(255,255,255,0.6);
+      color: #5c4f2a;
+    }
+    .postit-form-acoes { display: flex; gap: 0.4rem; margin-top: 0.5rem; }
+    .postit-form-acoes button { flex: 1; font-size: 0.78rem; padding: 0.4rem; border-radius: 4px; border: none; cursor: pointer; font-weight: 700; }
+    .postit-salvar { background: var(--green); color: #fff; }
+    .postit-cancelar { background: rgba(0,0,0,0.08); color: #5c4f2a; }
+    .postit-add {
+      width: 160px;
+      min-height: 3.2rem;
+      border: 2px dashed rgba(183, 155, 108, 0.4);
+      border-radius: 4px;
+      background: transparent;
+      color: var(--text-muted);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      font-size: 1.6rem;
+    }
+
+    .estado-vazio { color: var(--text-muted); font-size: 0.88rem; }
+  </style>
+</head>
+<body>
+  <header>
+    <a class="link-menu" href="https://script.google.com/macros/s/AKfycbzAA1-03ZTdzf2c23tQi6uxuM7gHV-bqcBa8wuuwkrzNhzW5vVkEDC1Jbfu15ClFnSmtg/exec">‹ Menu</a>
+    <h1>📌 Avisos</h1>
+    <p>Painel Qualidade — Mamma Mia</p>
+  </header>
+
+  <main>
+    <div class="estado-carregando" id="tela-carregando">Carregando avisos…</div>
+    <div class="mural" id="mural" style="display:none;"></div>
+  </main>
+
+  <script>
+    // Mesma URL que o Mamma Mia Control já usava pra esse módulo — nenhuma
+    // mudança no backend, só de onde a escrita acontece. Ver
+    // docs/superpowers/specs/2026-09-23-painel-qualidade-avisos-design.md.
+    var AVISOS_EXEC_URL = 'https://script.google.com/macros/s/AKfycbzHvvPZzBDSB730gShVCl7CPQb23h37w8k8B-cY8n1RI-NkBJzp0eUP5m-rbtj3nGdwpw/exec';
+
+    var _avisos = [];
+
+    function escaparHtml(texto) {
+      var div = document.createElement('div');
+      div.textContent = texto == null ? '' : String(texto);
+      return div.innerHTML;
+    }
+
+    function carregarAvisos() {
+      fetch(AVISOS_EXEC_URL, { cache: 'no-store' })
+        .then(function(resposta) {
+          if (!resposta.ok) throw new Error('HTTP ' + resposta.status);
+          return resposta.json();
+        })
+        .then(function(resultado) {
+          if (!resultado.ok) throw new Error(resultado.erro || 'Erro desconhecido');
+          _avisos = resultado.avisos || [];
+          document.getElementById('tela-carregando').style.display = 'none';
+          document.getElementById('mural').style.display = '';
+          renderizarMural();
+        })
+        .catch(function(erro) {
+          console.error('[AVISOS]', erro);
+          document.getElementById('tela-carregando').textContent = 'Não foi possível carregar os avisos.';
+        });
+    }
+
+    function renderizarMural() {
+      var mural = document.getElementById('mural');
+      mural.innerHTML = _avisos.map(function(aviso) {
+        return '<div class="postit" data-id="' + aviso.id + '">' +
+          '<div class="postit-texto">' + escaparHtml(aviso.texto) + '</div>' +
+          '<div class="postit-acoes">' +
+            '<button class="postit-btn" data-acao="editar" data-id="' + aviso.id + '" title="Editar">✏️</button>' +
+            '<button class="postit-btn" data-acao="remover" data-id="' + aviso.id + '" title="Remover">✕</button>' +
+          '</div>' +
+        '</div>';
+      }).join('') + '<button class="postit-add" id="btn-novo-aviso" title="Novo aviso">+</button>';
+
+      document.getElementById('btn-novo-aviso').addEventListener('click', novoAvisoUI);
+      mural.querySelectorAll('[data-acao="editar"]').forEach(function(btn) {
+        btn.addEventListener('click', function() { editarAvisoUI(btn.getAttribute('data-id')); });
+      });
+      mural.querySelectorAll('[data-acao="remover"]').forEach(function(btn) {
+        btn.addEventListener('click', function() { removerAvisoUI(btn.getAttribute('data-id')); });
+      });
+    }
+
+    function novoAvisoUI() {
+      var botaoAdd = document.getElementById('btn-novo-aviso');
+      if (!botaoAdd) return;
+      var form = document.createElement('div');
+      form.className = 'postit';
+      form.innerHTML =
+        '<textarea placeholder="Escreva o aviso..."></textarea>' +
+        '<div class="postit-form-acoes">' +
+          '<button class="postit-salvar">Salvar</button>' +
+          '<button class="postit-cancelar">Cancelar</button>' +
+        '</div>';
+      botaoAdd.replaceWith(form);
+      var textarea = form.querySelector('textarea');
+      textarea.focus();
+      form.querySelector('.postit-cancelar').addEventListener('click', renderizarMural);
+      form.querySelector('.postit-salvar').addEventListener('click', function(e) { salvarNovoAviso(textarea.value, e.target); });
+    }
+
+    function salvarNovoAviso(texto, btn) {
+      texto = (texto || '').trim();
+      if (!texto) { alert('Digite o texto do aviso.'); return; }
+      btn.disabled = true;
+      btn.textContent = 'Salvando...';
+      fetch(AVISOS_EXEC_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({ acao: 'criar', texto: texto }),
+      })
+        .then(function(resposta) { return resposta.json(); })
+        .then(function(resultado) {
+          if (!resultado.ok) throw new Error(resultado.erro || 'Erro desconhecido');
+          carregarAvisos();
+        })
+        .catch(function(erro) {
+          alert('Erro ao salvar aviso: ' + erro.message);
+          btn.disabled = false;
+          btn.textContent = 'Salvar';
+        });
+    }
+
+    function editarAvisoUI(id) {
+      var card = document.querySelector('.postit[data-id="' + id + '"]');
+      var aviso = _avisos.find(function(a) { return a.id === id; });
+      if (!card || !aviso) return;
+      card.innerHTML =
+        '<textarea>' + escaparHtml(aviso.texto) + '</textarea>' +
+        '<div class="postit-form-acoes">' +
+          '<button class="postit-salvar">Salvar</button>' +
+          '<button class="postit-cancelar">Cancelar</button>' +
+        '</div>';
+      var textarea = card.querySelector('textarea');
+      textarea.focus();
+      card.querySelector('.postit-cancelar').addEventListener('click', renderizarMural);
+      card.querySelector('.postit-salvar').addEventListener('click', function(e) { salvarEdicaoAviso(id, textarea.value, e.target); });
+    }
+
+    function salvarEdicaoAviso(id, texto, btn) {
+      texto = (texto || '').trim();
+      if (!texto) { alert('Digite o texto do aviso.'); return; }
+      btn.disabled = true;
+      btn.textContent = 'Salvando...';
+      fetch(AVISOS_EXEC_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({ acao: 'editar', id: id, texto: texto }),
+      })
+        .then(function(resposta) { return resposta.json(); })
+        .then(function(resultado) {
+          if (!resultado.ok) throw new Error(resultado.erro || 'Erro desconhecido');
+          carregarAvisos();
+        })
+        .catch(function(erro) {
+          alert('Erro ao salvar aviso: ' + erro.message);
+          btn.disabled = false;
+          btn.textContent = 'Salvar';
+        });
+    }
+
+    function removerAvisoUI(id) {
+      if (!confirm('Remover esse aviso?')) return;
+      fetch(AVISOS_EXEC_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({ acao: 'remover', id: id }),
+      })
+        .then(function(resposta) { return resposta.json(); })
+        .then(function(resultado) {
+          if (!resultado.ok) throw new Error(resultado.erro || 'Erro desconhecido');
+          carregarAvisos();
+        })
+        .catch(function(erro) {
+          alert('Erro ao remover aviso: ' + erro.message);
+        });
+    }
+
+    carregarAvisos();
+  </script>
+</body>
+</html>
