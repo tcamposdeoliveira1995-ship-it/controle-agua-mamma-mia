@@ -1,7 +1,9 @@
 # Painel Qualidade — porta de entrada com senha
 
 **Data:** 2026-09-23
-**Status:** Aprovado para implementação
+**Status:** Revertido — a usuária trocou de ideia antes de testar em produção e preferiu restringir por
+conta do Google (ver docs/superpowers/specs/2026-09-23-painel-qualidade-acesso-google-design.md) em vez
+de senha compartilhada. Mantido aqui só como registro da decisão original.
 
 ## Contexto
 
