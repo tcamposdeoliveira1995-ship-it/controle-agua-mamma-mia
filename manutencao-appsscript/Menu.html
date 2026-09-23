@@ -84,6 +84,21 @@
       text-align: center;
       line-height: 1.5;
     }
+
+    .btn-alertas {
+      display: block;
+      width: 100%;
+      padding: 0.7rem;
+      margin-bottom: 1rem;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      background: var(--card-bg);
+      color: var(--text);
+      font-size: 0.85rem;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .btn-alertas.ativo { background: var(--green); color: #fff; border-color: var(--green); }
   </style>
 </head>
 <body>
@@ -93,6 +108,8 @@
   </header>
 
   <main>
+    <button class="btn-alertas" id="btn-alertas-sonoros">🔔 Ativar alertas sonoros de OS nova</button>
+
     <div class="resumo-os" id="resumo-os">
       <div class="resumo-carregando">Carregando OS em aberto…</div>
     </div>
@@ -147,10 +164,79 @@
       if (alvo) alvo.innerHTML = '';
     }
 
-    google.script.run
-      .withSuccessHandler(mostrarResumoOS)
-      .withFailureHandler(ocultarResumoOS)
-      .listarOSAbertas();
+    // ---------- Alerta sonoro de OS nova ----------
+    // Fica desligado por padrão — precisa de 1 toque no botão pra ligar,
+    // porque navegadores bloqueiam som automático sem gesto do usuário
+    // (é esse toque que "libera" o áudio pro resto da sessão). Só
+    // funciona enquanto essa página do Menu estiver aberta e na tela —
+    // se o celular travar ou trocar de app, a verificação para (não é
+    // uma notificação push de verdade, é só um alerta enquanto a página
+    // está ativa).
+    var INTERVALO_VERIFICACAO_MS = 30000;
+    var alertasAtivos = false;
+    var audioCtx = null;
+    var verificacaoTimer = null;
+    var osIdsConhecidos = null; // null = ainda não temos uma base pra comparar
+
+    function tocarAlertaSonoro() {
+      if (!audioCtx) return;
+      [0, 0.28].forEach(function (offset) {
+        var osc = audioCtx.createOscillator();
+        var gain = audioCtx.createGain();
+        osc.type = 'sine';
+        osc.frequency.value = 880;
+        var inicio = audioCtx.currentTime + offset;
+        gain.gain.setValueAtTime(0.0001, inicio);
+        gain.gain.exponentialRampToValueAtTime(0.3, inicio + 0.02);
+        gain.gain.exponentialRampToValueAtTime(0.0001, inicio + 0.22);
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start(inicio);
+        osc.stop(inicio + 0.25);
+      });
+    }
+
+    // Reaproveitada tanto na carga inicial da página quanto no
+    // intervalo — a 1ª chamada só estabelece a base de OS conhecidas
+    // (osIdsConhecidos começa null), então nunca toca som "à toa" assim
+    // que a página abre, só quando surge uma OS que não existia antes.
+    function verificarNovasOS() {
+      google.script.run
+        .withSuccessHandler(function (lista) {
+          mostrarResumoOS(lista);
+
+          var idsAtuais = {};
+          (lista || []).forEach(function (os) { idsAtuais[os.os] = true; });
+
+          if (osIdsConhecidos) {
+            var temNova = Object.keys(idsAtuais).some(function (id) { return !osIdsConhecidos[id]; });
+            if (temNova && alertasAtivos) tocarAlertaSonoro();
+          }
+          osIdsConhecidos = idsAtuais;
+        })
+        .withFailureHandler(ocultarResumoOS)
+        .listarOSAbertas();
+    }
+
+    document.getElementById('btn-alertas-sonoros').addEventListener('click', function () {
+      var btn = this;
+      if (!alertasAtivos) {
+        if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        if (audioCtx.state === 'suspended') audioCtx.resume();
+        alertasAtivos = true;
+        btn.textContent = '🔔 Alertas sonoros ativados';
+        btn.classList.add('ativo');
+        tocarAlertaSonoro(); // beep de confirmação, pra já ouvir que funcionou
+        if (!verificacaoTimer) verificacaoTimer = setInterval(verificarNovasOS, INTERVALO_VERIFICACAO_MS);
+      } else {
+        alertasAtivos = false;
+        btn.textContent = '🔔 Ativar alertas sonoros de OS nova';
+        btn.classList.remove('ativo');
+        if (verificacaoTimer) { clearInterval(verificacaoTimer); verificacaoTimer = null; }
+      }
+    });
+
+    verificarNovasOS();
   </script>
 </body>
 </html>
