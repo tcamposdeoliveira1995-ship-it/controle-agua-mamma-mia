@@ -1,15 +1,23 @@
 /**
- * PROJETO ÚNICO: registro de água via Telegram + mural de Avisos do
- * painel (mammamia-control.vercel.app). Os dois moram no mesmo projeto
- * Apps Script porque só existe 1 link (/exec) e 1 doPost por projeto.
+ * PROJETO ÚNICO: registro de água via Telegram + mural de Avisos +
+ * registro de Caminhão Pipa + Higienização de Motores, todos vindos do
+ * Painel Qualidade (painel-qualidade-appscript). Moram no mesmo projeto
+ * Apps Script porque só existe 1 link (/exec) e 1 doPost por projeto —
+ * mesmo motivo que já juntava água+avisos aqui antes. Ver
+ * docs/superpowers/specs/2026-09-23-painel-qualidade-pipa-higienizacao-design.md
+ * no repo controle-agua-mamma-mia.
  *
  * O registro de água NÃO usa webhook do Telegram (ver "TELEGRAM VIA
- * POLLING" mais abaixo, e o motivo da troca) — então hoje o doPost só
- * atende o painel de Avisos ({acao: "criar"|"editar"|"remover"}).
+ * POLLING" mais abaixo, e o motivo da troca) — então hoje o doPost
+ * atende Avisos ({acao: "criar"|"editar"|"remover"}), Pipa
+ * ({acao: "criar_pipa", ...}) e Higienização de Motores
+ * ({acao: "criar_higienizacao", ...}).
  *
- * planilhaId aponta pra planilha de água — é onde tanto a aba
- * "Respostas ao formulário 1" (leituras, 1 linha por dia x 1 coluna por
- * relógio) quanto a aba "AVISOS" (mural) vivem.
+ * planilhaId aponta pra planilha de água — é onde a aba "Respostas ao
+ * formulário 1" (leituras), a aba "AVISOS" (mural) e a aba de Pipa
+ * (mesma planilha, achada pelo gid) vivem. Higienização de Motores é
+ * uma planilha DIFERENTE (HIGIENIZACAO_PLANILHA_ID abaixo), aberta à
+ * parte pelo ID.
  */
 
 // ================= CONFIG =================
@@ -427,6 +435,106 @@ function removerAviso(id) {
   }
 }
 
+// ================= PIPA (mesma planilha de água, aba achada pelo gid) =================
+// Aba achada pelo ID interno (gid) em vez do nome, porque abrir por
+// nome exigiria saber o texto exato da aba — o gid já é conhecido (é o
+// mesmo usado no link de leitura CSV do Mamma Mia Control) e nunca
+// muda mesmo que a aba seja renomeada.
+
+var PIPA_GID = 1113385596;
+
+function obterAbaPorGid(planilha, gid) {
+  var abas = planilha.getSheets().filter(function (s) { return s.getSheetId() === gid; });
+  if (abas.length === 0) {
+    throw new Error("Aba (gid " + gid + ") não encontrada na planilha.");
+  }
+  return abas[0];
+}
+
+// Acha coluna pelo cabeçalho contendo qualquer um dos trechos dados
+// (mesma lógica de match "contains" já usada na leitura do Mamma Mia
+// Control) — assim não depende de saber o texto exato do cabeçalho.
+function colunaPorTrecho(mapa, trechos) {
+  var chaves = Object.keys(mapa);
+  for (var t = 0; t < trechos.length; t++) {
+    for (var i = 0; i < chaves.length; i++) {
+      if (chaves[i].indexOf(trechos[t]) !== -1) return mapa[chaves[i]];
+    }
+  }
+  return 0;
+}
+
+function registrarPipa(dados) {
+  var lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    var planilha = SpreadsheetApp.openById(getConfig().planilhaId);
+    var aba = obterAbaPorGid(planilha, PIPA_GID);
+    var mapa = mapaColunas(aba);
+
+    var colPedido = colunaPorTrecho(mapa, ["PEDIDO"]);
+    var colReq = colunaPorTrecho(mapa, ["REQUISITADA", "QTD_REQ"]);
+    var colRec = colunaPorTrecho(mapa, ["RECEBIDA", "QTD_REC"]);
+    var colPlaca = colunaPorTrecho(mapa, ["PLACA"]);
+    var colInicio = colunaPorTrecho(mapa, ["INCIO", "INICIO", "INÍCIO"]);
+    var colFim = colunaPorTrecho(mapa, ["FIM"]);
+    var colRecibo = colunaPorTrecho(mapa, ["RECIBO", "Nº", "NR", "NUM"]);
+
+    if (!colPedido || !colReq || !colRec || !colPlaca || !colInicio || !colFim || !colRecibo) {
+      throw new Error("Não encontrei todas as colunas esperadas na aba de Pipa. Verifique os cabeçalhos da planilha.");
+    }
+
+    var linha = new Array(aba.getLastColumn()).fill("");
+    linha[colPedido - 1] = dados.pedido ? new Date(dados.pedido + "T00:00:00") : "";
+    linha[colReq - 1] = dados.requisitada;
+    linha[colRec - 1] = dados.recebida;
+    linha[colPlaca - 1] = dados.placa;
+    linha[colInicio - 1] = dados.relInicio;
+    linha[colFim - 1] = dados.relFim;
+    linha[colRecibo - 1] = dados.recibo;
+    aba.appendRow(linha);
+
+    return { ok: true };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+// ================= HIGIENIZAÇÃO DE MOTORES (planilha própria) =================
+
+var HIGIENIZACAO_PLANILHA_ID = "1whesPHLd83XkPRTWwrktJRvlfKk_CkCyxj_8ioSnk6A";
+var HIGIENIZACAO_GID = 1973720702;
+
+function registrarHigienizacao(dados) {
+  var lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    var planilha = SpreadsheetApp.openById(HIGIENIZACAO_PLANILHA_ID);
+    var aba = obterAbaPorGid(planilha, HIGIENIZACAO_GID);
+    var mapa = mapaColunas(aba);
+
+    var colTimestamp = colunaPorTrecho(mapa, ["TIMESTAMP", "CARIMBO"]);
+    var colData = colunaPorTrecho(mapa, ["HIGIENIZ"]);
+    var colResp = colunaPorTrecho(mapa, ["RESPONS"]);
+    var colUnidade = colunaPorTrecho(mapa, ["UNIDADE"]);
+
+    if (!colData || !colResp || !colUnidade) {
+      throw new Error("Não encontrei todas as colunas esperadas na aba de Higienização. Verifique os cabeçalhos da planilha.");
+    }
+
+    var linha = new Array(aba.getLastColumn()).fill("");
+    if (colTimestamp) linha[colTimestamp - 1] = new Date();
+    linha[colData - 1] = dados.dataHigienizacao ? new Date(dados.dataHigienizacao + "T00:00:00") : "";
+    linha[colResp - 1] = dados.responsavel;
+    linha[colUnidade - 1] = dados.unidade;
+    aba.appendRow(linha);
+
+    return { ok: true };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
 // ================= TELEGRAM VIA POLLING (não usa mais webhook) =================
 // Por que a troca: o Apps Script, por natureza da plataforma, responde
 // chamadas externas com um redirecionamento (302) antes de servir o
@@ -536,8 +644,11 @@ function doGet(e) {
 
 /**
  * O registro de água não usa mais webhook do Telegram (ver "TELEGRAM
- * VIA POLLING" acima) — então doPost hoje só atende o painel de Avisos:
- * {acao: "criar"|"editar"|"remover", ...}.
+ * VIA POLLING" acima) — então doPost hoje atende Avisos
+ * ({acao: "criar"|"editar"|"remover", ...}), Pipa
+ * ({acao: "criar_pipa", pedido, requisitada, recebida, placa,
+ * relInicio, relFim, recibo}) e Higienização de Motores
+ * ({acao: "criar_higienizacao", dataHigienizacao, responsavel, unidade}).
  */
 function doPost(e) {
   var dados = JSON.parse(e.postData.contents);
@@ -546,6 +657,8 @@ function doPost(e) {
     if (dados.acao === "criar") return respostaJson(criarAviso(dados.texto));
     if (dados.acao === "editar") return respostaJson(editarAviso(dados.id, dados.texto));
     if (dados.acao === "remover") return respostaJson(removerAviso(dados.id));
+    if (dados.acao === "criar_pipa") return respostaJson(registrarPipa(dados));
+    if (dados.acao === "criar_higienizacao") return respostaJson(registrarHigienizacao(dados));
     throw new Error("Ação inválida: " + dados.acao);
   } catch (erro) {
     return respostaJson({ ok: false, erro: erro.message });

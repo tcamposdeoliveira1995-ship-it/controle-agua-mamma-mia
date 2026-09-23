@@ -50,6 +50,18 @@
  *    cole o conteúdo de Avisos.html nele — mural de post-its (criar,
  *    editar, remover), mesma URL (AVISOS_EXEC_URL) de sempre. Já vem
  *    com o link "‹ Menu" preenchido, não precisa editar nada nele.
+ * 5e) Crie um arquivo novo do tipo HTML chamado exatamente "Pipa" e
+ *    cole o conteúdo de Pipa.html nele — formulário de abastecimento
+ *    (pedido, quantidades, placa, relógio, recibo). Usa o MESMO backend
+ *    do mural de Avisos (o projeto avisos-appscript ganhou uma ação
+ *    nova, criar_pipa — reaproveita a implantação existente, não
+ *    precisa criar nenhum projeto novo pra isso). Já vem com o link
+ *    "‹ Menu" preenchido.
+ * 5f) Crie um arquivo novo do tipo HTML chamado exatamente
+ *    "Higienizacao" (sem acento) e cole o conteúdo de Higienizacao.html
+ *    nele — formulário (data, responsável, unidade) + status por
+ *    unidade. Também usa o mesmo backend do mural de Avisos (ação nova
+ *    criar_higienizacao). Já vem com o link "‹ Menu" preenchido.
  * 6) Implantar > Nova implantação > tipo "App da Web":
  *      - Executar como: Eu (sua conta)
  *      - Quem pode acessar: Qualquer pessoa
@@ -94,6 +106,16 @@ function doGet(e) {
   if (tela === 'avisos') {
     return HtmlService.createHtmlOutputFromFile('Avisos')
       .setTitle('Avisos — Mamma Mia')
+      .addMetaTag('viewport', 'width=device-width, initial-scale=1');
+  }
+  if (tela === 'pipa') {
+    return HtmlService.createHtmlOutputFromFile('Pipa')
+      .setTitle('Caminhão Pipa — Mamma Mia')
+      .addMetaTag('viewport', 'width=device-width, initial-scale=1');
+  }
+  if (tela === 'higienizacao') {
+    return HtmlService.createHtmlOutputFromFile('Higienizacao')
+      .setTitle('Higienização de Motores — Mamma Mia')
       .addMetaTag('viewport', 'width=device-width, initial-scale=1');
   }
   return HtmlService.createHtmlOutputFromFile('Menu')

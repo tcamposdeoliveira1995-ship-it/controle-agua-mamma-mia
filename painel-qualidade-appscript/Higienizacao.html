@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    :root {
+      --bg: #f7f3ee;
+      --card-bg: #ffffff;
+      --border: #e8ddd0;
+      --text: #4b433c;
+      --text-muted: #8a8570;
+      --gold: #b79b6c;
+      --green: #8f9b72;
+      --red: #c07a6c;
+      --orange: #d6aa5f;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      -webkit-tap-highlight-color: transparent;
+    }
+    header {
+      background: var(--text);
+      color: #fff;
+      padding: 1rem 1.1rem;
+      position: sticky;
+      top: 0;
+      z-index: 5;
+    }
+    header h1 { font-size: 1.05rem; margin: 0; font-weight: 700; }
+    header p { margin: 0.15rem 0 0; font-size: 0.78rem; color: #d8d2c6; }
+    .link-menu { display: inline-block; margin-bottom: 0.5rem; font-size: 0.78rem; color: #d8d2c6; text-decoration: none; }
+    main { padding: 1rem; max-width: 560px; margin: 0 auto; padding-bottom: 3rem; }
+
+    .panel-card { background: var(--card-bg); border: 1px solid var(--border); border-radius: 14px; padding: 1.25rem; margin-bottom: 1.25rem; }
+    .panel-header h2 { font-size: 1.05rem; font-weight: 700; margin: 0 0 0.9rem; }
+
+    .form-group { margin-bottom: 1.1rem; }
+    .form-label { display: block; font-size: 0.82rem; font-weight: 600; color: var(--text-muted); margin-bottom: 0.4rem; }
+    .form-control {
+      width: 100%; background: #fff; border: 1px solid var(--border); color: var(--text);
+      font-family: inherit; padding: 0.65rem 0.85rem; border-radius: 10px; font-size: 0.92rem; outline: none;
+    }
+
+    .btn {
+      font-family: inherit; padding: 0.65rem 1.2rem; border-radius: 10px; font-weight: 700; font-size: 0.9rem;
+      cursor: pointer; border: none; width: 100%;
+    }
+    .btn-primary { background: var(--green); color: #fff; }
+    .btn-primary:disabled { opacity: 0.6; }
+
+    .estado-carregando, .estado-vazio { text-align: center; color: var(--text-muted); padding: 1rem; font-size: 0.88rem; }
+
+    .status-chip {
+      display: flex; justify-content: space-between; align-items: center; gap: 0.75rem;
+      padding: 0.75rem 1rem; border-radius: 10px; border: 1px solid var(--border);
+      background: rgba(255,255,255,0.5); margin-bottom: 0.6rem;
+    }
+    .status-chip.ok { border-left: 4px solid var(--green); }
+    .status-chip.atencao { border-left: 4px solid var(--orange); }
+    .status-chip.alerta { border-left: 4px solid var(--red); background: rgba(192,122,108,0.08); }
+    .status-chip-label { font-weight: 700; font-size: 0.9rem; }
+    .status-chip-status { font-size: 0.8rem; color: var(--text-muted); text-align: right; }
+    .status-chip.alerta .status-chip-status { color: var(--red); font-weight: 700; }
+    .status-chip.atencao .status-chip-status { color: var(--orange); font-weight: 700; }
+  </style>
+</head>
+<body>
+  <header>
+    <a class="link-menu" href="https://script.google.com/macros/s/AKfycbzAA1-03ZTdzf2c23tQi6uxuM7gHV-bqcBa8wuuwkrzNhzW5vVkEDC1Jbfu15ClFnSmtg/exec">‹ Menu</a>
+    <h1>🧴 Higienização de Motores</h1>
+    <p>Painel Qualidade — Mamma Mia</p>
+  </header>
+
+  <main>
+    <div class="panel-card">
+      <div class="panel-header"><h2>Registrar higienização</h2></div>
+      <form id="form-higienizacao">
+        <div class="form-group">
+          <label class="form-label">Data da higienização *</label>
+          <input type="date" id="hig-data" class="form-control" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Responsável *</label>
+          <input type="text" id="hig-responsavel" class="form-control" placeholder="Nome completo" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Unidade *</label>
+          <select id="hig-unidade" class="form-control" required>
+            <option value="">Selecione</option>
+            <option value="Yuka">YUKA</option>
+            <option value="Tc">TC</option>
+            <option value="Cd">CD</option>
+          </select>
+        </div>
+        <button type="submit" id="btn-salvar-hig" class="btn btn-primary">Salvar</button>
+      </form>
+    </div>
+
+    <div class="panel-card">
+      <div class="panel-header"><h2>Status por unidade</h2></div>
+      <div id="hig-status"><div class="estado-carregando">Carregando…</div></div>
+    </div>
+  </main>
+
+  <script>
+    // Mesmo backend do mural de Avisos (planilha própria de Higienização,
+    // aberta por ID) — só ganhou uma ação nova (criar_higienizacao). Ver
+    // docs/superpowers/specs/2026-09-23-painel-qualidade-pipa-higienizacao-design.md.
+    var HIGIENIZACAO_EXEC_URL = 'https://script.google.com/macros/s/AKfycbzHvvPZzBDSB730gShVCl7CPQb23h37w8k8B-cY8n1RI-NkBJzp0eUP5m-rbtj3nGdwpw/exec';
+    var HIGIENIZACAO_GVIZ_URL = 'https://docs.google.com/spreadsheets/d/1whesPHLd83XkPRTWwrktJRvlfKk_CkCyxj_8ioSnk6A/gviz/tq?tqx=out:json&gid=1973720702';
+    var HIGIENIZACAO_UNIDADES = ['Yuka', 'Tc', 'Cd'];
+    var HIGIENIZACAO_DATA_BASE = new Date(2026, 5, 1);
+
+    function anoValido(data) {
+      if (!data) return false;
+      var ano = data.getFullYear();
+      return ano >= 2023 && ano <= 2035;
+    }
+
+    function parseDataGviz(v) {
+      if (v === null || v === undefined || v === '') return null;
+      if (typeof v === 'string') {
+        var m = /^Date\((\d+),(\d+),(\d+)/.exec(v);
+        if (m) {
+          var data = new Date(Number(m[1]), Number(m[2]), Number(m[3]));
+          return isNaN(data.getTime()) ? null : data;
+        }
+      }
+      return null;
+    }
+
+    function formatarDataBR(data) {
+      if (!data) return '-';
+      var dia = String(data.getDate()).padStart(2, '0');
+      var mes = String(data.getMonth() + 1).padStart(2, '0');
+      return dia + '/' + mes + '/' + data.getFullYear();
+    }
+
+    function normalizarUnidade(raw) {
+      var u = (raw || '').toUpperCase();
+      if (u.indexOf('YUKA') !== -1) return 'Yuka';
+      if (u.indexOf('TC') !== -1) return 'Tc';
+      if (u.indexOf('CD') !== -1) return 'Cd';
+      return raw || '-';
+    }
+
+    function ultimoMarco(hoje) {
+      var ano = hoje.getFullYear(), mes = hoje.getMonth(), dia = hoje.getDate();
+      if (dia >= 15) return new Date(ano, mes, 15);
+      return new Date(ano, mes, 1);
+    }
+
+    function calcularStatus(registrosUnidade) {
+      var hoje = new Date();
+      hoje.setHours(0, 0, 0, 0);
+      var ordenados = registrosUnidade.filter(function(r) { return r.data; }).sort(function(a, b) { return b.data.getTime() - a.data.getTime(); });
+      var ultimo = ordenados[0] || null;
+      var semRegistro = false;
+      if (!ultimo) {
+        ultimo = { data: HIGIENIZACAO_DATA_BASE };
+        semRegistro = true;
+      }
+      var marco = ultimoMarco(hoje);
+      var atrasado = ultimo.data.getTime() < marco.getTime();
+      return { ultimo: ultimo, atrasado: atrasado, semRegistro: semRegistro };
+    }
+
+    function carregarStatus() {
+      var container = document.getElementById('hig-status');
+      fetch(HIGIENIZACAO_GVIZ_URL, { cache: 'no-store' })
+        .then(function(resposta) { return resposta.text(); })
+        .then(function(texto) {
+          var match = /setResponse\(([\s\S]*)\);?\s*$/.exec(texto.trim());
+          if (!match) throw new Error('Formato inesperado');
+          var payload = JSON.parse(match[1]);
+          if (payload.status === 'error') throw new Error('Erro ao ler a planilha');
+
+          var colunas = (payload.table.cols || []).map(function(c) { return (c.label || '').toUpperCase(); });
+          var linhasDados = payload.table.rows || [];
+          var idxTimestamp = colunas.findIndex(function(c) { return c.indexOf('TIMESTAMP') !== -1 || c.indexOf('CARIMBO') !== -1; });
+          var idxData = colunas.findIndex(function(c) { return c.indexOf('HIGIENIZ') !== -1; });
+          var idxUnidade = colunas.findIndex(function(c) { return c.indexOf('UNIDADE') !== -1; });
+
+          var valorCelula = function(linha, idx) {
+            if (idx < 0 || !linha.c || !linha.c[idx]) return null;
+            return linha.c[idx].v;
+          };
+
+          var porUnidade = { Yuka: [], Tc: [], Cd: [] };
+          linhasDados.forEach(function(linha) {
+            var dataPrincipal = parseDataGviz(valorCelula(linha, idxData));
+            var dataTimestamp = parseDataGviz(valorCelula(linha, idxTimestamp));
+            var data = anoValido(dataPrincipal) ? dataPrincipal : (anoValido(dataTimestamp) ? dataTimestamp : null);
+            var unidade = normalizarUnidade(valorCelula(linha, idxUnidade));
+            if (porUnidade[unidade]) porUnidade[unidade].push({ data: data });
+          });
+
+          container.innerHTML = HIGIENIZACAO_UNIDADES.map(function(u) {
+            var s = calcularStatus(porUnidade[u]);
+            var classe = s.atrasado ? 'alerta' : 'ok';
+            var label = { Yuka: 'YUKA', Tc: 'TC', Cd: 'CD' }[u];
+            var status = s.semRegistro ? '⚠️ Sem registro' : (s.atrasado ? '🔴 Atrasada' : '✅ Em dia') + ' — última: ' + formatarDataBR(s.ultimo.data);
+            return '<div class="status-chip ' + classe + '"><div class="status-chip-label">' + label + '</div><div class="status-chip-status">' + status + '</div></div>';
+          }).join('');
+        })
+        .catch(function() { container.innerHTML = '<p class="estado-vazio">Não foi possível carregar.</p>'; });
+    }
+
+    document.getElementById('form-higienizacao').addEventListener('submit', function(e) {
+      e.preventDefault();
+      var btn = document.getElementById('btn-salvar-hig');
+      var payload = {
+        acao: 'criar_higienizacao',
+        dataHigienizacao: document.getElementById('hig-data').value,
+        responsavel: document.getElementById('hig-responsavel').value.trim(),
+        unidade: document.getElementById('hig-unidade').value,
+      };
+      if (!payload.unidade) { alert('Selecione a unidade.'); return; }
+      btn.disabled = true;
+      btn.textContent = 'Salvando...';
+      fetch(HIGIENIZACAO_EXEC_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify(payload),
+      })
+        .then(function(resposta) { return resposta.json(); })
+        .then(function(resultado) {
+          if (!resultado.ok) throw new Error(resultado.erro || 'Erro desconhecido');
+          document.getElementById('form-higienizacao').reset();
+          carregarStatus();
+          alert('Higienização registrada!');
+        })
+        .catch(function(erro) {
+          alert('Erro ao salvar: ' + erro.message);
+        })
+        .finally(function() {
+          btn.disabled = false;
+          btn.textContent = 'Salvar';
+        });
+    });
+
+    carregarStatus();
+  </script>
+</body>
+</html>
