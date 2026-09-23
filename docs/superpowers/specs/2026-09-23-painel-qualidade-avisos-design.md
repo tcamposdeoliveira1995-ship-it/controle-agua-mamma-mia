@@ -1,7 +1,8 @@
 # Painel Qualidade — Fase 5 (migração do mural de Avisos + link para apps já existentes)
 
 **Data:** 2026-09-23
-**Status:** Aprovado para implementação
+**Status:** Implementado e validado em produção (mural criar/editar/remover testado de ponta a ponta no
+Painel Qualidade)
 
 ## Contexto
 
