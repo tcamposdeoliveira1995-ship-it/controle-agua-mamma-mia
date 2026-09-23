@@ -63,12 +63,14 @@
       padding: 0.55rem 0.7rem;
       text-align: center;
     }
+    .resumo-item { cursor: pointer; }
     .resumo-item .resumo-numero { font-size: 1.3rem; font-weight: 800; line-height: 1.1; }
     .resumo-item .resumo-rotulo { font-size: 0.7rem; color: var(--text-muted); font-weight: 600; }
     .resumo-item.resumo-critica .resumo-numero { color: var(--red); }
     .resumo-item.resumo-alta .resumo-numero { color: #c07a00; }
     .resumo-item.resumo-media .resumo-numero { color: #a8901f; }
     .resumo-item.resumo-baixa .resumo-numero { color: var(--green); }
+    .resumo-item.selecionado { border-color: var(--text); border-width: 2px; }
     .resumo-carregando, .resumo-vazio, .resumo-erro {
       font-size: 0.82rem;
       color: var(--text-muted);
@@ -76,6 +78,17 @@
       width: 100%;
       padding: 0.4rem 0;
     }
+
+    .os-item-lista {
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 0.6rem 0.8rem;
+      margin-bottom: 0.5rem;
+      background: var(--card-bg);
+      font-size: 0.82rem;
+    }
+    .os-item-lista .os-item-titulo { font-weight: 700; }
+    .os-item-lista .os-item-linha { color: var(--text-muted); margin-top: 0.15rem; }
 
     .dica {
       margin-top: 1.4rem;
@@ -113,6 +126,7 @@
     <div class="resumo-os" id="resumo-os">
       <div class="resumo-carregando">Carregando OS em aberto…</div>
     </div>
+    <div id="lista-os-prioridade"></div>
 
     <a class="opcao opcao-abrir" href="https://script.google.com/macros/s/AKfycbxN_cFnGJpZgwVaCAegqB0HwrBsw_wKQd56wXyeq3RK5LZbumHrFaudxu9VjQMPBuOauQ/exec?tela=abrir">
       <div class="opcao-icone">📋</div>
@@ -142,6 +156,17 @@
       return contagem;
     }
 
+    function escaparHtmlMenu(texto) {
+      var div = document.createElement('div');
+      div.textContent = texto == null ? '' : String(texto);
+      return div.innerHTML;
+    }
+
+    var osListaAtual = [];
+    // Qual card está "aberto" no momento (Crítica/Alta/Média/Baixa) — só
+    // 1 por vez; clicar de novo no mesmo card recolhe. null = nenhum.
+    var prioridadeExpandida = null;
+
     function mostrarResumoOS(lista) {
       var alvo = document.getElementById('resumo-os');
       if (!alvo) return;
@@ -152,16 +177,50 @@
       }
 
       var contagem = contarPorPrioridade(lista);
+      var classeSel = function (prioridade) { return prioridadeExpandida === prioridade ? ' selecionado' : ''; };
       alvo.innerHTML =
-        '<div class="resumo-item resumo-critica"><div class="resumo-numero">' + contagem["Crítica"] + '</div><div class="resumo-rotulo">🔴 Críticas</div></div>' +
-        '<div class="resumo-item resumo-alta"><div class="resumo-numero">' + contagem["Alta"] + '</div><div class="resumo-rotulo">🟠 Altas</div></div>' +
-        '<div class="resumo-item resumo-media"><div class="resumo-numero">' + contagem["Média"] + '</div><div class="resumo-rotulo">🟡 Médias</div></div>' +
-        '<div class="resumo-item resumo-baixa"><div class="resumo-numero">' + contagem["Baixa"] + '</div><div class="resumo-rotulo">🟢 Baixas</div></div>';
+        '<div class="resumo-item resumo-critica' + classeSel('Crítica') + '" onclick="alternarListaPrioridade(\'Crítica\')"><div class="resumo-numero">' + contagem["Crítica"] + '</div><div class="resumo-rotulo">🔴 Críticas</div></div>' +
+        '<div class="resumo-item resumo-alta' + classeSel('Alta') + '" onclick="alternarListaPrioridade(\'Alta\')"><div class="resumo-numero">' + contagem["Alta"] + '</div><div class="resumo-rotulo">🟠 Altas</div></div>' +
+        '<div class="resumo-item resumo-media' + classeSel('Média') + '" onclick="alternarListaPrioridade(\'Média\')"><div class="resumo-numero">' + contagem["Média"] + '</div><div class="resumo-rotulo">🟡 Médias</div></div>' +
+        '<div class="resumo-item resumo-baixa' + classeSel('Baixa') + '" onclick="alternarListaPrioridade(\'Baixa\')"><div class="resumo-numero">' + contagem["Baixa"] + '</div><div class="resumo-rotulo">🟢 Baixas</div></div>';
     }
 
     function ocultarResumoOS() {
       var alvo = document.getElementById('resumo-os');
       if (alvo) alvo.innerHTML = '';
+    }
+
+    // Renderiza (ou limpa) a lista de OS da prioridade selecionada, a
+    // partir de osListaAtual — chamada tanto ao clicar num card quanto
+    // toda vez que a lista é atualizada (verificarNovasOS), pra não
+    // ficar mostrando dados velhos se ela já estiver expandida.
+    function renderizarListaPrioridade() {
+      var alvo = document.getElementById('lista-os-prioridade');
+      if (!alvo) return;
+      if (!prioridadeExpandida) { alvo.innerHTML = ''; return; }
+
+      var filtradas = osListaAtual.filter(function (os) { return os.prioridade === prioridadeExpandida; });
+
+      if (filtradas.length === 0) {
+        alvo.innerHTML = '<p style="font-size:0.82rem;color:var(--text-muted);text-align:center;margin:0.6rem 0;">Nenhuma OS nessa prioridade no momento.</p>';
+        return;
+      }
+
+      alvo.innerHTML = filtradas.map(function (os) {
+        return (
+          '<div class="os-item-lista">' +
+            '<div class="os-item-titulo">' + escaparHtmlMenu(os.os) + ' · ' + escaparHtmlMenu(os.status) + '</div>' +
+            '<div class="os-item-linha">' + escaparHtmlMenu(os.setor || '-') + ' · ' + escaparHtmlMenu(os.equipamento || '-') + '</div>' +
+            '<div class="os-item-linha">' + escaparHtmlMenu(os.descricao || '') + '</div>' +
+          '</div>'
+        );
+      }).join('');
+    }
+
+    function alternarListaPrioridade(prioridade) {
+      prioridadeExpandida = (prioridadeExpandida === prioridade) ? null : prioridade;
+      mostrarResumoOS(osListaAtual); // re-renderiza os cards pra marcar/desmarcar o selecionado
+      renderizarListaPrioridade();
     }
 
     // ---------- Alerta sonoro de OS nova ----------
@@ -203,10 +262,12 @@
     function verificarNovasOS() {
       google.script.run
         .withSuccessHandler(function (lista) {
+          osListaAtual = lista || [];
           mostrarResumoOS(lista);
+          renderizarListaPrioridade(); // atualiza a lista aberta, se houver, com dados frescos
 
           var idsAtuais = {};
-          (lista || []).forEach(function (os) { idsAtuais[os.os] = true; });
+          osListaAtual.forEach(function (os) { idsAtuais[os.os] = true; });
 
           if (osIdsConhecidos) {
             var temNova = Object.keys(idsAtuais).some(function (id) { return !osIdsConhecidos[id]; });
