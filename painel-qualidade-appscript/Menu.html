@@ -11,6 +11,7 @@
       --text: #4b433c;
       --text-muted: #8a8570;
       --gold: #b79b6c;
+      --gold-escuro: #9c7f52;
     }
     * { box-sizing: border-box; }
     body {
@@ -21,30 +22,53 @@
       -webkit-tap-highlight-color: transparent;
     }
     header {
-      background: var(--text);
-      color: #fff;
+      background: var(--gold);
+      color: var(--text);
       padding: 1rem 1.1rem;
     }
-    header h1 { font-size: 1.05rem; margin: 0; font-weight: 700; }
-    header p { margin: 0.15rem 0 0; font-size: 0.78rem; color: #d8d2c6; }
-    main { padding: 1.2rem; max-width: 480px; margin: 0 auto; }
+    header h1 { font-size: 1.1rem; margin: 0; font-weight: 800; }
+    header p { margin: 0.15rem 0 0; font-size: 0.78rem; color: rgba(75,67,60,0.75); }
+    main { padding: 1rem; max-width: 640px; margin: 0 auto; }
 
+    .grid-opcoes {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 0.6rem;
+    }
     .opcao {
-      display: block;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+      gap: 0.35rem;
       background: var(--card-bg);
       border: 1px solid var(--border);
       border-radius: 14px;
-      padding: 1.3rem 1.2rem;
-      margin-bottom: 1rem;
+      padding: 0.85rem 0.4rem;
       text-decoration: none;
       color: var(--text);
-      border-left: 4px solid var(--gold);
       transition: transform 0.1s ease;
     }
-    .opcao:active { transform: scale(0.98); }
-    .opcao-icone { font-size: 1.8rem; margin-bottom: 0.4rem; }
-    .opcao-titulo { font-size: 1.05rem; font-weight: 700; margin-bottom: 0.25rem; }
-    .opcao-desc { font-size: 0.85rem; color: var(--text-muted); line-height: 1.4; }
+    .opcao:active { transform: scale(0.96); }
+    .opcao-icone {
+      font-size: 1.5rem;
+      width: 2.4rem;
+      height: 2.4rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 50%;
+      background: rgba(183,155,108,0.15);
+    }
+    .opcao-titulo { font-size: 0.7rem; font-weight: 700; line-height: 1.25; }
+    .opcao-desc { display: none; }
+
+    @media (max-width: 480px) {
+      .grid-opcoes { grid-template-columns: repeat(5, 1fr); gap: 0.4rem; }
+      .opcao { padding: 0.65rem 0.2rem; }
+      .opcao-icone { font-size: 1.25rem; width: 2.1rem; height: 2.1rem; }
+      .opcao-titulo { font-size: 0.62rem; }
+    }
 
     .dica {
       margin-top: 1.4rem;
@@ -57,11 +81,12 @@
 </head>
 <body>
   <header>
-    <h1>✅ Painel Qualidade</h1>
+    <h1>Painel Qualidade</h1>
     <p>De onde você lança os dados — o Mamma Mia Control só exibe.</p>
   </header>
 
   <main>
+    <div class="grid-opcoes">
     <a class="opcao" href="https://script.google.com/macros/s/AKfycbxg34g07LP6huO-f9AA4FCyOrg-xgKRTheRWxKrZyJfiTlj3qJCFZCzkl7drhs5jv3b/exec?tela=compras">
       <div class="opcao-icone">🛒</div>
       <div class="opcao-titulo">Compras</div>
@@ -105,7 +130,7 @@
     </a>
 
     <a class="opcao" href="https://verificacao-operacional-mammamia.vercel.app/">
-      <div class="opcao-icone">✅</div>
+      <div class="opcao-icone">🔍</div>
       <div class="opcao-titulo">VTO</div>
       <div class="opcao-desc">Verificação Técnica Operacional (app já existente).</div>
     </a>
@@ -121,6 +146,8 @@
       <div class="opcao-titulo">Higienização de Motores</div>
       <div class="opcao-desc">Registrar higienização de equipamentos refrigerados por unidade.</div>
     </a>
+
+    </div>
 
     <p class="dica">Todos os módulos previstos já estão ligados aqui.</p>
   </main>
