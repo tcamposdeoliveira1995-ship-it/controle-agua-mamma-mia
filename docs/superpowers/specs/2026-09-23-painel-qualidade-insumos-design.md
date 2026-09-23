@@ -1,7 +1,9 @@
 # Painel Qualidade — Fase 2 (migração do módulo Insumos Críticos)
 
 **Data:** 2026-09-23
-**Status:** Aprovado para implementação
+**Status:** Implementado e validado em produção (lista de insumos e atualização de quantidade pelo
+Painel Qualidade testadas de ponta a ponta — inclusive corrigindo o link do card "Insumos Críticos" no
+Menu, que precisava ser a URL completa do projeto em vez de um atalho relativo)
 
 ## Contexto
 
