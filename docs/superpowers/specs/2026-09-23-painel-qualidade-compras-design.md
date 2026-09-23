@@ -1,7 +1,9 @@
 # Painel Qualidade — Fase 1 (hub + migração do módulo Compras)
 
 **Data:** 2026-09-23
-**Status:** Aprovado para implementação
+**Status:** Implementado e validado em produção (hub Painel Qualidade, tela de Compras com registro/
+edição completos, Mamma Mia Control só leitura e o link "Registrar compra" a partir da aba OS testados
+de ponta a ponta)
 
 ## Contexto
 
