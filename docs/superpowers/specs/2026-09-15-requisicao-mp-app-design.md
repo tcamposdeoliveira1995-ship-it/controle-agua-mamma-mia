@@ -253,6 +253,13 @@ com a contagem por unidade e a data/hora da requisição pendente mais recente. 
   prefixo `🔴 (N)`, visível mesmo se a aba estiver em segundo plano.
 - Pensado pra alguém deixar essa página aberta o dia todo (ex: um PC do almoxarifado).
 
+### Card "Requisição de Caixas (DML)" no Menu (24/09/2026)
+
+Segundo link de "abrir" no Menu, direto pro Google Forms que o DML já usa pra pedir caixas
+(formulário e planilha de respostas próprios, sem relação com a planilha "BASE - REQUISIÇÃO MP E
+RECHEIOS"). Só o link — sem Fechar/Histórico pra esse fluxo (decisão explícita da usuária, pode virar
+uma frente futura se ela pedir).
+
 ### Chat da Equipe (`ChatInterno.html`)
 
 Sala única de chat (não separada por unidade), guardada numa aba própria da mesma planilha
