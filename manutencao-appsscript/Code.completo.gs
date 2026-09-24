@@ -154,18 +154,39 @@ function onFormSubmit(e) {
       "yyyyMMdd"
     );
 
-    var numero = proximoNumeroSequencialOS(sheet, cols);
+    // Trava só o trecho de gerar+gravar o número sequencial — duas OS
+    // abertas quase ao mesmo tempo (Forms e o app novo, ou dois
+    // solicitantes juntos) não podem ler o "próximo número" antes de
+    // qualquer uma gravar, senão as duas saem com o MESMO número de OS.
+    // O resto (Trello/PDF/Telegram, mais lento e sem risco de conflito de
+    // número) fica fora da trava, pra não travar todo mundo esperando.
+    var lock = LockService.getScriptLock();
+    lock.waitLock(30000);
+    var os, prioridade, linha;
+    try {
+      var numero = proximoNumeroSequencialOS(sheet, cols);
 
-    var os =
-      "OS-" +
-      dataFormatada +
-      "-" +
-      ("000" + numero).slice(-3);
+      os =
+        "OS-" +
+        dataFormatada +
+        "-" +
+        ("000" + numero).slice(-3);
 
-    // LINHA
-    var linha = sheet
-      .getRange(lastRow, 1, 1, sheet.getLastColumn())
-      .getValues()[0];
+      // LINHA
+      linha = sheet
+        .getRange(lastRow, 1, 1, sheet.getLastColumn())
+        .getValues()[0];
+
+      var gravidade = linha[cols.gravidade - 1];
+      prioridade = gravidade || "Baixa";
+
+      // PLANILHA
+      sheet.getRange(lastRow, cols.os).setValue(os);
+      sheet.getRange(lastRow, cols.status).setValue("Aberto");
+      sheet.getRange(lastRow, cols.prioridade).setValue(prioridade);
+    } finally {
+      lock.releaseLock();
+    }
 
     var timestamp = linha[cols.timestamp - 1];
     var solicitante = linha[cols.solicitante - 1];
@@ -178,15 +199,7 @@ function onFormSubmit(e) {
     var descricao = linha[cols.descricao - 1];
     var parou = linha[cols.parou - 1];
     var impacto = linha[cols.impacto - 1];
-    var gravidade = linha[cols.gravidade - 1];
     var observacoes = linha[cols.observacoes - 1];
-
-    var prioridade = gravidade || "Baixa";
-
-    // PLANILHA
-    sheet.getRange(lastRow, cols.os).setValue(os);
-    sheet.getRange(lastRow, cols.status).setValue("Aberto");
-    sheet.getRange(lastRow, cols.prioridade).setValue(prioridade);
 
     var dadosOS = {
       os: os,
@@ -249,6 +262,18 @@ function onFormSubmit(e) {
       });
     } catch (erroTelegram) {
       Logger.log("Falha ao enviar mensagem do Telegram: " + erroTelegram);
+    }
+
+    // ---- ASSISTENTE (GrokBot) — isolado: uma falha aqui não impede nada
+    // do resto. Sem ASSISTENTE_WEBHOOK_URL/ASSISTENTE_WEBHOOK_AUTH
+    // configurados em Propriedades do Script, a função sai sem fazer nada
+    // (não é erro). Esse era o passo que faltava pra OS nova chegar no
+    // GrokBot e ele redirecionar pro WhatsApp — a função já existia mas
+    // nunca era chamada aqui, só no teste manual.
+    try {
+      avisarAssistenteOSAberta(dadosOS, "nova_os");
+    } catch (erroAssistente) {
+      Logger.log("Falha ao avisar o assistente (GrokBot): " + erroAssistente);
     }
 
   } catch (erro) {
@@ -972,27 +997,39 @@ function listarOSAbertas() {
 function sinalizarNecessidadePeca(osId, descricao) {
   var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheets()[0];
   var cols = obterMapaColunas(sheet);
-  var dados = sheet.getDataRange().getValues();
 
-  var linhaEncontrada = -1;
-  for (var i = 1; i < dados.length; i++) {
-    if (dados[i][cols.os - 1] === osId) {
-      linhaEncontrada = i + 1;
-      break;
+  // Trava enquanto confere e grava o status — sem isso, duas pessoas
+  // mexendo nessa mesma OS quase ao mesmo tempo (ex: sinalizar peça vs.
+  // fechar OS) podem passar as duas pela checagem de status antes de
+  // qualquer uma gravar.
+  var lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  var linhaEncontrada, linhaDados;
+  try {
+    var dados = sheet.getDataRange().getValues();
+
+    linhaEncontrada = -1;
+    for (var i = 1; i < dados.length; i++) {
+      if (dados[i][cols.os - 1] === osId) {
+        linhaEncontrada = i + 1;
+        break;
+      }
     }
-  }
-  if (linhaEncontrada === -1) {
-    throw new Error('OS "' + osId + '" não encontrada.');
-  }
+    if (linhaEncontrada === -1) {
+      throw new Error('OS "' + osId + '" não encontrada.');
+    }
 
-  var linhaDados = dados[linhaEncontrada - 1];
-  var statusAtual = (linhaDados[cols.status - 1] || "").toString().trim();
-  if (statusAtual === STATUS_CONCLUIDO) {
-    throw new Error("Essa OS já está concluída — não é possível sinalizar necessidade de peça.");
-  }
+    linhaDados = dados[linhaEncontrada - 1];
+    var statusAtual = (linhaDados[cols.status - 1] || "").toString().trim();
+    if (statusAtual === STATUS_CONCLUIDO) {
+      throw new Error("Essa OS já está concluída — não é possível sinalizar necessidade de peça.");
+    }
 
-  sheet.getRange(linhaEncontrada, cols.necessidadePeca).setValue(descricao);
-  sheet.getRange(linhaEncontrada, cols.status).setValue(STATUS_AGUARDANDO_PECA);
+    sheet.getRange(linhaEncontrada, cols.necessidadePeca).setValue(descricao);
+    sheet.getRange(linhaEncontrada, cols.status).setValue(STATUS_AGUARDANDO_PECA);
+  } finally {
+    lock.releaseLock();
+  }
 
   // setValue() feito pelo script não dispara o onEdit (que só reage a
   // edição manual na planilha) — por isso o card do Trello precisa ser
@@ -1435,19 +1472,31 @@ function fecharOS(osId, oQueFoiFeito, assinadoPor, fotoBase64, fotoTipo) {
   }
   if (linhaEncontrada === -1) throw new Error("OS não encontrada: " + osId);
 
-  var statusAtual = (sheet.getRange(linhaEncontrada, cols.status).getValue() || "").toString().trim();
-  if (statusAtual === STATUS_CONCLUIDO) {
-    throw new Error("Essa OS já foi fechada por outra pessoa.");
-  }
-
+  // Foto sobe pro Drive fora da trava (é lento, não precisa bloquear
+  // ninguém enquanto isso) — só a checagem+gravação do status, que é
+  // rápida, fica protegida, pra duas pessoas fechando a mesma OS quase
+  // junto não passarem as duas pela checagem "já foi concluída?" antes de
+  // qualquer uma gravar.
   var resultadoFoto = salvarFotoConclusao(osId, fotoBase64, fotoTipo);
 
-  var agora = new Date();
-  sheet.getRange(linhaEncontrada, cols.status).setValue(STATUS_CONCLUIDO);
-  sheet.getRange(linhaEncontrada, cols.oQueFoiFeito).setValue(oQueFoiFeito);
-  sheet.getRange(linhaEncontrada, cols.dataConclusao).setValue(agora);
-  sheet.getRange(linhaEncontrada, cols.assinadoPor).setValue(assinadoPor);
-  sheet.getRange(linhaEncontrada, cols.fotoConclusao).setValue(resultadoFoto.url);
+  var lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  var agora;
+  try {
+    var statusAtual = (sheet.getRange(linhaEncontrada, cols.status).getValue() || "").toString().trim();
+    if (statusAtual === STATUS_CONCLUIDO) {
+      throw new Error("Essa OS já foi fechada por outra pessoa.");
+    }
+
+    agora = new Date();
+    sheet.getRange(linhaEncontrada, cols.status).setValue(STATUS_CONCLUIDO);
+    sheet.getRange(linhaEncontrada, cols.oQueFoiFeito).setValue(oQueFoiFeito);
+    sheet.getRange(linhaEncontrada, cols.dataConclusao).setValue(agora);
+    sheet.getRange(linhaEncontrada, cols.assinadoPor).setValue(assinadoPor);
+    sheet.getRange(linhaEncontrada, cols.fotoConclusao).setValue(resultadoFoto.url);
+  } finally {
+    lock.releaseLock();
+  }
 
   var resultadoPdf = null;
   try {
@@ -1653,4 +1702,66 @@ function doGet(e) {
     .createHtmlOutputFromFile("Menu")
     .setTitle("Manutenção Mamma Mia")
     .addMetaTag("viewport", "width=device-width, initial-scale=1");
+}
+
+/**
+ * Avisa um webhook externo (GrokBot) de uma OS nova, pra ele redirecionar
+ * do Telegram pro WhatsApp. Configurável em Propriedades do Script:
+ * ASSISTENTE_WEBHOOK_URL e ASSISTENTE_WEBHOOK_AUTH (o valor do cabeçalho
+ * Authorization — com ou sem o prefixo "Authorization: ", os dois
+ * funcionam). Sem essas duas propriedades configuradas, sai sem fazer
+ * nada (silencioso de propósito — esse aviso é um extra, não pode travar
+ * a abertura de OS se ainda não foi configurado).
+ */
+function avisarAssistenteOSAberta(d, tipo) {
+  var props = PropertiesService.getScriptProperties();
+  var url = props.getProperty("ASSISTENTE_WEBHOOK_URL");
+  var auth = props.getProperty("ASSISTENTE_WEBHOOK_AUTH");
+  if (!url || !auth) return;
+
+  var NL = String.fromCharCode(10);
+  var texto = [
+    "🚨 NOVA OS ABERTA",
+    "",
+    "🆔 " + d.os,
+    "📍 Setor: " + d.setor,
+    "⚠️ Prioridade: " + d.prioridade,
+    "🛠️ Equipamento: " + d.equipamentoLocal,
+    "📝 Descrição: " + d.descricao,
+    "📉 Impacto: " + d.impacto,
+    "⛔ Parado: " + d.parou,
+    "👤 Solicitante: " + d.solicitante,
+    "",
+    "📄 PDF DA OS:",
+    d.linkPDF
+  ].join(NL);
+
+  var payload = {
+    tipo: tipo || "nova_os",
+    os_numero: d.os,
+    texto: texto,
+    setor: d.setor,
+    prioridade: d.prioridade,
+    solicitante: d.solicitante,
+    data_hora: Utilities.formatDate(new Date(), "America/Sao_Paulo", "dd/MM/yyyy HH:mm:ss"),
+    anexos: [d.linkPDF, d.fotoUrl].filter(function (x) { return x && String(x).indexOf("http") === 0; })
+  };
+
+  var resp = UrlFetchApp.fetch(url, {
+    method: "post",
+    contentType: "application/json",
+    headers: { Authorization: auth.replace(/^Authorization:\s*/i, "") },
+    payload: JSON.stringify(payload),
+    muteHttpExceptions: true
+  });
+  Logger.log("Aviso assistente: HTTP " + resp.getResponseCode() + " " + resp.getContentText());
+}
+
+/** Teste manual: Apps Script > selecionar "testarAvisoAssistente" > Executar. */
+function testarAvisoAssistente() {
+  avisarAssistenteOSAberta({
+    os: "OS-TESTE-000", prioridade: "Baixa", solicitante: "THALITA", setor: "ADM",
+    equipamentoLocal: "Teste", descricao: "Teste do aviso imediato", impacto: "Nenhum",
+    parou: "Não", fotoUrl: "", linkPDF: "https://example.com/teste.pdf"
+  }, "teste");
 }
