@@ -27,6 +27,17 @@
  * nota do técnico quando ele sinaliza que precisa de uma peça em vez de
  * fechar a OS). Depois de adicionar a coluna, reimplante (mesmo passo 6
  * acima) pra tela de fechar OS ganhar o botão novo.
+ *
+ * HISTÓRICO + CANCELAR OS + TÉCNICO RESPONSÁVEL (24/09/2026): adicione
+ * ao cabeçalho (linha 1) da planilha de OS a coluna nova "Técnico
+ * responsável" (texto livre, opcional — quem abre a OS pode já indicar
+ * quem vai resolver, se souber). Cancelar uma OS não precisa de coluna
+ * nova (reaproveita "O que foi feito"/"Assinado por"/"Data de
+ * conclusão", só muda o STATUS pra "Cancelada"). Crie um arquivo HTML
+ * novo chamado "Historico" — cole o conteúdo de Historico.html nele.
+ * Depois de adicionar a coluna e o arquivo, reimplante (mesmo passo 6
+ * acima).
+ *      - Histórico: <esse link>?tela=historico
  */
 
 /**
@@ -93,11 +104,13 @@ function obterMapaColunas(sheet) {
     fotoConclusao: getColumnIndexByHeader(sheet, "Foto da conclusão"),
     pdfFechamento: getColumnIndexByHeader(sheet, "PDF Fechamento"),
     necessidadePeca: getColumnIndexByHeader(sheet, "Necessidade de peça"),
+    tecnicoResponsavel: getColumnIndexByHeader(sheet, "Técnico responsável"),
   };
 }
 
 var STATUS_CONCLUIDO = "Concluído";
 var STATUS_AGUARDANDO_PECA = "Aguardando peça";
+var STATUS_CANCELADA = "Cancelada";
 var NOME_ABA_TECNICOS = "Manutenção";
 var ORDEM_PRIORIDADE = { "Crítica": 0, "Alta": 1, "Média": 2, "Baixa": 3 };
 // Pasta do Drive usada por todos os anexos de OS: PDFs de abertura e
@@ -400,7 +413,8 @@ function moverCard(cardId, status) {
       "Em análise": "69c348d200ec6669fa84050c",
       "Em execução": "69c348e0614b5748c30f2816",
       "Aguardando peça": "69c348e76f3a09e0c9005e0b",
-      "Concluído": "69c348e8ac771c62e12ed270"
+      "Concluído": "69c348e8ac771c62e12ed270",
+      "Cancelada": "69c348e8ac771c62e12ed270"
     };
 
     var idList = listas[status];
@@ -958,7 +972,7 @@ function listarOSAbertas() {
     var linha = dados[i];
     var os = linha[cols.os - 1];
     var status = (linha[cols.status - 1] || "").toString().trim();
-    if (!os || status === STATUS_CONCLUIDO) continue;
+    if (!os || status === STATUS_CONCLUIDO || status === STATUS_CANCELADA) continue;
 
     abertas.push({
       os: os,
@@ -969,6 +983,7 @@ function listarOSAbertas() {
       equipamento: linha[cols.equipamentoLocal - 1],
       descricao: linha[cols.descricao - 1],
       necessidadePeca: linha[cols.necessidadePeca - 1],
+      tecnicoResponsavel: linha[cols.tecnicoResponsavel - 1],
       // Usado pela busca de "já existe uma OS parecida?" na tela de
       // abrir OS (AbrirOS.html) — não era retornado antes por falta de
       // uso, o campo em si já existia em obterMapaColunas.
@@ -983,6 +998,143 @@ function listarOSAbertas() {
   });
 
   return abertas;
+}
+
+/**
+ * Lista as OS já concluídas ou canceladas, para a tela de Histórico
+ * (Historico.html) — leitura só, não protegida por trava (não grava
+ * nada). Mais recente primeiro, por data de conclusão/cancelamento.
+ */
+function listarOSFechadas() {
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheets()[0];
+  var cols = obterMapaColunas(sheet);
+  var dados = sheet.getDataRange().getValues();
+
+  var fechadas = [];
+  for (var i = 1; i < dados.length; i++) {
+    var linha = dados[i];
+    var os = linha[cols.os - 1];
+    var status = (linha[cols.status - 1] || "").toString().trim();
+    if (!os || (status !== STATUS_CONCLUIDO && status !== STATUS_CANCELADA)) continue;
+
+    var dataConclusaoCel = linha[cols.dataConclusao - 1];
+    fechadas.push({
+      os: os,
+      status: status,
+      prioridade: (linha[cols.prioridade - 1] || "").toString().trim(),
+      setor: linha[cols.setor - 1],
+      unidade: linha[cols.unidade - 1],
+      equipamento: linha[cols.equipamentoLocal - 1],
+      descricao: linha[cols.descricao - 1],
+      tecnicoResponsavel: linha[cols.tecnicoResponsavel - 1],
+      oQueFoiFeito: linha[cols.oQueFoiFeito - 1],
+      assinadoPor: linha[cols.assinadoPor - 1],
+      dataConclusao: dataConclusaoCel ? formatarDataBR(dataConclusaoCel) : "",
+      dataConclusaoMs: dataConclusaoCel ? new Date(dataConclusaoCel).getTime() : 0,
+      pdfFechamento: linha[cols.pdfFechamento - 1],
+    });
+  }
+
+  fechadas.sort(function (a, b) { return b.dataConclusaoMs - a.dataConclusaoMs; });
+  return fechadas;
+}
+
+/**
+ * Cancela uma OS aberta por engano — diferente de fechar (não exige
+ * foto nem gera PDF de resolução, porque não houve reparo nenhum a
+ * documentar). Reaproveita as mesmas colunas do fechamento normal
+ * (STATUS, "O que foi feito" guarda o motivo do cancelamento,
+ * "Assinado por"/"Data de conclusão" guardam quem cancelou e quando) —
+ * assim não precisa de nenhuma coluna nova na planilha só pra isso.
+ * Mesma trava e mesma checagem de status já concluído/cancelado que
+ * fecharOS/sinalizarNecessidadePeca usam, pelo mesmo motivo (evitar
+ * duas pessoas mexendo na mesma OS ao mesmo tempo).
+ */
+function cancelarOS(osId, motivo, canceladoPor) {
+  osId = (osId || "").toString().trim();
+  motivo = (motivo || "").toString().trim();
+  canceladoPor = (canceladoPor || "").toString().trim();
+
+  if (!osId) throw new Error("Selecione uma OS.");
+  if (!motivo) throw new Error("Descreva o motivo do cancelamento antes de confirmar.");
+  if (!canceladoPor) throw new Error("Selecione quem está cancelando.");
+
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheets()[0];
+  var cols = obterMapaColunas(sheet);
+  var dados = sheet.getDataRange().getValues();
+
+  var linhaEncontrada = -1;
+  for (var i = 1; i < dados.length; i++) {
+    if ((dados[i][cols.os - 1] || "").toString().trim() === osId) {
+      linhaEncontrada = i + 1;
+      break;
+    }
+  }
+  if (linhaEncontrada === -1) throw new Error("OS não encontrada: " + osId);
+
+  var lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  var agora;
+  try {
+    var statusAtual = (sheet.getRange(linhaEncontrada, cols.status).getValue() || "").toString().trim();
+    if (statusAtual === STATUS_CONCLUIDO) {
+      throw new Error("Essa OS já foi fechada — não é possível cancelar.");
+    }
+    if (statusAtual === STATUS_CANCELADA) {
+      throw new Error("Essa OS já foi cancelada por outra pessoa.");
+    }
+
+    agora = new Date();
+    sheet.getRange(linhaEncontrada, cols.status).setValue(STATUS_CANCELADA);
+    sheet.getRange(linhaEncontrada, cols.oQueFoiFeito).setValue("Cancelada: " + motivo);
+    sheet.getRange(linhaEncontrada, cols.dataConclusao).setValue(agora);
+    sheet.getRange(linhaEncontrada, cols.assinadoPor).setValue(canceladoPor);
+  } finally {
+    lock.releaseLock();
+  }
+
+  try {
+    var cardId = dados[linhaEncontrada - 1][cols.trello - 1];
+    if (cardId) moverCard(cardId, STATUS_CANCELADA);
+  } catch (erroTrello) {
+    Logger.log("Falha ao mover card no Trello pra OS cancelada " + osId + ": " + erroTrello);
+  }
+
+  try {
+    enviarTelegramOSCancelada({
+      os: osId,
+      setor: dados[linhaEncontrada - 1][cols.setor - 1],
+      equipamento: dados[linhaEncontrada - 1][cols.equipamentoLocal - 1],
+      motivo: motivo,
+      canceladoPor: canceladoPor,
+      dataConclusao: agora,
+    });
+  } catch (erroTelegram) {
+    Logger.log("Falha ao avisar no Telegram sobre o cancelamento da OS " + osId + ": " + erroTelegram);
+  }
+
+  return { ok: true, os: osId };
+}
+
+function enviarTelegramOSCancelada(dados) {
+  var TOKEN = PropertiesService.getScriptProperties().getProperty("TELEGRAM_TOKEN");
+  var CHAT_ID = PropertiesService.getScriptProperties().getProperty("TELEGRAM_CHAT_ID");
+
+  var mensagem =
+    "🚫 OS CANCELADA\n\n" +
+    "🆔 " + dados.os + "\n" +
+    "📍 Setor: " + dados.setor + "\n" +
+    "🛠️ Equipamento: " + dados.equipamento + "\n" +
+    "📝 Motivo: " + dados.motivo + "\n" +
+    "👤 Cancelado por: " + dados.canceladoPor + "\n" +
+    "🕒 " + formatarDataBR(dados.dataConclusao);
+
+  var url = "https://api.telegram.org/bot" + TOKEN + "/sendMessage";
+  UrlFetchApp.fetch(url, {
+    method: "post",
+    contentType: "application/json",
+    payload: JSON.stringify({ chat_id: CHAT_ID, text: mensagem }),
+  });
 }
 
 /**
@@ -1663,6 +1815,7 @@ function abrirOS(dados) {
   linha[cols.gravidade - 1] = dados.gravidade;
   linha[cols.observacoes - 1] = dados.observacoes || "";
   linha[cols.fotoProblema - 1] = fotoUrl;
+  linha[cols.tecnicoResponsavel - 1] = dados.tecnicoResponsavel || "";
   // OS, STATUS, PRIORIDADE, TRELLO_CARD_ID e PDF_OS ficam em branco — quem
   // preenche é o onFormSubmit() chamado logo abaixo.
 
@@ -1695,6 +1848,13 @@ function doGet(e) {
     return HtmlService
       .createHtmlOutputFromFile("Index")
       .setTitle("Fechar OS — Manutenção Mamma Mia")
+      .addMetaTag("viewport", "width=device-width, initial-scale=1");
+  }
+
+  if (tela === "historico") {
+    return HtmlService
+      .createHtmlOutputFromFile("Historico")
+      .setTitle("Histórico de OS — Manutenção Mamma Mia")
       .addMetaTag("viewport", "width=device-width, initial-scale=1");
   }
 
