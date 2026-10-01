@@ -176,3 +176,35 @@ não feito" É o estado em que ele nasce, não algo que precisa ser resetado.
 5. Abrir a aba "🔁 Rotinas" — as rotinas já cadastradas continuam lá (só perderam a marcação de hoje, que
    não existe mais); abrir a aba "📋 Quadro" já deve mostrar um card novo pra cada uma, na coluna "A
    Fazer".
+
+## Correção — bug de duplicação (02/10/2026)
+
+Reportado pela usuária logo após testar: cada rotina aparecia com 2 cards duplicados no Quadro ("Não move
+e parece ter duplicado" — o "não move" era ilusão: mover UM dos 2 duplicados de verdade funcionava, mas o
+outro, idêntico, continuava parado em "A Fazer", parecendo que nada tinha acontecido).
+
+**Causa raiz:** o Google Sheets converte sozinho qualquer texto que pareça uma data (ex.: `"02/10/2026"`)
+pra um objeto `Date` de verdade ao gravar a célula — mesmo escrito via `appendRow`/`setValue` pelo código,
+não só digitado à mão na planilha. `gerarCardsRotinasDoDia()` gravava `DATA_ROTINA` como essa string, mas
+a comparação seguinte (`"já existe card de hoje?"`) comparava contra o texto original — e como a célula
+tinha virado `Date`, a comparação nunca batia. Resultado: toda vez que o Kanban era aberto no mesmo dia,
+a função achava que nenhuma rotina tinha card ainda e criava um novo pra cada uma.
+
+**Correção** em `gerarCardsRotinasDoDia()` (`avisos-appscript/Code.gs`):
+- Nova função `paraDataBR(valorCelula)` — normaliza a leitura: se a célula virou `Date` (o problema),
+  reformata de volta pra `"dd/MM/yyyy"` antes de comparar; se já é texto, usa direto. Mesma ideia já usada
+  em `processarRegistroTelegram()` (leitura de água), que sempre fez `new Date(celData)` antes de comparar,
+  por este mesmo motivo.
+- Depois de gravar cada card novo, força a célula de `DATA_ROTINA` a ficar como **texto puro**
+  (`setNumberFormat("@")`) — evita a conversão automática acontecer de novo nos próximos cards.
+
+**Limpeza dos duplicados já criados pelo bug:** nova função `limparCardsRotinaDuplicados()`, pra rodar
+**1 VEZ SÓ, manualmente**, direto no editor do Apps Script (selecionar a função no menu "Selecionar
+função" do topo e clicar em ▶ Executar) — agrupa os cards por rotina+dia e mantém só 1 de cada grupo,
+preferindo o que já foi movido pra fora de "A Fazer" (representa o que a usuária já tinha de fato
+começado a mexer) e, se nenhum saiu de lá, o primeiro criado.
+
+### Passo manual adicional
+
+Depois de colar o `Code.gs` novo do `avisos-appscript` e reimplantar, abrir o editor do Apps Script,
+selecionar **`limparCardsRotinaDuplicados`** no menu de funções e clicar em ▶ Executar — uma vez só.

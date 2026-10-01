@@ -774,6 +774,22 @@ function hojeFormatado() {
   return Utilities.formatDate(new Date(), "GMT-3", "dd/MM/yyyy");
 }
 
+// Lê uma célula que DEVERIA ser uma data em "dd/MM/yyyy" de volta como
+// essa mesma string — mesmo que o Sheets tenha convertido sozinho o
+// texto escrito em Date na hora de gravar (ele faz isso com qualquer
+// string que pareça uma data, mesmo escrita via appendRow/setValue, não
+// só digitada à mão; "02/10/2026" bate o padrão e vira Date). Sem isso,
+// comparar o texto original ("02/10/2026") com o que volta da planilha
+// (um objeto Date, cujo toString() não bate com nada) nunca dá igual —
+// foi exatamente o bug que gerava um card novo por rotina a cada vez
+// que o Kanban era aberto, em vez de reconhecer o de hoje já existente.
+function paraDataBR(valorCelula) {
+  if (Object.prototype.toString.call(valorCelula) === "[object Date]") {
+    return Utilities.formatDate(valorCelula, "GMT-3", "dd/MM/yyyy");
+  }
+  return (valorCelula || "").toString().trim();
+}
+
 // Lista as rotinas ativas, já ordenadas (com horário definido primeiro,
 // da mais cedo pra mais tarde; sem horário, no fim, na ordem de
 // criação) — usada tanto por listarRotinas() (tela de cadastro) quanto
@@ -951,7 +967,7 @@ function gerarCardsRotinasDoDia() {
     var maiorOrdemAFazer = -1;
     for (var i = 1; i < dados.length; i++) {
       var rotinaIdLinha = (dados[i][colRotinaId - 1] || "").toString().trim();
-      var dataLinha = (dados[i][colDataRotina - 1] || "").toString().trim();
+      var dataLinha = paraDataBR(dados[i][colDataRotina - 1]);
       if (rotinaIdLinha && dataLinha === hoje) jaTemHoje[rotinaIdLinha] = true;
       if ((dados[i][colColuna - 1] || "").toString().trim() === KANBAN_COLUNAS[0]) {
         maiorOrdemAFazer = Math.max(maiorOrdemAFazer, Number(dados[i][colOrdem - 1]) || 0);
@@ -970,10 +986,78 @@ function gerarCardsRotinasDoDia() {
       linha[colDataRotina - 1] = hoje;
       if (colCriado) linha[colCriado - 1] = new Date();
       aba.appendRow(linha);
+      // Força a célula de DATA_ROTINA a ficar como texto puro — sem
+      // isso, o Sheets converte "02/10/2026" sozinho pra Date na hora de
+      // gravar (mesmo escrito por appendRow, não só digitado à mão), o
+      // que quebraria a comparação da PRÓXIMA chamada antes mesmo de
+      // paraDataBR() entrar em ação (ela cobre o caso de já ter virado
+      // Date, mas aqui evitamos que vire, pra não depender só disso).
+      aba.getRange(aba.getLastRow(), colDataRotina).setNumberFormat("@").setValue(hoje);
     });
   } finally {
     lock.releaseLock();
   }
+}
+
+/**
+ * EXECUTAR 1 VEZ SÓ, manualmente, pelo editor do Apps Script (selecionar
+ * esta função no menu "Selecionar função" e clicar em ▶ Executar) —
+ * remove os cards duplicados que um bug (já corrigido acima, em
+ * gerarCardsRotinasDoDia) gerou: a comparação de data nunca batia por
+ * causa da conversão automática do Sheets pra Date, então cada vez que
+ * o Kanban era aberto no mesmo dia criava mais um card da mesma rotina,
+ * em vez de reconhecer o de hoje já existente.
+ *
+ * Pra cada grupo de cards da MESMA rotina + MESMO dia, mantém só 1 —
+ * preferindo um que já foi movido pra fora de "A Fazer" (representa
+ * trabalho de verdade já feito nele, ex.: um que a usuária já arrastou
+ * até Concluído) e, só se nenhum saiu de "A Fazer", o primeiro criado.
+ * Não mexe em cards criados manualmente (sem ROTINA_ID). Depois de
+ * rodar uma vez, pode ser ignorada — o bug que causava a duplicação já
+ * não existe mais.
+ */
+function limparCardsRotinaDuplicados() {
+  var aba = obterAbaKanban();
+  var mapa = mapaColunas(aba);
+  var colRotinaId = mapa["ROTINA_ID"];
+  var colDataRotina = mapa["DATA_ROTINA"];
+  if (!colRotinaId || !colDataRotina) {
+    Logger.log("Colunas ROTINA_ID/DATA_ROTINA não encontradas na aba KANBAN — nada a limpar.");
+    return;
+  }
+  var colColuna = colunaObrigatoria(mapa, ABA_KANBAN, "COLUNA");
+
+  var dados = aba.getDataRange().getValues();
+  var grupos = {}; // chave "rotinaId|data" -> lista de { linha (1-based), coluna }
+  for (var i = 1; i < dados.length; i++) {
+    var rotinaIdLinha = (dados[i][colRotinaId - 1] || "").toString().trim();
+    if (!rotinaIdLinha) continue;
+    var dataLinha = paraDataBR(dados[i][colDataRotina - 1]);
+    var chave = rotinaIdLinha + "|" + dataLinha;
+    if (!grupos[chave]) grupos[chave] = [];
+    grupos[chave].push({ linha: i + 1, coluna: (dados[i][colColuna - 1] || "").toString().trim() });
+  }
+
+  var linhasParaApagar = [];
+  for (var chaveGrupo in grupos) {
+    var ocorrencias = grupos[chaveGrupo];
+    if (ocorrencias.length <= 1) continue;
+
+    var manter = ocorrencias[0];
+    for (var k = 0; k < ocorrencias.length; k++) {
+      if (ocorrencias[k].coluna !== KANBAN_COLUNAS[0]) { manter = ocorrencias[k]; break; }
+    }
+    for (var m = 0; m < ocorrencias.length; m++) {
+      if (ocorrencias[m].linha !== manter.linha) linhasParaApagar.push(ocorrencias[m].linha);
+    }
+  }
+
+  // De baixo pra cima — apagar de cima pra baixo bagunçaria os números
+  // de linha dos itens seguintes da própria lista.
+  linhasParaApagar.sort(function (a, b) { return b - a; });
+  linhasParaApagar.forEach(function (linha) { aba.deleteRow(linha); });
+
+  Logger.log(linhasParaApagar.length + " card(s) duplicado(s) removido(s).");
 }
 
 // ================= TELEGRAM VIA POLLING (não usa mais webhook) =================
