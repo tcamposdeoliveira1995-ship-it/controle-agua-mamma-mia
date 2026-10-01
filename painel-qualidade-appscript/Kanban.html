@@ -35,6 +35,26 @@
     header p { margin: 0.15rem 0 0; font-size: 0.78rem; color: #d8d2c6; }
     .link-menu { display: inline-block; margin-bottom: 0.5rem; font-size: 0.78rem; color: #d8d2c6; text-decoration: none; }
 
+    .abas {
+      display: flex;
+      gap: 0.5rem;
+      padding: 0.7rem 1rem 0;
+      background: var(--bg);
+    }
+    .aba-btn {
+      flex: 1;
+      padding: 0.55rem 0.5rem;
+      border-radius: 10px 10px 0 0;
+      border: 1px solid var(--border);
+      border-bottom: none;
+      background: rgba(0,0,0,0.025);
+      color: var(--text-muted);
+      font-size: 0.82rem;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    .aba-btn.ativa { background: var(--card-bg); color: var(--text); }
+
     .estado-carregando { text-align: center; color: var(--text-muted); padding: 1.5rem 1rem; font-size: 0.92rem; }
 
     .quadro {
@@ -180,6 +200,42 @@
     .btn-salvar { background: var(--green); color: #fff; }
     .btn-cancelar { background: rgba(0,0,0,0.06); color: var(--text); }
     .btn-excluir-card { background: none; color: var(--red); font-weight: 600; text-decoration: underline; margin-top: 0.9rem; border: none; cursor: pointer; font-size: 0.82rem; padding: 0; }
+
+    .rotinas { padding: 1rem; max-width: 480px; margin: 0 auto; }
+    .rotinas-lista { background: var(--card-bg); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+    .rotina-item {
+      display: flex;
+      align-items: center;
+      gap: 0.7rem;
+      padding: 0.8rem 0.9rem;
+      border-bottom: 1px solid var(--border);
+    }
+    .rotina-item:last-child { border-bottom: none; }
+    .rotina-checkbox {
+      width: 1.4rem;
+      height: 1.4rem;
+      flex-shrink: 0;
+      accent-color: var(--green);
+      cursor: pointer;
+    }
+    .rotina-texto { flex: 1; font-size: 0.92rem; line-height: 1.35; }
+    .rotina-item.marcada .rotina-texto { color: var(--text-muted); text-decoration: line-through; }
+    .rotina-acoes { display: flex; gap: 0.5rem; }
+    .rotina-btn { background: none; border: none; cursor: pointer; padding: 0; color: var(--text-muted); font-size: 0.88rem; }
+    .rotina-btn:active { opacity: 0.6; }
+    .estado-vazio-rotinas { color: var(--text-muted); font-size: 0.85rem; text-align: center; padding: 1.2rem; }
+    .btn-nova-rotina {
+      width: 100%;
+      padding: 0.65rem;
+      margin-top: 0.7rem;
+      border-radius: 10px;
+      border: 2px dashed var(--border);
+      background: transparent;
+      color: var(--text-muted);
+      font-size: 0.85rem;
+      cursor: pointer;
+    }
+    .btn-nova-rotina:active { background: rgba(0,0,0,0.04); }
   </style>
 </head>
 <body>
@@ -189,8 +245,14 @@
     <p>Painel Qualidade — Mamma Mia</p>
   </header>
 
-  <div class="estado-carregando" id="tela-carregando">Carregando quadro…</div>
+  <div class="abas">
+    <button class="aba-btn ativa" id="aba-quadro" data-aba="quadro">📋 Quadro</button>
+    <button class="aba-btn" id="aba-rotinas" data-aba="rotinas">✅ Checklist Diário</button>
+  </div>
+
+  <div class="estado-carregando" id="tela-carregando">Carregando…</div>
   <div class="quadro" id="quadro" style="display:none;"></div>
+  <div class="rotinas" id="rotinas" style="display:none;"></div>
 
   <script>
     // Mesmo backend do mural de Avisos (avisos-appscript) — ganhou ações
@@ -210,6 +272,9 @@
     ];
 
     var _cards = [];
+    var _rotinas = [];
+    var _marcadosHoje = [];
+    var _abaAtiva = 'quadro';
 
     function escaparHtml(texto) {
       var div = document.createElement('div');
@@ -222,18 +287,46 @@
       return achada ? achada.cor : null;
     }
 
+    // ---------- Abas (Quadro / Checklist Diário) ----------
+
+    function trocarAba(aba) {
+      _abaAtiva = aba;
+      document.getElementById('aba-quadro').classList.toggle('ativa', aba === 'quadro');
+      document.getElementById('aba-rotinas').classList.toggle('ativa', aba === 'rotinas');
+      document.getElementById('quadro').style.display = aba === 'quadro' ? '' : 'none';
+      document.getElementById('rotinas').style.display = aba === 'rotinas' ? '' : 'none';
+    }
+
+    document.getElementById('aba-quadro').addEventListener('click', function () { trocarAba('quadro'); });
+    document.getElementById('aba-rotinas').addEventListener('click', function () { trocarAba('rotinas'); });
+
+    // ---------- Carga inicial (Quadro + Checklist Diário juntos) ----------
+
     function carregarQuadro() {
-      fetch(KANBAN_EXEC_URL + '?dados=kanban', { cache: 'no-store' })
-        .then(function (resposta) {
-          if (!resposta.ok) throw new Error('HTTP ' + resposta.status);
-          return resposta.json();
-        })
-        .then(function (resultado) {
-          if (!resultado.ok) throw new Error(resultado.erro || 'Erro desconhecido');
-          _cards = resultado.cards || [];
+      Promise.all([
+        fetch(KANBAN_EXEC_URL + '?dados=kanban', { cache: 'no-store' }).then(function (r) {
+          if (!r.ok) throw new Error('HTTP ' + r.status);
+          return r.json();
+        }),
+        fetch(KANBAN_EXEC_URL + '?dados=rotinas', { cache: 'no-store' }).then(function (r) {
+          if (!r.ok) throw new Error('HTTP ' + r.status);
+          return r.json();
+        }),
+      ])
+        .then(function (resultados) {
+          var resultadoKanban = resultados[0];
+          var resultadoRotinas = resultados[1];
+          if (!resultadoKanban.ok) throw new Error(resultadoKanban.erro || 'Erro desconhecido');
+          if (!resultadoRotinas.ok) throw new Error(resultadoRotinas.erro || 'Erro desconhecido');
+
+          _cards = resultadoKanban.cards || [];
+          _rotinas = resultadoRotinas.rotinas || [];
+          _marcadosHoje = resultadoRotinas.marcadosHoje || [];
+
           document.getElementById('tela-carregando').style.display = 'none';
-          document.getElementById('quadro').style.display = '';
+          trocarAba(_abaAtiva);
           renderizarQuadro();
+          renderizarRotinas();
         })
         .catch(function (erro) {
           console.error('[KANBAN]', erro);
@@ -291,7 +384,138 @@
       });
     }
 
-    // ---------- Criar / Editar / Excluir ----------
+    // ---------- Checklist Diário (Rotinas) ----------
+    // Lista fixa cadastrada pela própria usuária (não por mim no código).
+    // "Desmarcar tudo de novo ao virar o dia" não precisa de nenhum reset
+    // manual: o servidor só manda em marcadosHoje os IDs com uma marcação
+    // de HOJE (calculado lá, GMT-3) — amanhã, sem marcação pra essa data
+    // nova, já volta desmarcado sozinho (ver comentário no Code.gs).
+
+    function rotinaHtml(rotina) {
+      var marcada = _marcadosHoje.indexOf(rotina.id) !== -1;
+      return (
+        '<div class="rotina-item' + (marcada ? ' marcada' : '') + '" data-id="' + rotina.id + '">' +
+          '<input type="checkbox" class="rotina-checkbox"' + (marcada ? ' checked' : '') + '>' +
+          '<div class="rotina-texto">' + escaparHtml(rotina.texto) + '</div>' +
+          '<div class="rotina-acoes">' +
+            '<button class="rotina-btn" data-acao="editar" title="Editar">✏️</button>' +
+            '<button class="rotina-btn" data-acao="excluir" title="Excluir">✕</button>' +
+          '</div>' +
+        '</div>'
+      );
+    }
+
+    function renderizarRotinas() {
+      var container = document.getElementById('rotinas');
+      container.innerHTML =
+        '<div class="rotinas-lista">' +
+          (_rotinas.length
+            ? _rotinas.map(rotinaHtml).join('')
+            : '<div class="estado-vazio-rotinas">Nenhuma rotina cadastrada ainda.</div>') +
+        '</div>' +
+        '<button class="btn-nova-rotina" id="btn-nova-rotina">+ Nova rotina</button>';
+
+      container.querySelectorAll('.rotina-item').forEach(function (el) {
+        var id = el.getAttribute('data-id');
+        el.querySelector('.rotina-checkbox').addEventListener('change', function (ev) {
+          alternarRotina(id, ev.target.checked);
+        });
+        el.querySelector('[data-acao="editar"]').addEventListener('click', function () { abrirModalRotina(id); });
+        el.querySelector('[data-acao="excluir"]').addEventListener('click', function () { excluirRotinaUI(id); });
+      });
+
+      document.getElementById('btn-nova-rotina').addEventListener('click', function () { abrirModalRotina(null); });
+    }
+
+    function alternarRotina(id, marcar) {
+      // Otimista: atualiza a tela na hora, sem esperar o servidor — se
+      // der erro, desfaz recarregando tudo do zero (mesmo padrão já
+      // usado no arrastar-e-soltar do quadro).
+      if (marcar && _marcadosHoje.indexOf(id) === -1) _marcadosHoje.push(id);
+      if (!marcar) _marcadosHoje = _marcadosHoje.filter(function (m) { return m !== id; });
+      renderizarRotinas();
+
+      fetch(KANBAN_EXEC_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({ acao: marcar ? 'marcar_rotina' : 'desmarcar_rotina', id: id }),
+      })
+        .then(function (r) { return r.json(); })
+        .then(function (resultado) {
+          if (!resultado.ok) throw new Error(resultado.erro || 'Erro desconhecido');
+        })
+        .catch(function (erro) {
+          alert('Não consegui salvar, desfazendo: ' + erro.message);
+          carregarQuadro();
+        });
+    }
+
+    function abrirModalRotina(id) {
+      var rotina = id ? _rotinas.filter(function (r) { return r.id === id; })[0] : null;
+      var overlay = document.createElement('div');
+      overlay.className = 'overlay';
+      overlay.innerHTML =
+        '<div class="modal">' +
+          '<h2>' + (id ? 'Editar rotina' : 'Nova rotina') + '</h2>' +
+          '<label>Nome da atividade</label>' +
+          '<input type="text" id="campo-rotina-texto" maxlength="120" placeholder="Ex.: Leitura da Água">' +
+          '<div class="modal-acoes">' +
+            '<button class="btn-cancelar" id="btn-rotina-cancelar">Cancelar</button>' +
+            '<button class="btn-salvar" id="btn-rotina-salvar">Salvar</button>' +
+          '</div>' +
+        '</div>';
+      document.body.appendChild(overlay);
+
+      var campoTexto = overlay.querySelector('#campo-rotina-texto');
+      campoTexto.value = rotina ? rotina.texto : '';
+
+      function fechar() { overlay.remove(); }
+      overlay.addEventListener('click', function (ev) { if (ev.target === overlay) fechar(); });
+      overlay.querySelector('#btn-rotina-cancelar').addEventListener('click', fechar);
+
+      var btnSalvar = overlay.querySelector('#btn-rotina-salvar');
+      btnSalvar.addEventListener('click', function () {
+        var texto = campoTexto.value.trim();
+        if (!texto) { alert('Digite o nome da atividade.'); return; }
+        btnSalvar.disabled = true;
+        btnSalvar.textContent = 'Salvando...';
+        fetch(KANBAN_EXEC_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+          body: JSON.stringify(id ? { acao: 'editar_rotina', id: id, texto: texto } : { acao: 'criar_rotina', texto: texto }),
+        })
+          .then(function (r) { return r.json(); })
+          .then(function (resultado) {
+            if (!resultado.ok) throw new Error(resultado.erro || 'Erro desconhecido');
+            fechar();
+            carregarQuadro();
+          })
+          .catch(function (erro) {
+            alert('Erro ao salvar: ' + erro.message);
+            btnSalvar.disabled = false;
+            btnSalvar.textContent = 'Salvar';
+          });
+      });
+
+      campoTexto.focus();
+    }
+
+    function excluirRotinaUI(id) {
+      if (!confirm('Excluir essa rotina do checklist? Essa ação não pode ser desfeita.')) return;
+      fetch(KANBAN_EXEC_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({ acao: 'excluir_rotina', id: id }),
+      })
+        .then(function (r) { return r.json(); })
+        .then(function (resultado) {
+          if (!resultado.ok) throw new Error(resultado.erro || 'Erro desconhecido');
+          carregarQuadro();
+        })
+        .catch(function (erro) { alert('Erro ao excluir: ' + erro.message); });
+    }
+
+    // ---------- Criar / Editar / Excluir (cards do Quadro) ----------
 
     function abrirModalBase(titulo, valores, aoSalvar, aoExcluir) {
       var overlay = document.createElement('div');

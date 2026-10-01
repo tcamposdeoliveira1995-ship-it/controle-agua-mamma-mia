@@ -1,18 +1,22 @@
 /**
  * PROJETO ÚNICO: registro de água via Telegram + mural de Avisos +
- * registro de Caminhão Pipa + Higienização de Motores, todos vindos do
- * Painel Qualidade (painel-qualidade-appscript). Moram no mesmo projeto
- * Apps Script porque só existe 1 link (/exec) e 1 doPost por projeto —
- * mesmo motivo que já juntava água+avisos aqui antes. Ver
+ * registro de Caminhão Pipa + Higienização de Motores + Kanban de
+ * atividades + checklist diário de Rotinas, todos vindos do Painel
+ * Qualidade (painel-qualidade-appscript). Moram no mesmo projeto Apps
+ * Script porque só existe 1 link (/exec) e 1 doPost por projeto — mesmo
+ * motivo que já juntava água+avisos aqui antes. Ver
  * docs/superpowers/specs/2026-09-23-painel-qualidade-pipa-higienizacao-design.md
+ * e docs/superpowers/specs/2026-10-01-painel-qualidade-kanban-design.md
  * no repo controle-agua-mamma-mia.
  *
  * O registro de água NÃO usa webhook do Telegram (ver "TELEGRAM VIA
  * POLLING" mais abaixo, e o motivo da troca) — então hoje o doPost
  * atende Avisos ({acao: "criar"|"editar"|"remover"}), Pipa
  * ({acao: "criar_pipa", ...}), Higienização de Motores
- * ({acao: "criar_higienizacao", ...}) e Kanban ({acao: "criar_card"|
- * "editar_card"|"mover_card"|"excluir_card", ...}).
+ * ({acao: "criar_higienizacao", ...}), Kanban ({acao: "criar_card"|
+ * "editar_card"|"mover_card"|"excluir_card", ...}) e Rotinas
+ * ({acao: "criar_rotina"|"editar_rotina"|"excluir_rotina"|
+ * "marcar_rotina"|"desmarcar_rotina", ...}).
  *
  * planilhaId aponta pra planilha de água — é onde a aba "Respostas ao
  * formulário 1" (leituras), a aba "AVISOS" (mural) e a aba de Pipa
@@ -734,6 +738,239 @@ function excluirCard(id) {
   }
 }
 
+// ================= ROTINAS (checklist diário, aba do Kanban) =================
+// Duas abas na mesma planilha de água:
+// - ROTINAS: ID | TEXTO | ORDEM | ATIVA | CRIADO_EM — a lista fixa de
+//   atividades recorrentes (ex.: "Leitura da Água", "Refeitório"),
+//   cadastrada pela própria usuária na tela, não por mim no código.
+//   ATIVA=false em vez de apagar a linha (exclusão pela tela é "soft
+//   delete") — preserva o histórico de marcações antigas que apontam
+//   pro ID dessa rotina, mesmo removida da lista.
+// - ROTINA_MARCACOES: ID | ROTINA_ID | DATA | MARCADO_EM — 1 linha por
+//   dia em que uma rotina foi marcada como feita. "Desmarcar tudo de
+//   novo ao virar o dia" não precisa de nenhum job/reset: a tela só
+//   mostra marcada a rotina que tem uma linha aqui com DATA = hoje: no
+//   dia seguinte, sem marcação pra essa data, já nasce desmarcada
+//   sozinha. DATA sempre calculada aqui no servidor (GMT-3), nunca
+//   confiando na data do aparelho de quem usa. Ver
+//   docs/superpowers/specs/2026-10-01-painel-qualidade-rotinas-design.md.
+
+var ABA_ROTINAS = "ROTINAS";
+var ABA_ROTINA_MARCACOES = "ROTINA_MARCACOES";
+
+function obterAbaRotinas() {
+  var aba = SpreadsheetApp.openById(getConfig().planilhaId).getSheetByName(ABA_ROTINAS);
+  if (!aba) {
+    throw new Error('Aba "' + ABA_ROTINAS + '" não foi encontrada na planilha.');
+  }
+  return aba;
+}
+
+function obterAbaRotinaMarcacoes() {
+  var aba = SpreadsheetApp.openById(getConfig().planilhaId).getSheetByName(ABA_ROTINA_MARCACOES);
+  if (!aba) {
+    throw new Error('Aba "' + ABA_ROTINA_MARCACOES + '" não foi encontrada na planilha.');
+  }
+  return aba;
+}
+
+function hojeFormatado() {
+  return Utilities.formatDate(new Date(), "GMT-3", "dd/MM/yyyy");
+}
+
+function listarRotinas() {
+  var aba = obterAbaRotinas();
+  var mapa = mapaColunas(aba);
+  var colId = colunaObrigatoria(mapa, ABA_ROTINAS, "ID");
+  var colTexto = colunaObrigatoria(mapa, ABA_ROTINAS, "TEXTO");
+  var colOrdem = colunaObrigatoria(mapa, ABA_ROTINAS, "ORDEM");
+  var colAtiva = colunaObrigatoria(mapa, ABA_ROTINAS, "ATIVA");
+
+  var dados = aba.getDataRange().getValues();
+  var rotinas = [];
+  for (var i = 1; i < dados.length; i++) {
+    var texto = (dados[i][colTexto - 1] || "").toString().trim();
+    if (!texto) continue;
+    if (dados[i][colAtiva - 1] === false) continue; // ATIVA só é false quando explicitamente desmarcada (excluída)
+    rotinas.push({
+      id: (dados[i][colId - 1] || "").toString().trim(),
+      texto: texto,
+      ordem: Number(dados[i][colOrdem - 1]) || 0,
+    });
+  }
+  rotinas.sort(function (a, b) { return a.ordem - b.ordem; });
+
+  var abaMarcacoes = obterAbaRotinaMarcacoes();
+  var mapaMarcacoes = mapaColunas(abaMarcacoes);
+  var colRotinaId = colunaObrigatoria(mapaMarcacoes, ABA_ROTINA_MARCACOES, "ROTINA_ID");
+  var colData = colunaObrigatoria(mapaMarcacoes, ABA_ROTINA_MARCACOES, "DATA");
+  var hoje = hojeFormatado();
+  var dadosMarcacoes = abaMarcacoes.getDataRange().getValues();
+  var marcadosHoje = [];
+  for (var j = 1; j < dadosMarcacoes.length; j++) {
+    if ((dadosMarcacoes[j][colData - 1] || "").toString().trim() === hoje) {
+      marcadosHoje.push((dadosMarcacoes[j][colRotinaId - 1] || "").toString().trim());
+    }
+  }
+
+  return { ok: true, rotinas: rotinas, marcadosHoje: marcadosHoje };
+}
+
+function criarRotina(texto) {
+  texto = (texto || "").toString().trim();
+  if (!texto) throw new Error("Digite o nome da rotina.");
+
+  var lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    var aba = obterAbaRotinas();
+    var mapa = mapaColunas(aba);
+    var colId = colunaObrigatoria(mapa, ABA_ROTINAS, "ID");
+    var colTexto = colunaObrigatoria(mapa, ABA_ROTINAS, "TEXTO");
+    var colOrdem = colunaObrigatoria(mapa, ABA_ROTINAS, "ORDEM");
+    var colAtiva = colunaObrigatoria(mapa, ABA_ROTINAS, "ATIVA");
+    var colCriado = mapa["CRIADO_EM"];
+
+    var dados = aba.getDataRange().getValues();
+    var maiorOrdem = -1;
+    for (var i = 1; i < dados.length; i++) {
+      maiorOrdem = Math.max(maiorOrdem, Number(dados[i][colOrdem - 1]) || 0);
+    }
+
+    var id = Utilities.getUuid();
+    var linha = new Array(aba.getLastColumn()).fill("");
+    linha[colId - 1] = id;
+    linha[colTexto - 1] = texto;
+    linha[colOrdem - 1] = maiorOrdem + 1;
+    linha[colAtiva - 1] = true;
+    if (colCriado) linha[colCriado - 1] = new Date();
+    aba.appendRow(linha);
+
+    return { ok: true, id: id };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function editarRotina(id, texto) {
+  id = (id || "").toString().trim();
+  texto = (texto || "").toString().trim();
+  if (!id) throw new Error("Rotina não identificada.");
+  if (!texto) throw new Error("Digite o nome da rotina.");
+
+  var lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    var aba = obterAbaRotinas();
+    var mapa = mapaColunas(aba);
+    var colId = colunaObrigatoria(mapa, ABA_ROTINAS, "ID");
+    var colTexto = colunaObrigatoria(mapa, ABA_ROTINAS, "TEXTO");
+
+    var dados = aba.getDataRange().getValues();
+    for (var i = 1; i < dados.length; i++) {
+      if ((dados[i][colId - 1] || "").toString().trim() === id) {
+        aba.getRange(i + 1, colTexto).setValue(texto);
+        return { ok: true };
+      }
+    }
+    throw new Error("Rotina não encontrada.");
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+// Exclusão "soft" (ATIVA=false) em vez de apagar a linha — preserva o
+// histórico de ROTINA_MARCACOES, que referencia o ID dessa rotina.
+function excluirRotina(id) {
+  id = (id || "").toString().trim();
+  if (!id) throw new Error("Rotina não identificada.");
+
+  var lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    var aba = obterAbaRotinas();
+    var mapa = mapaColunas(aba);
+    var colId = colunaObrigatoria(mapa, ABA_ROTINAS, "ID");
+    var colAtiva = colunaObrigatoria(mapa, ABA_ROTINAS, "ATIVA");
+
+    var dados = aba.getDataRange().getValues();
+    for (var i = 1; i < dados.length; i++) {
+      if ((dados[i][colId - 1] || "").toString().trim() === id) {
+        aba.getRange(i + 1, colAtiva).setValue(false);
+        return { ok: true };
+      }
+    }
+    throw new Error("Rotina não encontrada.");
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+// Marcar é idempotente (clicar 2x não cria 2 linhas) — confere se já
+// existe uma marcação pra essa rotina+hoje antes de criar.
+function marcarRotina(rotinaId) {
+  rotinaId = (rotinaId || "").toString().trim();
+  if (!rotinaId) throw new Error("Rotina não identificada.");
+
+  var lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    var aba = obterAbaRotinaMarcacoes();
+    var mapa = mapaColunas(aba);
+    var colId = colunaObrigatoria(mapa, ABA_ROTINA_MARCACOES, "ID");
+    var colRotinaId = colunaObrigatoria(mapa, ABA_ROTINA_MARCACOES, "ROTINA_ID");
+    var colData = colunaObrigatoria(mapa, ABA_ROTINA_MARCACOES, "DATA");
+    var colMarcado = mapa["MARCADO_EM"];
+    var hoje = hojeFormatado();
+
+    var dados = aba.getDataRange().getValues();
+    for (var i = 1; i < dados.length; i++) {
+      if ((dados[i][colRotinaId - 1] || "").toString().trim() === rotinaId &&
+          (dados[i][colData - 1] || "").toString().trim() === hoje) {
+        return { ok: true }; // já marcada hoje, não duplica
+      }
+    }
+
+    var linha = new Array(aba.getLastColumn()).fill("");
+    linha[colId - 1] = Utilities.getUuid();
+    linha[colRotinaId - 1] = rotinaId;
+    linha[colData - 1] = hoje;
+    if (colMarcado) linha[colMarcado - 1] = new Date();
+    aba.appendRow(linha);
+
+    return { ok: true };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function desmarcarRotina(rotinaId) {
+  rotinaId = (rotinaId || "").toString().trim();
+  if (!rotinaId) throw new Error("Rotina não identificada.");
+
+  var lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    var aba = obterAbaRotinaMarcacoes();
+    var mapa = mapaColunas(aba);
+    var colRotinaId = colunaObrigatoria(mapa, ABA_ROTINA_MARCACOES, "ROTINA_ID");
+    var colData = colunaObrigatoria(mapa, ABA_ROTINA_MARCACOES, "DATA");
+    var hoje = hojeFormatado();
+
+    var dados = aba.getDataRange().getValues();
+    for (var i = dados.length - 1; i >= 1; i--) {
+      if ((dados[i][colRotinaId - 1] || "").toString().trim() === rotinaId &&
+          (dados[i][colData - 1] || "").toString().trim() === hoje) {
+        aba.deleteRow(i + 1);
+        return { ok: true };
+      }
+    }
+    return { ok: true }; // já não estava marcada — nada a fazer, não é erro
+  } finally {
+    lock.releaseLock();
+  }
+}
+
 // ================= TELEGRAM VIA POLLING (não usa mais webhook) =================
 // Por que a troca: o Apps Script, por natureza da plataforma, responde
 // chamadas externas com um redirecionamento (302) antes de servir o
@@ -836,11 +1073,13 @@ function verificarMensagensTelegram() {
  * GET — usado pelo painel. Sem parâmetro (?dados= ausente), devolve os
  * avisos — comportamento antigo, preservado pra não quebrar o Avisos.html
  * já implantado, que sempre buscou essa URL sem nenhum parâmetro.
- * ?dados=kanban devolve os cards do Kanban.
+ * ?dados=kanban devolve os cards do Kanban. ?dados=rotinas devolve o
+ * checklist diário (rotinas ativas + quais já foram marcadas hoje).
  */
 function doGet(e) {
   try {
     if (e.parameter.dados === "kanban") return respostaJson(listarCards());
+    if (e.parameter.dados === "rotinas") return respostaJson(listarRotinas());
     return respostaJson(listarAvisos());
   } catch (erro) {
     return respostaJson({ ok: false, erro: erro.message });
@@ -853,9 +1092,10 @@ function doGet(e) {
  * ({acao: "criar"|"editar"|"remover", ...}), Pipa
  * ({acao: "criar_pipa", pedido, requisitada, recebida, placa,
  * relInicio, relFim, recibo}), Higienização de Motores
- * ({acao: "criar_higienizacao", dataHigienizacao, responsavel, unidade})
- * e Kanban ({acao: "criar_card"|"editar_card"|"excluir_card"|
- * "mover_card", ...}).
+ * ({acao: "criar_higienizacao", dataHigienizacao, responsavel, unidade}),
+ * Kanban ({acao: "criar_card"|"editar_card"|"excluir_card"|"mover_card",
+ * ...}) e Rotinas ({acao: "criar_rotina"|"editar_rotina"|
+ * "excluir_rotina"|"marcar_rotina"|"desmarcar_rotina", ...}).
  */
 function doPost(e) {
   var dados = JSON.parse(e.postData.contents);
@@ -870,6 +1110,11 @@ function doPost(e) {
     if (dados.acao === "editar_card") return respostaJson(editarCard(dados.id, dados.titulo, dados.descricao, dados.etiqueta));
     if (dados.acao === "mover_card") return respostaJson(moverCard(dados.id, dados.coluna, dados.ordemIds));
     if (dados.acao === "excluir_card") return respostaJson(excluirCard(dados.id));
+    if (dados.acao === "criar_rotina") return respostaJson(criarRotina(dados.texto));
+    if (dados.acao === "editar_rotina") return respostaJson(editarRotina(dados.id, dados.texto));
+    if (dados.acao === "excluir_rotina") return respostaJson(excluirRotina(dados.id));
+    if (dados.acao === "marcar_rotina") return respostaJson(marcarRotina(dados.id));
+    if (dados.acao === "desmarcar_rotina") return respostaJson(desmarcarRotina(dados.id));
     throw new Error("Ação inválida: " + dados.acao);
   } catch (erro) {
     return respostaJson({ ok: false, erro: erro.message });
