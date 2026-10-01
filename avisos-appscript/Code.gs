@@ -10,8 +10,9 @@
  * O registro de água NÃO usa webhook do Telegram (ver "TELEGRAM VIA
  * POLLING" mais abaixo, e o motivo da troca) — então hoje o doPost
  * atende Avisos ({acao: "criar"|"editar"|"remover"}), Pipa
- * ({acao: "criar_pipa", ...}) e Higienização de Motores
- * ({acao: "criar_higienizacao", ...}).
+ * ({acao: "criar_pipa", ...}), Higienização de Motores
+ * ({acao: "criar_higienizacao", ...}) e Kanban ({acao: "criar_card"|
+ * "editar_card"|"mover_card"|"excluir_card", ...}).
  *
  * planilhaId aponta pra planilha de água — é onde a aba "Respostas ao
  * formulário 1" (leituras), a aba "AVISOS" (mural) e a aba de Pipa
@@ -535,6 +536,204 @@ function registrarHigienizacao(dados) {
   }
 }
 
+// ================= KANBAN (quadro de atividades do painel) =================
+// Aba KANBAN, na mesma planilha de água (colunas: ID | TITULO |
+// DESCRICAO | COLUNA | ETIQUETA | ORDEM | CRIADO_EM | ATUALIZADO_EM).
+// Quadro geral de atividades do dia a dia — INDEPENDENTE do Trello real
+// de Ordens de Serviço (manutencao-appsscript), que continua existindo à
+// parte. Colunas fixas (ver KANBAN_COLUNAS); ORDEM é a posição do card
+// dentro da coluna (inteiro, não precisa ser sequencial sem buracos —
+// só a ordem relativa importa pra ordenar). Ver
+// docs/superpowers/specs/2026-10-01-painel-qualidade-kanban-design.md.
+
+var ABA_KANBAN = "KANBAN";
+var KANBAN_COLUNAS = ["A Fazer", "Em Andamento", "Concluído"];
+
+function obterAbaKanban() {
+  var aba = SpreadsheetApp.openById(getConfig().planilhaId).getSheetByName(ABA_KANBAN);
+  if (!aba) {
+    throw new Error('Aba "' + ABA_KANBAN + '" não foi encontrada na planilha.');
+  }
+  return aba;
+}
+
+function listarCards() {
+  var aba = obterAbaKanban();
+  var mapa = mapaColunas(aba);
+  var colId = colunaObrigatoria(mapa, ABA_KANBAN, "ID");
+  var colTitulo = colunaObrigatoria(mapa, ABA_KANBAN, "TITULO");
+  var colDescricao = colunaObrigatoria(mapa, ABA_KANBAN, "DESCRICAO");
+  var colColuna = colunaObrigatoria(mapa, ABA_KANBAN, "COLUNA");
+  var colEtiqueta = colunaObrigatoria(mapa, ABA_KANBAN, "ETIQUETA");
+  var colOrdem = colunaObrigatoria(mapa, ABA_KANBAN, "ORDEM");
+
+  var dados = aba.getDataRange().getValues();
+  var cards = [];
+  for (var i = 1; i < dados.length; i++) {
+    var titulo = (dados[i][colTitulo - 1] || "").toString().trim();
+    if (!titulo) continue;
+    cards.push({
+      id: (dados[i][colId - 1] || "").toString().trim(),
+      titulo: titulo,
+      descricao: (dados[i][colDescricao - 1] || "").toString().trim(),
+      coluna: (dados[i][colColuna - 1] || "").toString().trim() || KANBAN_COLUNAS[0],
+      etiqueta: (dados[i][colEtiqueta - 1] || "").toString().trim(),
+      ordem: Number(dados[i][colOrdem - 1]) || 0,
+    });
+  }
+  // Ordenado aqui (não confia só na ordem das linhas na planilha) — o
+  // front-end já recebe pronto pra desenhar cada coluna sem reordenar.
+  cards.sort(function (a, b) { return a.ordem - b.ordem; });
+  return { ok: true, cards: cards };
+}
+
+function criarCard(titulo, descricao, etiqueta) {
+  titulo = (titulo || "").toString().trim();
+  if (!titulo) throw new Error("Digite o título do card.");
+
+  var lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    var aba = obterAbaKanban();
+    var mapa = mapaColunas(aba);
+    var colId = colunaObrigatoria(mapa, ABA_KANBAN, "ID");
+    var colTitulo = colunaObrigatoria(mapa, ABA_KANBAN, "TITULO");
+    var colDescricao = colunaObrigatoria(mapa, ABA_KANBAN, "DESCRICAO");
+    var colColuna = colunaObrigatoria(mapa, ABA_KANBAN, "COLUNA");
+    var colEtiqueta = colunaObrigatoria(mapa, ABA_KANBAN, "ETIQUETA");
+    var colOrdem = colunaObrigatoria(mapa, ABA_KANBAN, "ORDEM");
+    var colCriado = mapa["CRIADO_EM"];
+
+    // Novo card sempre entra no fim da 1ª coluna (A Fazer) — ordem =
+    // maior ordem já usada nessa coluna + 1.
+    var dados = aba.getDataRange().getValues();
+    var maiorOrdem = -1;
+    for (var i = 1; i < dados.length; i++) {
+      if ((dados[i][colColuna - 1] || "").toString().trim() === KANBAN_COLUNAS[0]) {
+        maiorOrdem = Math.max(maiorOrdem, Number(dados[i][colOrdem - 1]) || 0);
+      }
+    }
+
+    var id = Utilities.getUuid();
+    var linha = new Array(aba.getLastColumn()).fill("");
+    linha[colId - 1] = id;
+    linha[colTitulo - 1] = titulo;
+    linha[colDescricao - 1] = (descricao || "").toString().trim();
+    linha[colColuna - 1] = KANBAN_COLUNAS[0];
+    linha[colEtiqueta - 1] = (etiqueta || "").toString().trim();
+    linha[colOrdem - 1] = maiorOrdem + 1;
+    if (colCriado) linha[colCriado - 1] = new Date();
+    aba.appendRow(linha);
+
+    return { ok: true, id: id };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function editarCard(id, titulo, descricao, etiqueta) {
+  id = (id || "").toString().trim();
+  titulo = (titulo || "").toString().trim();
+  if (!id) throw new Error("Card não identificado.");
+  if (!titulo) throw new Error("Digite o título do card.");
+
+  var lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    var aba = obterAbaKanban();
+    var mapa = mapaColunas(aba);
+    var colId = colunaObrigatoria(mapa, ABA_KANBAN, "ID");
+    var colTitulo = colunaObrigatoria(mapa, ABA_KANBAN, "TITULO");
+    var colDescricao = colunaObrigatoria(mapa, ABA_KANBAN, "DESCRICAO");
+    var colEtiqueta = colunaObrigatoria(mapa, ABA_KANBAN, "ETIQUETA");
+    var colAtualizado = mapa["ATUALIZADO_EM"];
+
+    var dados = aba.getDataRange().getValues();
+    for (var i = 1; i < dados.length; i++) {
+      if ((dados[i][colId - 1] || "").toString().trim() === id) {
+        aba.getRange(i + 1, colTitulo).setValue(titulo);
+        aba.getRange(i + 1, colDescricao).setValue((descricao || "").toString().trim());
+        aba.getRange(i + 1, colEtiqueta).setValue((etiqueta || "").toString().trim());
+        if (colAtualizado) aba.getRange(i + 1, colAtualizado).setValue(new Date());
+        return { ok: true };
+      }
+    }
+    throw new Error("Card não encontrado.");
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+// Move um card pra outra coluna (ou reordena dentro da mesma) — recebe a
+// ORDEM FINAL INTEIRA da coluna de destino (array de IDs, na ordem que
+// devem aparecer) e grava ORDEM = índice de cada um nesse array. A
+// coluna de ORIGEM não precisa ser reenviada nem reordenada: os cards
+// que sobraram lá mantêm seus valores de ORDEM antigos, que já bastam
+// pra manter a ordem relativa entre eles (não precisa ser sequencial
+// sem buracos, só a ordem relativa importa pra ordenar).
+function moverCard(id, coluna, ordemIds) {
+  id = (id || "").toString().trim();
+  coluna = (coluna || "").toString().trim();
+  if (!id) throw new Error("Card não identificado.");
+  if (KANBAN_COLUNAS.indexOf(coluna) === -1) throw new Error("Coluna inválida: " + coluna);
+  if (!ordemIds || !ordemIds.length) throw new Error("Ordem da coluna não informada.");
+
+  var lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    var aba = obterAbaKanban();
+    var mapa = mapaColunas(aba);
+    var colId = colunaObrigatoria(mapa, ABA_KANBAN, "ID");
+    var colColuna = colunaObrigatoria(mapa, ABA_KANBAN, "COLUNA");
+    var colOrdem = colunaObrigatoria(mapa, ABA_KANBAN, "ORDEM");
+    var colAtualizado = mapa["ATUALIZADO_EM"];
+
+    var dados = aba.getDataRange().getValues();
+    var linhaPorId = {};
+    for (var i = 1; i < dados.length; i++) {
+      var idLinha = (dados[i][colId - 1] || "").toString().trim();
+      if (idLinha) linhaPorId[idLinha] = i + 1; // +1 porque getRange é 1-based
+    }
+
+    if (!linhaPorId[id]) throw new Error("Card não encontrado.");
+    aba.getRange(linhaPorId[id], colColuna).setValue(coluna);
+    if (colAtualizado) aba.getRange(linhaPorId[id], colAtualizado).setValue(new Date());
+
+    ordemIds.forEach(function (idCard, indice) {
+      var linha = linhaPorId[(idCard || "").toString().trim()];
+      if (linha) aba.getRange(linha, colOrdem).setValue(indice);
+    });
+
+    return { ok: true };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function excluirCard(id) {
+  id = (id || "").toString().trim();
+  if (!id) throw new Error("Card não identificado.");
+
+  var lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    var aba = obterAbaKanban();
+    var mapa = mapaColunas(aba);
+    var colId = colunaObrigatoria(mapa, ABA_KANBAN, "ID");
+
+    var dados = aba.getDataRange().getValues();
+    for (var i = dados.length - 1; i >= 1; i--) {
+      if ((dados[i][colId - 1] || "").toString().trim() === id) {
+        aba.deleteRow(i + 1);
+        return { ok: true };
+      }
+    }
+    throw new Error("Card não encontrado.");
+  } finally {
+    lock.releaseLock();
+  }
+}
+
 // ================= TELEGRAM VIA POLLING (não usa mais webhook) =================
 // Por que a troca: o Apps Script, por natureza da plataforma, responde
 // chamadas externas com um redirecionamento (302) antes de servir o
@@ -633,9 +832,15 @@ function verificarMensagensTelegram() {
 
 // ================= ROTEAMENTO DO WEB APP =================
 
-/** GET — só usado pelo painel, pra listar os avisos. */
+/**
+ * GET — usado pelo painel. Sem parâmetro (?dados= ausente), devolve os
+ * avisos — comportamento antigo, preservado pra não quebrar o Avisos.html
+ * já implantado, que sempre buscou essa URL sem nenhum parâmetro.
+ * ?dados=kanban devolve os cards do Kanban.
+ */
 function doGet(e) {
   try {
+    if (e.parameter.dados === "kanban") return respostaJson(listarCards());
     return respostaJson(listarAvisos());
   } catch (erro) {
     return respostaJson({ ok: false, erro: erro.message });
@@ -647,8 +852,10 @@ function doGet(e) {
  * VIA POLLING" acima) — então doPost hoje atende Avisos
  * ({acao: "criar"|"editar"|"remover", ...}), Pipa
  * ({acao: "criar_pipa", pedido, requisitada, recebida, placa,
- * relInicio, relFim, recibo}) e Higienização de Motores
- * ({acao: "criar_higienizacao", dataHigienizacao, responsavel, unidade}).
+ * relInicio, relFim, recibo}), Higienização de Motores
+ * ({acao: "criar_higienizacao", dataHigienizacao, responsavel, unidade})
+ * e Kanban ({acao: "criar_card"|"editar_card"|"excluir_card"|
+ * "mover_card", ...}).
  */
 function doPost(e) {
   var dados = JSON.parse(e.postData.contents);
@@ -659,6 +866,10 @@ function doPost(e) {
     if (dados.acao === "remover") return respostaJson(removerAviso(dados.id));
     if (dados.acao === "criar_pipa") return respostaJson(registrarPipa(dados));
     if (dados.acao === "criar_higienizacao") return respostaJson(registrarHigienizacao(dados));
+    if (dados.acao === "criar_card") return respostaJson(criarCard(dados.titulo, dados.descricao, dados.etiqueta));
+    if (dados.acao === "editar_card") return respostaJson(editarCard(dados.id, dados.titulo, dados.descricao, dados.etiqueta));
+    if (dados.acao === "mover_card") return respostaJson(moverCard(dados.id, dados.coluna, dados.ordemIds));
+    if (dados.acao === "excluir_card") return respostaJson(excluirCard(dados.id));
     throw new Error("Ação inválida: " + dados.acao);
   } catch (erro) {
     return respostaJson({ ok: false, erro: erro.message });

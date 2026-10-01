@@ -62,6 +62,16 @@
  *    nele — formulário (data, responsável, unidade) + status por
  *    unidade. Também usa o mesmo backend do mural de Avisos (ação nova
  *    criar_higienizacao). Já vem com o link "‹ Menu" preenchido.
+ * 5g) Crie um arquivo novo do tipo HTML chamado exatamente "Kanban" e
+ *    cole o conteúdo de Kanban.html nele — quadro de atividades com 3
+ *    colunas fixas (A Fazer / Em Andamento / Concluído), arrastar e
+ *    soltar entre colunas, criar/editar/excluir card com etiqueta
+ *    colorida. Também usa o mesmo backend do mural de Avisos (ações
+ *    novas criar_card/editar_card/mover_card/excluir_card) — IMPORTANTE:
+ *    precisa criar uma aba nova chamada "KANBAN" na planilha de água
+ *    (mesma planilha onde já tem a aba AVISOS), com a linha 1 (cabeçalho)
+ *    exatamente: ID | TITULO | DESCRICAO | COLUNA | ETIQUETA | ORDEM |
+ *    CRIADO_EM | ATUALIZADO_EM. Já vem com o link "‹ Menu" preenchido.
  * 6) Implantar > Nova implantação > tipo "App da Web":
  *      - Executar como: Eu (sua conta)
  *      - Quem pode acessar: Qualquer pessoa
@@ -116,6 +126,11 @@ function doGet(e) {
   if (tela === 'higienizacao') {
     return HtmlService.createHtmlOutputFromFile('Higienizacao')
       .setTitle('Higienização de Motores — Mamma Mia')
+      .addMetaTag('viewport', 'width=device-width, initial-scale=1');
+  }
+  if (tela === 'kanban') {
+    return HtmlService.createHtmlOutputFromFile('Kanban')
+      .setTitle('Kanban de Atividades — Mamma Mia')
       .addMetaTag('viewport', 'width=device-width, initial-scale=1');
   }
   return HtmlService.createHtmlOutputFromFile('Menu')

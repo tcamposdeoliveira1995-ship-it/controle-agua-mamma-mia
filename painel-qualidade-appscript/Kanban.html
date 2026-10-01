@@ -1,0 +1,536 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    :root {
+      --bg: #f7f3ee;
+      --card-bg: #ffffff;
+      --border: #e8ddd0;
+      --text: #4b433c;
+      --text-muted: #8a8570;
+      --gold: #b79b6c;
+      --green: #8f9b72;
+      --red: #c07a6c;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      -webkit-tap-highlight-color: transparent;
+      overscroll-behavior: none;
+    }
+    header {
+      background: var(--text);
+      color: #fff;
+      padding: 1rem 1.1rem;
+      position: sticky;
+      top: 0;
+      z-index: 20;
+    }
+    header h1 { font-size: 1.05rem; margin: 0; font-weight: 700; }
+    header p { margin: 0.15rem 0 0; font-size: 0.78rem; color: #d8d2c6; }
+    .link-menu { display: inline-block; margin-bottom: 0.5rem; font-size: 0.78rem; color: #d8d2c6; text-decoration: none; }
+
+    .estado-carregando { text-align: center; color: var(--text-muted); padding: 1.5rem 1rem; font-size: 0.92rem; }
+
+    .quadro {
+      display: flex;
+      gap: 0.85rem;
+      padding: 1rem;
+      overflow-x: auto;
+      align-items: flex-start;
+    }
+    .coluna {
+      background: rgba(0,0,0,0.025);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 0.7rem;
+      width: 260px;
+      min-width: 260px;
+      flex-shrink: 0;
+    }
+    .coluna-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 0.6rem;
+      padding: 0 0.15rem;
+    }
+    .coluna-titulo { font-size: 0.88rem; font-weight: 700; }
+    .coluna-contador {
+      font-size: 0.7rem;
+      font-weight: 700;
+      color: var(--text-muted);
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 0.05rem 0.5rem;
+    }
+    .lista-cards { min-height: 0.5rem; }
+
+    .card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 0.65rem 0.7rem;
+      margin-bottom: 0.55rem;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+      cursor: grab;
+      touch-action: none;
+      user-select: none;
+    }
+    .card.arrastando { opacity: 0.35; }
+    .card.flutuando {
+      position: fixed;
+      z-index: 50;
+      pointer-events: none;
+      box-shadow: 0 8px 20px rgba(0,0,0,0.25);
+      width: 232px;
+    }
+    .card-etiqueta { height: 5px; border-radius: 3px; margin-bottom: 0.45rem; }
+    .card-titulo { font-size: 0.88rem; font-weight: 600; line-height: 1.35; word-break: break-word; }
+    .card-descricao {
+      font-size: 0.78rem;
+      color: var(--text-muted);
+      line-height: 1.4;
+      margin-top: 0.3rem;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    .card-acoes { display: flex; gap: 0.6rem; justify-content: flex-end; margin-top: 0.4rem; }
+    .card-btn { background: none; border: none; cursor: pointer; padding: 0; color: var(--text-muted); font-size: 0.92rem; }
+    .card-btn:active { opacity: 0.6; }
+
+    .placeholder-drop {
+      border: 2px dashed var(--gold);
+      border-radius: 10px;
+      margin-bottom: 0.55rem;
+      background: rgba(183,155,108,0.08);
+    }
+
+    .btn-novo-card {
+      width: 100%;
+      padding: 0.5rem;
+      margin-top: 0.1rem;
+      border-radius: 8px;
+      border: 2px dashed var(--border);
+      background: transparent;
+      color: var(--text-muted);
+      font-size: 0.82rem;
+      cursor: pointer;
+    }
+    .btn-novo-card:active { background: rgba(0,0,0,0.04); }
+
+    .overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.4);
+      z-index: 100;
+      display: flex;
+      align-items: flex-end;
+      justify-content: center;
+    }
+    @media (min-width: 560px) {
+      .overlay { align-items: center; }
+    }
+    .modal {
+      background: var(--card-bg);
+      border-radius: 16px 16px 0 0;
+      padding: 1.2rem;
+      width: 100%;
+      max-width: 420px;
+      max-height: 85vh;
+      overflow-y: auto;
+    }
+    @media (min-width: 560px) {
+      .modal { border-radius: 16px; }
+    }
+    .modal h2 { margin: 0 0 0.9rem; font-size: 1rem; }
+    .modal label { display: block; font-size: 0.78rem; font-weight: 700; color: var(--text-muted); margin: 0.7rem 0 0.3rem; }
+    .modal input[type="text"], .modal textarea {
+      width: 100%;
+      font-family: inherit;
+      font-size: 0.9rem;
+      padding: 0.55rem 0.65rem;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      background: #fff;
+    }
+    .modal textarea { resize: vertical; min-height: 4.5rem; }
+    .etiquetas-opcoes { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+    .etiqueta-opcao {
+      width: 2rem;
+      height: 2rem;
+      border-radius: 50%;
+      border: 2px solid transparent;
+      cursor: pointer;
+      padding: 0;
+    }
+    .etiqueta-opcao.selecionada { border-color: var(--text); }
+    .etiqueta-opcao.sem-cor { background: #fff; border: 2px solid var(--border); position: relative; }
+    .etiqueta-opcao.sem-cor::after { content: '✕'; position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: var(--text-muted); font-size: 0.8rem; }
+    .etiqueta-opcao.sem-cor.selecionada { border-color: var(--text); }
+    .modal-acoes { display: flex; gap: 0.6rem; margin-top: 1.2rem; }
+    .modal-acoes button { flex: 1; font-size: 0.85rem; padding: 0.6rem; border-radius: 8px; border: none; cursor: pointer; font-weight: 700; }
+    .btn-salvar { background: var(--green); color: #fff; }
+    .btn-cancelar { background: rgba(0,0,0,0.06); color: var(--text); }
+    .btn-excluir-card { background: none; color: var(--red); font-weight: 600; text-decoration: underline; margin-top: 0.9rem; border: none; cursor: pointer; font-size: 0.82rem; padding: 0; }
+  </style>
+</head>
+<body>
+  <header>
+    <a class="link-menu" href="https://script.google.com/macros/s/AKfycbzAA1-03ZTdzf2c23tQi6uxuM7gHV-bqcBa8wuuwkrzNhzW5vVkEDC1Jbfu15ClFnSmtg/exec">‹ Menu</a>
+    <h1>🗂️ Kanban de Atividades</h1>
+    <p>Painel Qualidade — Mamma Mia</p>
+  </header>
+
+  <div class="estado-carregando" id="tela-carregando">Carregando quadro…</div>
+  <div class="quadro" id="quadro" style="display:none;"></div>
+
+  <script>
+    // Mesmo backend do mural de Avisos (avisos-appscript) — ganhou ações
+    // novas (criar_card/editar_card/mover_card/excluir_card) pra não
+    // precisar de outro projeto/implantação. Ver
+    // docs/superpowers/specs/2026-10-01-painel-qualidade-kanban-design.md.
+    var KANBAN_EXEC_URL = 'https://script.google.com/macros/s/AKfycbzHvvPZzBDSB730gShVCl7CPQb23h37w8k8B-cY8n1RI-NkBJzp0eUP5m-rbtj3nGdwpw/exec';
+
+    var COLUNAS = ['A Fazer', 'Em Andamento', 'Concluído'];
+    var ETIQUETAS = [
+      { chave: 'vermelho', cor: '#c07a6c' },
+      { chave: 'laranja', cor: '#d6aa5f' },
+      { chave: 'amarelo', cor: '#e0c468' },
+      { chave: 'verde', cor: '#8f9b72' },
+      { chave: 'azul', cor: '#6c93b7' },
+      { chave: 'roxo', cor: '#9b7ab7' },
+    ];
+
+    var _cards = [];
+
+    function escaparHtml(texto) {
+      var div = document.createElement('div');
+      div.textContent = texto == null ? '' : String(texto);
+      return div.innerHTML;
+    }
+
+    function corDaEtiqueta(chave) {
+      var achada = ETIQUETAS.filter(function (e) { return e.chave === chave; })[0];
+      return achada ? achada.cor : null;
+    }
+
+    function carregarQuadro() {
+      fetch(KANBAN_EXEC_URL + '?dados=kanban', { cache: 'no-store' })
+        .then(function (resposta) {
+          if (!resposta.ok) throw new Error('HTTP ' + resposta.status);
+          return resposta.json();
+        })
+        .then(function (resultado) {
+          if (!resultado.ok) throw new Error(resultado.erro || 'Erro desconhecido');
+          _cards = resultado.cards || [];
+          document.getElementById('tela-carregando').style.display = 'none';
+          document.getElementById('quadro').style.display = '';
+          renderizarQuadro();
+        })
+        .catch(function (erro) {
+          console.error('[KANBAN]', erro);
+          document.getElementById('tela-carregando').textContent = 'Não foi possível carregar o quadro.';
+        });
+    }
+
+    function cardHtml(card) {
+      var cor = corDaEtiqueta(card.etiqueta);
+      return (
+        '<div class="card" data-id="' + card.id + '">' +
+          (cor ? '<div class="card-etiqueta" style="background:' + cor + ';"></div>' : '') +
+          '<div class="card-titulo">' + escaparHtml(card.titulo) + '</div>' +
+          (card.descricao ? '<div class="card-descricao">' + escaparHtml(card.descricao) + '</div>' : '') +
+          '<div class="card-acoes">' +
+            '<button class="card-btn" data-acao="editar" title="Editar">✏️</button>' +
+            '<button class="card-btn" data-acao="excluir" title="Excluir">✕</button>' +
+          '</div>' +
+        '</div>'
+      );
+    }
+
+    function renderizarQuadro() {
+      var quadro = document.getElementById('quadro');
+      quadro.innerHTML = COLUNAS.map(function (coluna) {
+        var cardsDaColuna = _cards.filter(function (c) { return c.coluna === coluna; });
+        return (
+          '<div class="coluna" data-coluna="' + coluna + '">' +
+            '<div class="coluna-header">' +
+              '<div class="coluna-titulo">' + coluna + '</div>' +
+              '<div class="coluna-contador">' + cardsDaColuna.length + '</div>' +
+            '</div>' +
+            '<div class="lista-cards" data-coluna="' + coluna + '">' +
+              cardsDaColuna.map(cardHtml).join('') +
+            '</div>' +
+            '<button class="btn-novo-card" data-coluna="' + coluna + '">+ Novo card</button>' +
+          '</div>'
+        );
+      }).join('');
+
+      quadro.querySelectorAll('.card').forEach(function (el) {
+        el.querySelector('[data-acao="editar"]').addEventListener('click', function (ev) {
+          ev.stopPropagation();
+          abrirModalEdicao(el.getAttribute('data-id'));
+        });
+        el.querySelector('[data-acao="excluir"]').addEventListener('click', function (ev) {
+          ev.stopPropagation();
+          excluirCard(el.getAttribute('data-id'));
+        });
+        iniciarArrastar(el);
+      });
+
+      quadro.querySelectorAll('.btn-novo-card').forEach(function (btn) {
+        btn.addEventListener('click', function () { abrirModalNovo(btn.getAttribute('data-coluna')); });
+      });
+    }
+
+    // ---------- Criar / Editar / Excluir ----------
+
+    function abrirModalBase(titulo, valores, aoSalvar, aoExcluir) {
+      var overlay = document.createElement('div');
+      overlay.className = 'overlay';
+      overlay.innerHTML =
+        '<div class="modal">' +
+          '<h2>' + titulo + '</h2>' +
+          '<label>Título</label>' +
+          '<input type="text" id="campo-titulo" maxlength="120">' +
+          '<label>Descrição (opcional)</label>' +
+          '<textarea id="campo-descricao"></textarea>' +
+          '<label>Etiqueta (opcional)</label>' +
+          '<div class="etiquetas-opcoes" id="campo-etiquetas">' +
+            '<button type="button" class="etiqueta-opcao sem-cor" data-chave=""></button>' +
+            ETIQUETAS.map(function (e) {
+              return '<button type="button" class="etiqueta-opcao" data-chave="' + e.chave + '" style="background:' + e.cor + ';"></button>';
+            }).join('') +
+          '</div>' +
+          '<div class="modal-acoes">' +
+            '<button class="btn-cancelar" id="btn-modal-cancelar">Cancelar</button>' +
+            '<button class="btn-salvar" id="btn-modal-salvar">Salvar</button>' +
+          '</div>' +
+          (aoExcluir ? '<button class="btn-excluir-card" id="btn-modal-excluir">Excluir este card</button>' : '') +
+        '</div>';
+      document.body.appendChild(overlay);
+
+      var etiquetaSelecionada = valores.etiqueta || '';
+      var botoesEtiqueta = overlay.querySelectorAll('.etiqueta-opcao');
+      function marcarEtiquetaSelecionada() {
+        botoesEtiqueta.forEach(function (b) {
+          b.classList.toggle('selecionada', b.getAttribute('data-chave') === etiquetaSelecionada);
+        });
+      }
+      botoesEtiqueta.forEach(function (b) {
+        b.addEventListener('click', function () {
+          etiquetaSelecionada = b.getAttribute('data-chave');
+          marcarEtiquetaSelecionada();
+        });
+      });
+      marcarEtiquetaSelecionada();
+
+      var campoTitulo = overlay.querySelector('#campo-titulo');
+      var campoDescricao = overlay.querySelector('#campo-descricao');
+      campoTitulo.value = valores.titulo || '';
+      campoDescricao.value = valores.descricao || '';
+
+      function fechar() { overlay.remove(); }
+      overlay.addEventListener('click', function (ev) { if (ev.target === overlay) fechar(); });
+      overlay.querySelector('#btn-modal-cancelar').addEventListener('click', fechar);
+
+      var btnSalvar = overlay.querySelector('#btn-modal-salvar');
+      btnSalvar.addEventListener('click', function () {
+        var titulo = campoTitulo.value.trim();
+        if (!titulo) { alert('Digite o título do card.'); return; }
+        btnSalvar.disabled = true;
+        btnSalvar.textContent = 'Salvando...';
+        aoSalvar(
+          { titulo: titulo, descricao: campoDescricao.value.trim(), etiqueta: etiquetaSelecionada },
+          fechar,
+          function (erro) { alert('Erro ao salvar: ' + erro.message); btnSalvar.disabled = false; btnSalvar.textContent = 'Salvar'; }
+        );
+      });
+
+      if (aoExcluir) {
+        overlay.querySelector('#btn-modal-excluir').addEventListener('click', function () {
+          if (!confirm('Excluir esse card? Essa ação não pode ser desfeita.')) return;
+          fechar();
+          aoExcluir();
+        });
+      }
+
+      campoTitulo.focus();
+    }
+
+    function abrirModalNovo(coluna) {
+      abrirModalBase('Novo card', {}, function (valores, fechar, aoErro) {
+        fetch(KANBAN_EXEC_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+          body: JSON.stringify({ acao: 'criar_card', titulo: valores.titulo, descricao: valores.descricao, etiqueta: valores.etiqueta }),
+        })
+          .then(function (r) { return r.json(); })
+          .then(function (resultado) {
+            if (!resultado.ok) throw new Error(resultado.erro || 'Erro desconhecido');
+            fechar();
+            carregarQuadro();
+          })
+          .catch(aoErro);
+      });
+    }
+
+    function abrirModalEdicao(id) {
+      var card = _cards.filter(function (c) { return c.id === id; })[0];
+      if (!card) return;
+      abrirModalBase('Editar card', card, function (valores, fechar, aoErro) {
+        fetch(KANBAN_EXEC_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+          body: JSON.stringify({ acao: 'editar_card', id: id, titulo: valores.titulo, descricao: valores.descricao, etiqueta: valores.etiqueta }),
+        })
+          .then(function (r) { return r.json(); })
+          .then(function (resultado) {
+            if (!resultado.ok) throw new Error(resultado.erro || 'Erro desconhecido');
+            fechar();
+            carregarQuadro();
+          })
+          .catch(aoErro);
+      }, function () { excluirCard(id); });
+    }
+
+    function excluirCard(id) {
+      if (!confirm('Excluir esse card? Essa ação não pode ser desfeita.')) return;
+      fetch(KANBAN_EXEC_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({ acao: 'excluir_card', id: id }),
+      })
+        .then(function (r) { return r.json(); })
+        .then(function (resultado) {
+          if (!resultado.ok) throw new Error(resultado.erro || 'Erro desconhecido');
+          carregarQuadro();
+        })
+        .catch(function (erro) { alert('Erro ao excluir: ' + erro.message); });
+    }
+
+    // ---------- Arrastar e soltar (mouse e toque, via Pointer Events) ----------
+    // Nativo (sem biblioteca externa): drag-and-drop HTML5 não funciona em
+    // touch no Safari/iOS, então usamos Pointer Events (funciona igual pra
+    // mouse e dedo). O card arrastado vira "flutuando" (position:fixed,
+    // segue o ponteiro) e um placeholder tracejado marca onde ele vai
+    // cair, dentro da coluna sob o ponteiro.
+
+    var LIMIAR_ARRASTO_PX = 8;
+
+    function iniciarArrastar(cardEl) {
+      cardEl.addEventListener('pointerdown', function (ev) {
+        if (ev.target.closest('.card-btn')) return; // não inicia arrasto clicando em editar/excluir
+        if (ev.button !== undefined && ev.button !== 0) return; // só botão esquerdo do mouse
+
+        var origemX = ev.clientX;
+        var origemY = ev.clientY;
+        var retanguloOriginal = cardEl.getBoundingClientRect();
+        var deslocamentoX = origemX - retanguloOriginal.left;
+        var deslocamentoY = origemY - retanguloOriginal.top;
+        var arrastando = false;
+        var placeholder = document.createElement('div');
+        placeholder.className = 'placeholder-drop';
+
+        function aoMover(evMove) {
+          var dx = evMove.clientX - origemX;
+          var dy = evMove.clientY - origemY;
+
+          if (!arrastando) {
+            if (Math.abs(dx) < LIMIAR_ARRASTO_PX && Math.abs(dy) < LIMIAR_ARRASTO_PX) return;
+            arrastando = true;
+            placeholder.style.height = retanguloOriginal.height + 'px';
+            cardEl.parentNode.insertBefore(placeholder, cardEl);
+            cardEl.classList.add('flutuando');
+            cardEl.style.left = retanguloOriginal.left + 'px';
+            cardEl.style.top = retanguloOriginal.top + 'px';
+            document.body.appendChild(cardEl);
+          }
+
+          cardEl.style.left = (evMove.clientX - deslocamentoX) + 'px';
+          cardEl.style.top = (evMove.clientY - deslocamentoY) + 'px';
+
+          // Acha a coluna sob o ponteiro e onde encaixar o placeholder nela
+          cardEl.style.pointerEvents = 'none';
+          var alvo = document.elementFromPoint(evMove.clientX, evMove.clientY);
+          cardEl.style.pointerEvents = '';
+          var listaAlvo = alvo ? alvo.closest('.lista-cards') : null;
+          if (!listaAlvo) return;
+
+          var irmaos = Array.prototype.slice.call(listaAlvo.children).filter(function (el) {
+            return el !== placeholder && el.classList.contains('card');
+          });
+          var proximoAntes = null;
+          for (var i = 0; i < irmaos.length; i++) {
+            var ret = irmaos[i].getBoundingClientRect();
+            if (evMove.clientY < ret.top + ret.height / 2) { proximoAntes = irmaos[i]; break; }
+          }
+          if (proximoAntes) listaAlvo.insertBefore(placeholder, proximoAntes);
+          else listaAlvo.appendChild(placeholder);
+        }
+
+        function aoSoltar() {
+          document.removeEventListener('pointermove', aoMover);
+          document.removeEventListener('pointerup', aoSoltar);
+          document.removeEventListener('pointercancel', aoSoltar);
+
+          if (!arrastando) return;
+
+          cardEl.classList.remove('flutuando');
+          cardEl.style.left = '';
+          cardEl.style.top = '';
+          cardEl.style.width = '';
+          placeholder.parentNode.insertBefore(cardEl, placeholder);
+          placeholder.remove();
+
+          var colunaFinalEl = cardEl.closest('.lista-cards');
+          var colunaFinal = colunaFinalEl.getAttribute('data-coluna');
+          var ordemIds = Array.prototype.slice.call(colunaFinalEl.children)
+            .filter(function (el) { return el.classList.contains('card'); })
+            .map(function (el) { return el.getAttribute('data-id'); });
+
+          var id = cardEl.getAttribute('data-id');
+          // Atualiza o cache local na hora (otimista), pra coluna-header
+          // (contador) e um próximo arrasto já refletirem sem esperar o
+          // servidor — se der erro, recarrega do zero pra desfazer.
+          var cardCache = _cards.filter(function (c) { return c.id === id; })[0];
+          if (cardCache) cardCache.coluna = colunaFinal;
+          ordemIds.forEach(function (idCard, indice) {
+            var c = _cards.filter(function (c2) { return c2.id === idCard; })[0];
+            if (c) c.ordem = indice;
+          });
+          renderizarQuadro();
+
+          fetch(KANBAN_EXEC_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+            body: JSON.stringify({ acao: 'mover_card', id: id, coluna: colunaFinal, ordemIds: ordemIds }),
+          })
+            .then(function (r) { return r.json(); })
+            .then(function (resultado) {
+              if (!resultado.ok) throw new Error(resultado.erro || 'Erro desconhecido');
+            })
+            .catch(function (erro) {
+              alert('Não consegui mover o card, desfazendo: ' + erro.message);
+              carregarQuadro();
+            });
+        }
+
+        document.addEventListener('pointermove', aoMover);
+        document.addEventListener('pointerup', aoSoltar);
+        document.addEventListener('pointercancel', aoSoltar);
+      });
+    }
+
+    carregarQuadro();
+  </script>
+</body>
+</html>
