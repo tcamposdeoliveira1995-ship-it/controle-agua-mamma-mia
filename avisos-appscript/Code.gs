@@ -1,10 +1,11 @@
 /**
  * PROJETO ÚNICO: registro de água via Telegram + mural de Avisos +
  * registro de Caminhão Pipa + Higienização de Motores + Kanban de
- * atividades + checklist diário de Rotinas, todos vindos do Painel
- * Qualidade (painel-qualidade-appscript). Moram no mesmo projeto Apps
- * Script porque só existe 1 link (/exec) e 1 doPost por projeto — mesmo
- * motivo que já juntava água+avisos aqui antes. Ver
+ * atividades (com cards diários gerados sozinhos a partir de Rotinas
+ * cadastradas), todos vindos do Painel Qualidade
+ * (painel-qualidade-appscript). Moram no mesmo projeto Apps Script
+ * porque só existe 1 link (/exec) e 1 doPost por projeto — mesmo motivo
+ * que já juntava água+avisos aqui antes. Ver
  * docs/superpowers/specs/2026-09-23-painel-qualidade-pipa-higienizacao-design.md
  * e docs/superpowers/specs/2026-10-01-painel-qualidade-kanban-design.md
  * no repo controle-agua-mamma-mia.
@@ -14,9 +15,10 @@
  * atende Avisos ({acao: "criar"|"editar"|"remover"}), Pipa
  * ({acao: "criar_pipa", ...}), Higienização de Motores
  * ({acao: "criar_higienizacao", ...}), Kanban ({acao: "criar_card"|
- * "editar_card"|"mover_card"|"excluir_card", ...}) e Rotinas
- * ({acao: "criar_rotina"|"editar_rotina"|"excluir_rotina"|
- * "marcar_rotina"|"desmarcar_rotina", ...}).
+ * "editar_card"|"mover_card"|"excluir_card", ...}) e Rotinas — só o
+ * CADASTRO do modelo ({acao: "criar_rotina"|"editar_rotina"|
+ * "excluir_rotina", ...}); o card do dia em si é gerado sozinho dentro
+ * de listarCards(), não por uma ação de doPost.
  *
  * planilhaId aponta pra planilha de água — é onde a aba "Respostas ao
  * formulário 1" (leituras), a aba "AVISOS" (mural) e a aba de Pipa
@@ -562,6 +564,10 @@ function obterAbaKanban() {
 }
 
 function listarCards() {
+  // Garante que os cards de rotina de hoje já existem antes de listar —
+  // ver gerarCardsRotinasDoDia() na seção ROTINAS, mais abaixo.
+  gerarCardsRotinasDoDia();
+
   var aba = obterAbaKanban();
   var mapa = mapaColunas(aba);
   var colId = colunaObrigatoria(mapa, ABA_KANBAN, "ID");
@@ -570,6 +576,9 @@ function listarCards() {
   var colColuna = colunaObrigatoria(mapa, ABA_KANBAN, "COLUNA");
   var colEtiqueta = colunaObrigatoria(mapa, ABA_KANBAN, "ETIQUETA");
   var colOrdem = colunaObrigatoria(mapa, ABA_KANBAN, "ORDEM");
+  // Opcional — ver gerarCardsRotinasDoDia(). Exposto aqui só pra o
+  // front-end marcar visualmente quais cards vieram de uma rotina.
+  var colRotinaId = mapa["ROTINA_ID"];
 
   var dados = aba.getDataRange().getValues();
   var cards = [];
@@ -583,6 +592,7 @@ function listarCards() {
       coluna: (dados[i][colColuna - 1] || "").toString().trim() || KANBAN_COLUNAS[0],
       etiqueta: (dados[i][colEtiqueta - 1] || "").toString().trim(),
       ordem: Number(dados[i][colOrdem - 1]) || 0,
+      rotinaId: colRotinaId ? (dados[i][colRotinaId - 1] || "").toString().trim() : "",
     });
   }
   // Ordenado aqui (não confia só na ordem das linhas na planilha) — o
@@ -738,25 +748,19 @@ function excluirCard(id) {
   }
 }
 
-// ================= ROTINAS (checklist diário, aba do Kanban) =================
-// Duas abas na mesma planilha de água:
-// - ROTINAS: ID | TEXTO | ORDEM | ATIVA | CRIADO_EM — a lista fixa de
-//   atividades recorrentes (ex.: "Leitura da Água", "Refeitório"),
-//   cadastrada pela própria usuária na tela, não por mim no código.
-//   ATIVA=false em vez de apagar a linha (exclusão pela tela é "soft
-//   delete") — preserva o histórico de marcações antigas que apontam
-//   pro ID dessa rotina, mesmo removida da lista.
-// - ROTINA_MARCACOES: ID | ROTINA_ID | DATA | MARCADO_EM — 1 linha por
-//   dia em que uma rotina foi marcada como feita. "Desmarcar tudo de
-//   novo ao virar o dia" não precisa de nenhum job/reset: a tela só
-//   mostra marcada a rotina que tem uma linha aqui com DATA = hoje: no
-//   dia seguinte, sem marcação pra essa data, já nasce desmarcada
-//   sozinha. DATA sempre calculada aqui no servidor (GMT-3), nunca
-//   confiando na data do aparelho de quem usa. Ver
-//   docs/superpowers/specs/2026-10-01-painel-qualidade-rotinas-design.md.
+// ================= ROTINAS (modelo das atividades diárias do Kanban) =================
+// ROTINAS: ID | TEXTO | HORARIO | ORDEM | ATIVA | CRIADO_EM — a lista
+// fixa de atividades recorrentes (ex.: "Leitura da Água", "Refeitório"),
+// cadastrada pela própria usuária na tela, não por mim no código.
+// ATIVA=false em vez de apagar a linha (exclusão pela tela é "soft
+// delete") — preserva o vínculo dos cards já gerados no Kanban (campo
+// ROTINA_ID lá) que apontam pro ID dessa rotina, mesmo removida da
+// lista. Cada rotina ativa é só um MODELO — quem representa "feito
+// hoje" ou não é um card de verdade no Kanban (coluna A Fazer), gerado
+// sozinho todo dia por gerarCardsRotinasDoDia(), logo abaixo. Ver
+// docs/superpowers/specs/2026-10-01-painel-qualidade-rotinas-design.md.
 
 var ABA_ROTINAS = "ROTINAS";
-var ABA_ROTINA_MARCACOES = "ROTINA_MARCACOES";
 
 function obterAbaRotinas() {
   var aba = SpreadsheetApp.openById(getConfig().planilhaId).getSheetByName(ABA_ROTINAS);
@@ -766,19 +770,15 @@ function obterAbaRotinas() {
   return aba;
 }
 
-function obterAbaRotinaMarcacoes() {
-  var aba = SpreadsheetApp.openById(getConfig().planilhaId).getSheetByName(ABA_ROTINA_MARCACOES);
-  if (!aba) {
-    throw new Error('Aba "' + ABA_ROTINA_MARCACOES + '" não foi encontrada na planilha.');
-  }
-  return aba;
-}
-
 function hojeFormatado() {
   return Utilities.formatDate(new Date(), "GMT-3", "dd/MM/yyyy");
 }
 
-function listarRotinas() {
+// Lista as rotinas ativas, já ordenadas (com horário definido primeiro,
+// da mais cedo pra mais tarde; sem horário, no fim, na ordem de
+// criação) — usada tanto por listarRotinas() (tela de cadastro) quanto
+// por gerarCardsRotinasDoDia() (geração dos cards do dia).
+function listarRotinasAtivas() {
   var aba = obterAbaRotinas();
   var mapa = mapaColunas(aba);
   var colId = colunaObrigatoria(mapa, ABA_ROTINAS, "ID");
@@ -803,29 +803,17 @@ function listarRotinas() {
       ordem: Number(dados[i][colOrdem - 1]) || 0,
     });
   }
-  // Com horário definido, ordena por ele (cedo pro tarde); sem horário,
-  // fica no fim da lista, na ordem de criação entre si.
   rotinas.sort(function (a, b) {
     if (a.horario && b.horario) return a.horario.localeCompare(b.horario);
     if (a.horario && !b.horario) return -1;
     if (!a.horario && b.horario) return 1;
     return a.ordem - b.ordem;
   });
+  return rotinas;
+}
 
-  var abaMarcacoes = obterAbaRotinaMarcacoes();
-  var mapaMarcacoes = mapaColunas(abaMarcacoes);
-  var colRotinaId = colunaObrigatoria(mapaMarcacoes, ABA_ROTINA_MARCACOES, "ROTINA_ID");
-  var colData = colunaObrigatoria(mapaMarcacoes, ABA_ROTINA_MARCACOES, "DATA");
-  var hoje = hojeFormatado();
-  var dadosMarcacoes = abaMarcacoes.getDataRange().getValues();
-  var marcadosHoje = [];
-  for (var j = 1; j < dadosMarcacoes.length; j++) {
-    if ((dadosMarcacoes[j][colData - 1] || "").toString().trim() === hoje) {
-      marcadosHoje.push((dadosMarcacoes[j][colRotinaId - 1] || "").toString().trim());
-    }
-  }
-
-  return { ok: true, rotinas: rotinas, marcadosHoje: marcadosHoje };
+function listarRotinas() {
+  return { ok: true, rotinas: listarRotinasAtivas() };
 }
 
 function criarRotina(texto, horario) {
@@ -896,7 +884,9 @@ function editarRotina(id, texto, horario) {
 }
 
 // Exclusão "soft" (ATIVA=false) em vez de apagar a linha — preserva o
-// histórico de ROTINA_MARCACOES, que referencia o ID dessa rotina.
+// vínculo dos cards já gerados no Kanban, que referenciam o ID dessa
+// rotina em ROTINA_ID. Rotina excluída simplesmente para de gerar card
+// novo a partir de amanhã; os cards já existentes continuam intactos.
 function excluirRotina(id) {
   id = (id || "").toString().trim();
   if (!id) throw new Error("Rotina não identificada.");
@@ -922,66 +912,65 @@ function excluirRotina(id) {
   }
 }
 
-// Marcar é idempotente (clicar 2x não cria 2 linhas) — confere se já
-// existe uma marcação pra essa rotina+hoje antes de criar.
-function marcarRotina(rotinaId) {
-  rotinaId = (rotinaId || "").toString().trim();
-  if (!rotinaId) throw new Error("Rotina não identificada.");
+// Garante que toda rotina ativa já tenha o card de HOJE no Kanban
+// (coluna A Fazer) — chamada sempre que o Kanban é aberto (dentro de
+// listarCards(), logo acima), não por nenhum gatilho/trigger agendado:
+// assim não depende de configurar nada à parte, nem do script
+// "acordar" sozinho um dia que a usuária não abrir o painel. Se o card
+// de ontem de uma rotina não foi movido pra Concluído, ele continua
+// aberto, parado — hoje ganha o seu próprio card novo mesmo assim
+// (decisão explícita: não tenta "esperar" o de ontem terminar pra
+// criar o de hoje, senão uma rotina atrasada um dia travaria de
+// aparecer nos dias seguintes). ROTINA_ID/DATA_ROTINA são colunas
+// opcionais no KANBAN — sem elas, esta função simplesmente não faz
+// nada (ainda não dá pra saber se já existe o card de hoje de forma
+// confiável), sem derrubar o resto do Kanban.
+function gerarCardsRotinasDoDia() {
+  var rotinas = listarRotinasAtivas();
+  if (!rotinas.length) return;
 
   var lock = LockService.getScriptLock();
   lock.waitLock(30000);
   try {
-    var aba = obterAbaRotinaMarcacoes();
+    var aba = obterAbaKanban();
     var mapa = mapaColunas(aba);
-    var colId = colunaObrigatoria(mapa, ABA_ROTINA_MARCACOES, "ID");
-    var colRotinaId = colunaObrigatoria(mapa, ABA_ROTINA_MARCACOES, "ROTINA_ID");
-    var colData = colunaObrigatoria(mapa, ABA_ROTINA_MARCACOES, "DATA");
-    var colMarcado = mapa["MARCADO_EM"];
-    var hoje = hojeFormatado();
+    var colRotinaId = mapa["ROTINA_ID"];
+    var colDataRotina = mapa["DATA_ROTINA"];
+    if (!colRotinaId || !colDataRotina) return;
 
+    var colId = colunaObrigatoria(mapa, ABA_KANBAN, "ID");
+    var colTitulo = colunaObrigatoria(mapa, ABA_KANBAN, "TITULO");
+    var colColuna = colunaObrigatoria(mapa, ABA_KANBAN, "COLUNA");
+    var colOrdem = colunaObrigatoria(mapa, ABA_KANBAN, "ORDEM");
+    var colCriado = mapa["CRIADO_EM"];
+
+    var hoje = hojeFormatado();
     var dados = aba.getDataRange().getValues();
+
+    var jaTemHoje = {};
+    var maiorOrdemAFazer = -1;
     for (var i = 1; i < dados.length; i++) {
-      if ((dados[i][colRotinaId - 1] || "").toString().trim() === rotinaId &&
-          (dados[i][colData - 1] || "").toString().trim() === hoje) {
-        return { ok: true }; // já marcada hoje, não duplica
+      var rotinaIdLinha = (dados[i][colRotinaId - 1] || "").toString().trim();
+      var dataLinha = (dados[i][colDataRotina - 1] || "").toString().trim();
+      if (rotinaIdLinha && dataLinha === hoje) jaTemHoje[rotinaIdLinha] = true;
+      if ((dados[i][colColuna - 1] || "").toString().trim() === KANBAN_COLUNAS[0]) {
+        maiorOrdemAFazer = Math.max(maiorOrdemAFazer, Number(dados[i][colOrdem - 1]) || 0);
       }
     }
 
-    var linha = new Array(aba.getLastColumn()).fill("");
-    linha[colId - 1] = Utilities.getUuid();
-    linha[colRotinaId - 1] = rotinaId;
-    linha[colData - 1] = hoje;
-    if (colMarcado) linha[colMarcado - 1] = new Date();
-    aba.appendRow(linha);
-
-    return { ok: true };
-  } finally {
-    lock.releaseLock();
-  }
-}
-
-function desmarcarRotina(rotinaId) {
-  rotinaId = (rotinaId || "").toString().trim();
-  if (!rotinaId) throw new Error("Rotina não identificada.");
-
-  var lock = LockService.getScriptLock();
-  lock.waitLock(30000);
-  try {
-    var aba = obterAbaRotinaMarcacoes();
-    var mapa = mapaColunas(aba);
-    var colRotinaId = colunaObrigatoria(mapa, ABA_ROTINA_MARCACOES, "ROTINA_ID");
-    var colData = colunaObrigatoria(mapa, ABA_ROTINA_MARCACOES, "DATA");
-    var hoje = hojeFormatado();
-
-    var dados = aba.getDataRange().getValues();
-    for (var i = dados.length - 1; i >= 1; i--) {
-      if ((dados[i][colRotinaId - 1] || "").toString().trim() === rotinaId &&
-          (dados[i][colData - 1] || "").toString().trim() === hoje) {
-        aba.deleteRow(i + 1);
-        return { ok: true };
-      }
-    }
-    return { ok: true }; // já não estava marcada — nada a fazer, não é erro
+    rotinas.forEach(function (rotina) {
+      if (jaTemHoje[rotina.id]) return;
+      maiorOrdemAFazer++;
+      var linha = new Array(aba.getLastColumn()).fill("");
+      linha[colId - 1] = Utilities.getUuid();
+      linha[colTitulo - 1] = rotina.texto;
+      linha[colColuna - 1] = KANBAN_COLUNAS[0];
+      linha[colOrdem - 1] = maiorOrdemAFazer;
+      linha[colRotinaId - 1] = rotina.id;
+      linha[colDataRotina - 1] = hoje;
+      if (colCriado) linha[colCriado - 1] = new Date();
+      aba.appendRow(linha);
+    });
   } finally {
     lock.releaseLock();
   }
@@ -1110,8 +1099,9 @@ function doGet(e) {
  * relInicio, relFim, recibo}), Higienização de Motores
  * ({acao: "criar_higienizacao", dataHigienizacao, responsavel, unidade}),
  * Kanban ({acao: "criar_card"|"editar_card"|"excluir_card"|"mover_card",
- * ...}) e Rotinas ({acao: "criar_rotina"|"editar_rotina"|
- * "excluir_rotina"|"marcar_rotina"|"desmarcar_rotina", ...}).
+ * ...}) e o CADASTRO de Rotinas ({acao: "criar_rotina"|"editar_rotina"|
+ * "excluir_rotina", ...}) — o card do dia em si é gerado sozinho dentro
+ * de listarCards() (doGet), não por uma ação aqui.
  */
 function doPost(e) {
   var dados = JSON.parse(e.postData.contents);
@@ -1129,8 +1119,6 @@ function doPost(e) {
     if (dados.acao === "criar_rotina") return respostaJson(criarRotina(dados.texto, dados.horario));
     if (dados.acao === "editar_rotina") return respostaJson(editarRotina(dados.id, dados.texto, dados.horario));
     if (dados.acao === "excluir_rotina") return respostaJson(excluirRotina(dados.id));
-    if (dados.acao === "marcar_rotina") return respostaJson(marcarRotina(dados.id));
-    if (dados.acao === "desmarcar_rotina") return respostaJson(desmarcarRotina(dados.id));
     throw new Error("Ação inválida: " + dados.acao);
   } catch (erro) {
     return respostaJson({ ok: false, erro: erro.message });

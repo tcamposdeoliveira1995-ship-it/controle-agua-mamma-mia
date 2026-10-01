@@ -66,22 +66,27 @@
  *    cole o conteúdo de Kanban.html nele — quadro de atividades com 3
  *    colunas fixas (A Fazer / Em Andamento / Concluído), arrastar e
  *    soltar entre colunas, criar/editar/excluir card com etiqueta
- *    colorida, MAIS uma 2ª aba na própria tela ("Checklist Diário") com
- *    uma lista fixa de rotinas (cadastrada pela usuária, com caixinha de
- *    marcar que desmarca sozinha todo dia). Também usa o mesmo backend
- *    do mural de Avisos (ações novas criar_card/editar_card/mover_card/
- *    excluir_card/criar_rotina/editar_rotina/excluir_rotina/
- *    marcar_rotina/desmarcar_rotina) — IMPORTANTE: precisa criar TRÊS
- *    abas novas na planilha de água (mesma planilha onde já tem a aba
- *    AVISOS), com a linha 1 (cabeçalho) exatamente:
+ *    colorida, MAIS uma 2ª aba na própria tela ("🔁 Rotinas") pra
+ *    cadastrar atividades recorrentes (ex.: "Leitura da Água") — cada
+ *    rotina ativa gera SOZINHA um card novo (🔁) todo dia na coluna "A
+ *    Fazer" do Quadro, sem precisar abrir nenhum checklist à parte; dar
+ *    baixa é simplesmente arrastar esse card até "Concluído", como
+ *    qualquer outro. Também usa o mesmo backend do mural de Avisos
+ *    (ações novas criar_card/editar_card/mover_card/excluir_card/
+ *    criar_rotina/editar_rotina/excluir_rotina) — IMPORTANTE: precisa
+ *    criar/ajustar DUAS abas na planilha de água (mesma planilha onde já
+ *    tem a aba AVISOS), com a linha 1 (cabeçalho) exatamente:
  *      - "KANBAN": ID | TITULO | DESCRICAO | COLUNA | ETIQUETA | ORDEM |
- *        CRIADO_EM | ATUALIZADO_EM
+ *        CRIADO_EM | ATUALIZADO_EM | ROTINA_ID | DATA_ROTINA
+ *        (ROTINA_ID/DATA_ROTINA são as 2 colunas novas que permitem os
+ *        cards de rotina serem gerados sozinhos — se a aba KANBAN já
+ *        existir de uma instalação anterior sem elas, só adicionar as
+ *        duas no cabeçalho, em qualquer posição, já é suficiente)
  *      - "ROTINAS": ID | TEXTO | HORARIO | ORDEM | ATIVA | CRIADO_EM
- *        (HORARIO é opcional — se a aba ROTINAS já existir de uma
- *        instalação anterior sem essa coluna, só adicionar "HORARIO" no
- *        cabeçalho em qualquer posição já é suficiente, não precisa
- *        recriar a aba)
- *      - "ROTINA_MARCACOES": ID | ROTINA_ID | DATA | MARCADO_EM
+ *        (HORARIO é opcional — mesma lógica acima)
+ *    Se a aba "ROTINA_MARCACOES" existir de uma instalação anterior
+ *    (checklist com caixinha de marcar, substituído por este sistema),
+ *    pode ser apagada — não é mais usada.
  *    Já vem com o link "‹ Menu" preenchido.
  * 6) Implantar > Nova implantação > tipo "App da Web":
  *      - Executar como: Eu (sua conta)

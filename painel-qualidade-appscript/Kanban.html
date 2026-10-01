@@ -202,6 +202,7 @@
     .btn-excluir-card { background: none; color: var(--red); font-weight: 600; text-decoration: underline; margin-top: 0.9rem; border: none; cursor: pointer; font-size: 0.82rem; padding: 0; }
 
     .rotinas { padding: 1rem; max-width: 480px; margin: 0 auto; }
+    .rotinas-dica { font-size: 0.8rem; color: var(--text-muted); line-height: 1.5; margin: 0 0 1rem; text-align: center; }
     .rotinas-lista { background: var(--card-bg); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
     .rotina-item {
       display: flex;
@@ -211,16 +212,8 @@
       border-bottom: 1px solid var(--border);
     }
     .rotina-item:last-child { border-bottom: none; }
-    .rotina-checkbox {
-      width: 1.4rem;
-      height: 1.4rem;
-      flex-shrink: 0;
-      accent-color: var(--green);
-      cursor: pointer;
-    }
     .rotina-texto { flex: 1; font-size: 0.92rem; line-height: 1.35; }
     .rotina-horario { font-weight: 700; color: var(--gold); }
-    .rotina-item.marcada .rotina-texto { color: var(--text-muted); text-decoration: line-through; }
     .rotina-acoes { display: flex; gap: 0.5rem; }
     .rotina-btn { background: none; border: none; cursor: pointer; padding: 0; color: var(--text-muted); font-size: 0.88rem; }
     .rotina-btn:active { opacity: 0.6; }
@@ -248,7 +241,7 @@
 
   <div class="abas">
     <button class="aba-btn ativa" id="aba-quadro" data-aba="quadro">📋 Quadro</button>
-    <button class="aba-btn" id="aba-rotinas" data-aba="rotinas">✅ Checklist Diário</button>
+    <button class="aba-btn" id="aba-rotinas" data-aba="rotinas">🔁 Rotinas</button>
   </div>
 
   <div class="estado-carregando" id="tela-carregando">Carregando…</div>
@@ -259,7 +252,9 @@
     // Mesmo backend do mural de Avisos (avisos-appscript) — ganhou ações
     // novas (criar_card/editar_card/mover_card/excluir_card) pra não
     // precisar de outro projeto/implantação. Ver
-    // docs/superpowers/specs/2026-10-01-painel-qualidade-kanban-design.md.
+    // docs/superpowers/specs/2026-10-01-painel-qualidade-kanban-design.md
+    // e docs/superpowers/specs/2026-10-01-painel-qualidade-rotinas-design.md
+    // (rotina gerando card sozinha todo dia, sem checklist separado).
     var KANBAN_EXEC_URL = 'https://script.google.com/macros/s/AKfycbzHvvPZzBDSB730gShVCl7CPQb23h37w8k8B-cY8n1RI-NkBJzp0eUP5m-rbtj3nGdwpw/exec';
 
     var COLUNAS = ['A Fazer', 'Em Andamento', 'Concluído'];
@@ -274,7 +269,6 @@
 
     var _cards = [];
     var _rotinas = [];
-    var _marcadosHoje = [];
     var _abaAtiva = 'quadro';
 
     function escaparHtml(texto) {
@@ -301,7 +295,12 @@
     document.getElementById('aba-quadro').addEventListener('click', function () { trocarAba('quadro'); });
     document.getElementById('aba-rotinas').addEventListener('click', function () { trocarAba('rotinas'); });
 
-    // ---------- Carga inicial (Quadro + Checklist Diário juntos) ----------
+    // ---------- Carga inicial (Quadro + Rotinas juntos) ----------
+    // O GET ?dados=kanban já garante sozinho (no servidor) que o card de
+    // hoje de cada rotina ativa existe antes de devolver a lista — ver
+    // gerarCardsRotinasDoDia() no Code.gs. Por isso abrir essa tela já
+    // basta pra "atualizar" o quadro com as rotinas do dia, sem
+    // precisar de nenhuma ação manual.
 
     function carregarQuadro() {
       Promise.all([
@@ -322,7 +321,6 @@
 
           _cards = resultadoKanban.cards || [];
           _rotinas = resultadoRotinas.rotinas || [];
-          _marcadosHoje = resultadoRotinas.marcadosHoje || [];
 
           document.getElementById('tela-carregando').style.display = 'none';
           trocarAba(_abaAtiva);
@@ -340,7 +338,7 @@
       return (
         '<div class="card" data-id="' + card.id + '">' +
           (cor ? '<div class="card-etiqueta" style="background:' + cor + ';"></div>' : '') +
-          '<div class="card-titulo">' + escaparHtml(card.titulo) + '</div>' +
+          '<div class="card-titulo">' + (card.rotinaId ? '🔁 ' : '') + escaparHtml(card.titulo) + '</div>' +
           (card.descricao ? '<div class="card-descricao">' + escaparHtml(card.descricao) + '</div>' : '') +
           '<div class="card-acoes">' +
             '<button class="card-btn" data-acao="editar" title="Editar">✏️</button>' +
@@ -385,18 +383,17 @@
       });
     }
 
-    // ---------- Checklist Diário (Rotinas) ----------
-    // Lista fixa cadastrada pela própria usuária (não por mim no código).
-    // "Desmarcar tudo de novo ao virar o dia" não precisa de nenhum reset
-    // manual: o servidor só manda em marcadosHoje os IDs com uma marcação
-    // de HOJE (calculado lá, GMT-3) — amanhã, sem marcação pra essa data
-    // nova, já volta desmarcado sozinho (ver comentário no Code.gs).
+    // ---------- Rotinas (cadastro do modelo) ----------
+    // Essa aba é só o CADASTRO — criar, editar, excluir a lista de
+    // rotinas (o "molde"). O "feito hoje ou não" de cada uma não é
+    // controlado aqui: é o card 🔁 correspondente no Quadro, gerado
+    // sozinho todo dia pelo servidor (gerarCardsRotinasDoDia() no
+    // Code.gs, chamada dentro de listarCards()) — arrastar esse card até
+    // "Concluído" é como se marca uma rotina como feita agora.
 
     function rotinaHtml(rotina) {
-      var marcada = _marcadosHoje.indexOf(rotina.id) !== -1;
       return (
-        '<div class="rotina-item' + (marcada ? ' marcada' : '') + '" data-id="' + rotina.id + '">' +
-          '<input type="checkbox" class="rotina-checkbox"' + (marcada ? ' checked' : '') + '>' +
+        '<div class="rotina-item" data-id="' + rotina.id + '">' +
           '<div class="rotina-texto">' +
             (rotina.horario ? '<span class="rotina-horario">' + escaparHtml(rotina.horario) + '</span> · ' : '') +
             escaparHtml(rotina.texto) +
@@ -412,6 +409,7 @@
     function renderizarRotinas() {
       var container = document.getElementById('rotinas');
       container.innerHTML =
+        '<p class="rotinas-dica">Toda rotina cadastrada aqui vira um card 🔁 sozinho, todo dia, na coluna "A Fazer" do Quadro.</p>' +
         '<div class="rotinas-lista">' +
           (_rotinas.length
             ? _rotinas.map(rotinaHtml).join('')
@@ -421,37 +419,11 @@
 
       container.querySelectorAll('.rotina-item').forEach(function (el) {
         var id = el.getAttribute('data-id');
-        el.querySelector('.rotina-checkbox').addEventListener('change', function (ev) {
-          alternarRotina(id, ev.target.checked);
-        });
         el.querySelector('[data-acao="editar"]').addEventListener('click', function () { abrirModalRotina(id); });
         el.querySelector('[data-acao="excluir"]').addEventListener('click', function () { excluirRotinaUI(id); });
       });
 
       document.getElementById('btn-nova-rotina').addEventListener('click', function () { abrirModalRotina(null); });
-    }
-
-    function alternarRotina(id, marcar) {
-      // Otimista: atualiza a tela na hora, sem esperar o servidor — se
-      // der erro, desfaz recarregando tudo do zero (mesmo padrão já
-      // usado no arrastar-e-soltar do quadro).
-      if (marcar && _marcadosHoje.indexOf(id) === -1) _marcadosHoje.push(id);
-      if (!marcar) _marcadosHoje = _marcadosHoje.filter(function (m) { return m !== id; });
-      renderizarRotinas();
-
-      fetch(KANBAN_EXEC_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-        body: JSON.stringify({ acao: marcar ? 'marcar_rotina' : 'desmarcar_rotina', id: id }),
-      })
-        .then(function (r) { return r.json(); })
-        .then(function (resultado) {
-          if (!resultado.ok) throw new Error(resultado.erro || 'Erro desconhecido');
-        })
-        .catch(function (erro) {
-          alert('Não consegui salvar, desfazendo: ' + erro.message);
-          carregarQuadro();
-        });
     }
 
     function abrirModalRotina(id) {

@@ -1,8 +1,11 @@
-# Painel Qualidade — Checklist Diário (Rotinas), aba dentro do Kanban
+# Painel Qualidade — Rotinas gerando card diário no Kanban
 
 **Data:** 2026-10-01
-**Status:** Implementado e validado em produção (testado pela usuária em 01/10/2026; horário por rotina
-adicionado no mesmo dia, ver seção no fim do documento)
+**Status:** Implementado, aguardando teste em produção. **ATENÇÃO:** o desenho original deste documento
+(checklist com caixinha de marcar, abaixo) foi SUBSTITUÍDO no mesmo dia — ver a seção "Correção/complemento
+— Rotina vira card no Kanban" no fim, que é a versão que está valendo. O corpo do documento foi mantido
+pra contexto histórico (por que a 1ª versão foi desenhada daquele jeito), mas não reflete mais o código
+atual sozinho — leia a correção também.
 
 ## Contexto
 
@@ -111,3 +114,65 @@ descartado por enquanto.
 Na aba ROTINAS já criada, adicionar a coluna **HORARIO** no cabeçalho (qualquer posição — a leitura é por
 nome da coluna, não pela posição). Não precisa recriar a aba nem preencher horário em rotinas já
 cadastradas (ficam sem horário até serem editadas).
+
+## Correção/complemento — Rotina vira card no Kanban (01/10/2026, mesmo dia)
+
+Depois de testar o checklist com caixinha, a usuária pediu outra coisa: "Quero que esse checklist apareça
+no Kanban. Como não dei baixa em nada, eles estão parados, lá entende. Quando eu cadastrar rotina, ela
+diariamente vai para o Kanban sem eu precisar ficar olhando checklist." Esclarecido por perguntas:
+
+- **O checklist (caixinha de marcar) sai** — substituído completamente pelos cards do Kanban. Não ficam os
+  dois juntos.
+- **Se o card de ontem de uma rotina não foi movido pra "Concluído"**, hoje ganha um card novo mesmo assim
+  (o de ontem continua lá, parado, como lembrete do que ficou pra trás — não trava a rotina de aparecer
+  nos dias seguintes).
+
+### O que muda na arquitetura
+
+- **ROTINAS continua existindo**, mas muda de papel: deixa de ser "a lista que a usuária marca" e vira só o
+  **molde** (texto, horário, ordem, ativa) — de onde um card de verdade é gerado todo dia.
+- **ROTINA_MARCACOES é removida.** Não existe mais "marcar"/"desmarcar" — o estado de "feito" passa a ser o
+  próprio card estar (ou não) na coluna "Concluído" do Kanban, igual qualquer outro card. As funções
+  `marcarRotina`/`desmarcarRotina`/`obterAbaRotinaMarcacoes` foram apagadas do `Code.gs` (não só
+  desativadas) — código morto não fica pra trás.
+- **KANBAN ganha 2 colunas novas, opcionais**: `ROTINA_ID` (qual rotina gerou esse card — vazio pra card
+  criado manualmente) e `DATA_ROTINA` (o dia — `dd/MM/yyyy` — pro qual esse card de rotina é). É esse par
+  que permite checar "a rotina X já tem card de hoje?" sem duplicar.
+- **Nenhum gatilho/trigger agendado.** Em vez de uma function rodando sozinha à meia-noite (mais
+  configuração manual pra usuária, mais um ponto de falha se o Apps Script não acordar), a geração roda
+  **dentro de `listarCards()`**, chamada toda vez que a aba Quadro é aberta: `gerarCardsRotinasDoDia()`
+  olha as rotinas ativas, verifica quais já têm card com `DATA_ROTINA = hoje`, e cria o que faltar — direto
+  na coluna "A Fazer", no fim da lista (`ORDEM` = maior já usada em "A Fazer" + 1). Idempotente: abrir a
+  tela 10 vezes no mesmo dia não gera 10 cards.
+- **ROTINA_ID/DATA_ROTINA são opcionais** (mesmo padrão de todas as colunas novas deste projeto): se
+  qualquer uma não existir ainda na planilha, `gerarCardsRotinasDoDia()` simplesmente não faz nada — o
+  Kanban continua funcionando normalmente pra cards manuais, só sem os cards de rotina até a coluna ser
+  criada.
+
+### Frontend
+
+- A aba (antes "✅ Checklist Diário") vira **"🔁 Rotinas"** — só cadastro (criar/editar/excluir o molde,
+  com horário opcional), sem caixinha de marcar nenhuma.
+- Um aviso fixo no topo dessa aba explica o novo comportamento: *"Toda rotina cadastrada aqui vira um card
+  🔁 sozinho, todo dia, na coluna 'A Fazer' do Quadro."*
+- No Quadro, um card gerado a partir de rotina é identificado com um emoji 🔁 antes do título (ex.: "🔁
+  Leitura da Água"), pra diferenciar de cards criados manualmente — sem precisar abrir o card pra saber a
+  origem.
+
+### Por que não precisa mais da seção "Como o reset diário funciona" do corpo original
+
+Aquela lógica (marcação por data, sem job de reset) resolvia "desmarcar sozinho a caixinha". Esse
+problema nem existe mais: não há caixinha. O card de hoje simplesmente nasce na coluna "A Fazer" — "ainda
+não feito" É o estado em que ele nasce, não algo que precisa ser resetado.
+
+### Passos manuais pra usuária (substituem os do corpo original)
+
+1. Na aba **KANBAN** já existente, adicionar 2 colunas no cabeçalho: **ROTINA_ID** e **DATA_ROTINA**
+   (qualquer posição).
+2. Se a aba **ROTINA_MARCACOES** existir (da instalação anterior, mesmo dia), pode apagar — não é mais
+   usada por nada.
+3. Colar `Code.gs` do `avisos-appscript` por cima do existente e reimplantar.
+4. Colar `Kanban.html` e `Code.gs` do Painel Qualidade por cima dos existentes e reimplantar.
+5. Abrir a aba "🔁 Rotinas" — as rotinas já cadastradas continuam lá (só perderam a marcação de hoje, que
+   não existe mais); abrir a aba "📋 Quadro" já deve mostrar um card novo pra cada uma, na coluna "A
+   Fazer".
