@@ -67,12 +67,19 @@
     .coluna {
       background: rgba(0,0,0,0.025);
       border: 1px solid var(--border);
+      border-top: 4px solid var(--border);
       border-radius: 12px;
       padding: 0.7rem;
       width: 260px;
       min-width: 260px;
       flex-shrink: 0;
     }
+    /* Cores por coluna (pedido da usuária): A Fazer laranja, Em
+       Andamento amarelo, Concluído verde — mesmos tons já usados nas
+       etiquetas dos cards, pra manter 1 paleta só no Kanban. */
+    .coluna-a-fazer { border-top-color: #d6aa5f; }
+    .coluna-em-andamento { border-top-color: #e0c468; }
+    .coluna-concluido { border-top-color: #8f9b72; }
     .coluna-header {
       display: flex;
       justify-content: space-between;
@@ -348,12 +355,19 @@
       );
     }
 
+    function classeDaColuna(coluna) {
+      if (coluna === 'A Fazer') return 'coluna-a-fazer';
+      if (coluna === 'Em Andamento') return 'coluna-em-andamento';
+      if (coluna === 'Concluído') return 'coluna-concluido';
+      return '';
+    }
+
     function renderizarQuadro() {
       var quadro = document.getElementById('quadro');
       quadro.innerHTML = COLUNAS.map(function (coluna) {
         var cardsDaColuna = _cards.filter(function (c) { return c.coluna === coluna; });
         return (
-          '<div class="coluna" data-coluna="' + coluna + '">' +
+          '<div class="coluna ' + classeDaColuna(coluna) + '" data-coluna="' + coluna + '">' +
             '<div class="coluna-header">' +
               '<div class="coluna-titulo">' + coluna + '</div>' +
               '<div class="coluna-contador">' + cardsDaColuna.length + '</div>' +
