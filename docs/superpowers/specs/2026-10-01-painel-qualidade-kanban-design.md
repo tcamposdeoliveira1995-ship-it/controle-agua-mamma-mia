@@ -1,7 +1,8 @@
 # Painel Qualidade — Kanban de Atividades
 
 **Data:** 2026-10-01
-**Status:** Implementado, aguardando teste em produção
+**Status:** Implementado e validado em produção (testado pela usuária em 01/10/2026, arrastar e soltar,
+criar/editar/excluir card, tudo funcionando)
 
 ## Contexto
 
