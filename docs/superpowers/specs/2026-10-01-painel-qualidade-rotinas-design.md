@@ -1,7 +1,8 @@
 # Painel Qualidade — Rotinas gerando card diário no Kanban
 
 **Data:** 2026-10-01
-**Status:** Implementado, aguardando teste em produção. **ATENÇÃO:** o desenho original deste documento
+**Status:** Implementado e validado em produção (testado pela usuária em 02/10/2026, incluindo o bug de
+duplicação corrigido no mesmo dia — ver seção no fim). **ATENÇÃO:** o desenho original deste documento
 (checklist com caixinha de marcar, abaixo) foi SUBSTITUÍDO no mesmo dia — ver a seção "Correção/complemento
 — Rotina vira card no Kanban" no fim, que é a versão que está valendo. O corpo do documento foi mantido
 pra contexto histórico (por que a 1ª versão foi desenhada daquele jeito), mas não reflete mais o código
