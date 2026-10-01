@@ -1,7 +1,8 @@
 # Painel Qualidade — Checklist Diário (Rotinas), aba dentro do Kanban
 
 **Data:** 2026-10-01
-**Status:** Implementado, aguardando teste em produção
+**Status:** Implementado e validado em produção (testado pela usuária em 01/10/2026; horário por rotina
+adicionado no mesmo dia, ver seção no fim do documento)
 
 ## Contexto
 
@@ -88,3 +89,25 @@ já traz lista + estado de hoje junto, sem precisar de 2 requisições.
    `Code.gs` do Painel Qualidade por cima do existente (só comentário atualizado, nenhuma rota nova) e
    reimplantar.
 4. Abrir a aba "✅ Checklist Diário" e cadastrar as rotinas (ex.: Leitura da Água, Refeitório).
+
+## Correção/complemento — Horário por rotina (01/10/2026)
+
+Depois de validado, a usuária pediu "quero definir horário" pra cada rotina. Esclarecido: só informativo
+(ordenar a lista), sem alerta/notificação na hora certa — diferente do alerta sonoro de OS nova já usado
+em `manutencao-appsscript/Menu.html`, que exige a tela aberta no navegador pra funcionar; um alerta por
+horário teria a mesma limitação (não dispara se a tela não estiver aberta naquele minuto exato), então foi
+descartado por enquanto.
+
+- **Nova coluna opcional `HORARIO`** na aba ROTINAS (formato `HH:MM`, ex.: `08:00`) — opcional de verdade:
+  se a coluna não existir na planilha, o backend não quebra, só trata toda rotina como sem horário (mesmo
+  padrão de coluna opcional já usado em `main.js` pra `KG_CRU`/`INGREDIENTE`).
+- **Ordenação**: rotinas COM horário vêm primeiro, da mais cedo pra mais tarde; rotinas SEM horário ficam
+  no fim, na ordem em que foram criadas entre si.
+- Campo `<input type="time">` no modal de criar/editar rotina — mesmo estilo visual dos outros campos.
+- Na lista, o horário aparece em destaque (cor dourada) antes do nome: "**08:00** · Leitura da Água".
+
+### Passo manual adicional
+
+Na aba ROTINAS já criada, adicionar a coluna **HORARIO** no cabeçalho (qualquer posição — a leitura é por
+nome da coluna, não pela posição). Não precisa recriar a aba nem preencher horário em rotinas já
+cadastradas (ficam sem horário até serem editadas).

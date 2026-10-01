@@ -76,7 +76,11 @@
  *    AVISOS), com a linha 1 (cabeçalho) exatamente:
  *      - "KANBAN": ID | TITULO | DESCRICAO | COLUNA | ETIQUETA | ORDEM |
  *        CRIADO_EM | ATUALIZADO_EM
- *      - "ROTINAS": ID | TEXTO | ORDEM | ATIVA | CRIADO_EM
+ *      - "ROTINAS": ID | TEXTO | HORARIO | ORDEM | ATIVA | CRIADO_EM
+ *        (HORARIO é opcional — se a aba ROTINAS já existir de uma
+ *        instalação anterior sem essa coluna, só adicionar "HORARIO" no
+ *        cabeçalho em qualquer posição já é suficiente, não precisa
+ *        recriar a aba)
  *      - "ROTINA_MARCACOES": ID | ROTINA_ID | DATA | MARCADO_EM
  *    Já vem com o link "‹ Menu" preenchido.
  * 6) Implantar > Nova implantação > tipo "App da Web":

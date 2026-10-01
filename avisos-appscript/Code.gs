@@ -785,6 +785,10 @@ function listarRotinas() {
   var colTexto = colunaObrigatoria(mapa, ABA_ROTINAS, "TEXTO");
   var colOrdem = colunaObrigatoria(mapa, ABA_ROTINAS, "ORDEM");
   var colAtiva = colunaObrigatoria(mapa, ABA_ROTINAS, "ATIVA");
+  // Opcional — só existe depois que a coluna HORARIO for criada na
+  // planilha (ver install-instructions do Code.gs do Painel Qualidade).
+  // Sem ela, toda rotina entra sem horário, sem quebrar nada.
+  var colHorario = mapa["HORARIO"];
 
   var dados = aba.getDataRange().getValues();
   var rotinas = [];
@@ -795,10 +799,18 @@ function listarRotinas() {
     rotinas.push({
       id: (dados[i][colId - 1] || "").toString().trim(),
       texto: texto,
+      horario: colHorario ? (dados[i][colHorario - 1] || "").toString().trim() : "",
       ordem: Number(dados[i][colOrdem - 1]) || 0,
     });
   }
-  rotinas.sort(function (a, b) { return a.ordem - b.ordem; });
+  // Com horário definido, ordena por ele (cedo pro tarde); sem horário,
+  // fica no fim da lista, na ordem de criação entre si.
+  rotinas.sort(function (a, b) {
+    if (a.horario && b.horario) return a.horario.localeCompare(b.horario);
+    if (a.horario && !b.horario) return -1;
+    if (!a.horario && b.horario) return 1;
+    return a.ordem - b.ordem;
+  });
 
   var abaMarcacoes = obterAbaRotinaMarcacoes();
   var mapaMarcacoes = mapaColunas(abaMarcacoes);
@@ -816,7 +828,7 @@ function listarRotinas() {
   return { ok: true, rotinas: rotinas, marcadosHoje: marcadosHoje };
 }
 
-function criarRotina(texto) {
+function criarRotina(texto, horario) {
   texto = (texto || "").toString().trim();
   if (!texto) throw new Error("Digite o nome da rotina.");
 
@@ -830,6 +842,7 @@ function criarRotina(texto) {
     var colOrdem = colunaObrigatoria(mapa, ABA_ROTINAS, "ORDEM");
     var colAtiva = colunaObrigatoria(mapa, ABA_ROTINAS, "ATIVA");
     var colCriado = mapa["CRIADO_EM"];
+    var colHorario = mapa["HORARIO"];
 
     var dados = aba.getDataRange().getValues();
     var maiorOrdem = -1;
@@ -844,6 +857,7 @@ function criarRotina(texto) {
     linha[colOrdem - 1] = maiorOrdem + 1;
     linha[colAtiva - 1] = true;
     if (colCriado) linha[colCriado - 1] = new Date();
+    if (colHorario) linha[colHorario - 1] = (horario || "").toString().trim();
     aba.appendRow(linha);
 
     return { ok: true, id: id };
@@ -852,7 +866,7 @@ function criarRotina(texto) {
   }
 }
 
-function editarRotina(id, texto) {
+function editarRotina(id, texto, horario) {
   id = (id || "").toString().trim();
   texto = (texto || "").toString().trim();
   if (!id) throw new Error("Rotina não identificada.");
@@ -865,11 +879,13 @@ function editarRotina(id, texto) {
     var mapa = mapaColunas(aba);
     var colId = colunaObrigatoria(mapa, ABA_ROTINAS, "ID");
     var colTexto = colunaObrigatoria(mapa, ABA_ROTINAS, "TEXTO");
+    var colHorario = mapa["HORARIO"];
 
     var dados = aba.getDataRange().getValues();
     for (var i = 1; i < dados.length; i++) {
       if ((dados[i][colId - 1] || "").toString().trim() === id) {
         aba.getRange(i + 1, colTexto).setValue(texto);
+        if (colHorario) aba.getRange(i + 1, colHorario).setValue((horario || "").toString().trim());
         return { ok: true };
       }
     }
@@ -1110,8 +1126,8 @@ function doPost(e) {
     if (dados.acao === "editar_card") return respostaJson(editarCard(dados.id, dados.titulo, dados.descricao, dados.etiqueta));
     if (dados.acao === "mover_card") return respostaJson(moverCard(dados.id, dados.coluna, dados.ordemIds));
     if (dados.acao === "excluir_card") return respostaJson(excluirCard(dados.id));
-    if (dados.acao === "criar_rotina") return respostaJson(criarRotina(dados.texto));
-    if (dados.acao === "editar_rotina") return respostaJson(editarRotina(dados.id, dados.texto));
+    if (dados.acao === "criar_rotina") return respostaJson(criarRotina(dados.texto, dados.horario));
+    if (dados.acao === "editar_rotina") return respostaJson(editarRotina(dados.id, dados.texto, dados.horario));
     if (dados.acao === "excluir_rotina") return respostaJson(excluirRotina(dados.id));
     if (dados.acao === "marcar_rotina") return respostaJson(marcarRotina(dados.id));
     if (dados.acao === "desmarcar_rotina") return respostaJson(desmarcarRotina(dados.id));

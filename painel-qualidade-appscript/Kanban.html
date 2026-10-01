@@ -171,7 +171,7 @@
     }
     .modal h2 { margin: 0 0 0.9rem; font-size: 1rem; }
     .modal label { display: block; font-size: 0.78rem; font-weight: 700; color: var(--text-muted); margin: 0.7rem 0 0.3rem; }
-    .modal input[type="text"], .modal textarea {
+    .modal input[type="text"], .modal input[type="time"], .modal textarea {
       width: 100%;
       font-family: inherit;
       font-size: 0.9rem;
@@ -219,6 +219,7 @@
       cursor: pointer;
     }
     .rotina-texto { flex: 1; font-size: 0.92rem; line-height: 1.35; }
+    .rotina-horario { font-weight: 700; color: var(--gold); }
     .rotina-item.marcada .rotina-texto { color: var(--text-muted); text-decoration: line-through; }
     .rotina-acoes { display: flex; gap: 0.5rem; }
     .rotina-btn { background: none; border: none; cursor: pointer; padding: 0; color: var(--text-muted); font-size: 0.88rem; }
@@ -396,7 +397,10 @@
       return (
         '<div class="rotina-item' + (marcada ? ' marcada' : '') + '" data-id="' + rotina.id + '">' +
           '<input type="checkbox" class="rotina-checkbox"' + (marcada ? ' checked' : '') + '>' +
-          '<div class="rotina-texto">' + escaparHtml(rotina.texto) + '</div>' +
+          '<div class="rotina-texto">' +
+            (rotina.horario ? '<span class="rotina-horario">' + escaparHtml(rotina.horario) + '</span> · ' : '') +
+            escaparHtml(rotina.texto) +
+          '</div>' +
           '<div class="rotina-acoes">' +
             '<button class="rotina-btn" data-acao="editar" title="Editar">✏️</button>' +
             '<button class="rotina-btn" data-acao="excluir" title="Excluir">✕</button>' +
@@ -459,6 +463,8 @@
           '<h2>' + (id ? 'Editar rotina' : 'Nova rotina') + '</h2>' +
           '<label>Nome da atividade</label>' +
           '<input type="text" id="campo-rotina-texto" maxlength="120" placeholder="Ex.: Leitura da Água">' +
+          '<label>Horário (opcional)</label>' +
+          '<input type="time" id="campo-rotina-horario">' +
           '<div class="modal-acoes">' +
             '<button class="btn-cancelar" id="btn-rotina-cancelar">Cancelar</button>' +
             '<button class="btn-salvar" id="btn-rotina-salvar">Salvar</button>' +
@@ -467,7 +473,9 @@
       document.body.appendChild(overlay);
 
       var campoTexto = overlay.querySelector('#campo-rotina-texto');
+      var campoHorario = overlay.querySelector('#campo-rotina-horario');
       campoTexto.value = rotina ? rotina.texto : '';
+      campoHorario.value = rotina ? (rotina.horario || '') : '';
 
       function fechar() { overlay.remove(); }
       overlay.addEventListener('click', function (ev) { if (ev.target === overlay) fechar(); });
@@ -477,12 +485,13 @@
       btnSalvar.addEventListener('click', function () {
         var texto = campoTexto.value.trim();
         if (!texto) { alert('Digite o nome da atividade.'); return; }
+        var horario = campoHorario.value;
         btnSalvar.disabled = true;
         btnSalvar.textContent = 'Salvando...';
         fetch(KANBAN_EXEC_URL, {
           method: 'POST',
           headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-          body: JSON.stringify(id ? { acao: 'editar_rotina', id: id, texto: texto } : { acao: 'criar_rotina', texto: texto }),
+          body: JSON.stringify(id ? { acao: 'editar_rotina', id: id, texto: texto, horario: horario } : { acao: 'criar_rotina', texto: texto, horario: horario }),
         })
           .then(function (r) { return r.json(); })
           .then(function (resultado) {
