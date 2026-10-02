@@ -29,49 +29,76 @@
     }
     header h1 { font-size: 1.1rem; margin: 0; font-weight: 800; }
     header p { margin: 0.15rem 0 0; font-size: 0.78rem; color: rgba(75,67,60,0.75); }
-    main { padding: 1rem; max-width: 640px; margin: 0 auto; }
+    main { padding: 1rem; max-width: 520px; margin: 0 auto; }
 
-    .grid-opcoes {
-      display: grid;
-      /* 4 por linha (não 5) — com os 11 módulos de hoje, 4+4+3 fica mais
-         equilibrado que 5+5+1 (última linha com 1 card sozinho). */
-      grid-template-columns: repeat(4, 1fr);
+    /* ---------- Resumo do Kanban (live, buscado via fetch) ---------- */
+    .kanban-resumo {
+      display: block;
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 0.9rem 1rem;
+      text-decoration: none;
+      color: var(--text);
+      margin-bottom: 1rem;
+      transition: transform 0.1s ease;
+    }
+    .kanban-resumo:active { transform: scale(0.98); }
+    .kanban-resumo-topo { display: flex; justify-content: space-between; align-items: center; }
+    .kanban-resumo-titulo { font-size: 0.95rem; font-weight: 800; }
+    .kanban-resumo-seta { color: var(--text-muted); font-size: 1.2rem; }
+    .kanban-resumo-stats { display: flex; gap: 0.55rem; margin-top: 0.7rem; }
+    .kanban-stat {
+      flex: 1;
+      text-align: center;
+      border-radius: 10px;
+      padding: 0.5rem 0.3rem;
+      background: rgba(0,0,0,0.03);
+    }
+    .kanban-stat-numero { font-size: 1.3rem; font-weight: 800; line-height: 1.1; }
+    .kanban-stat-rotulo { font-size: 0.64rem; color: var(--text-muted); font-weight: 700; margin-top: 0.15rem; text-transform: uppercase; }
+    .kanban-stat-a-fazer .kanban-stat-numero { color: #c08f3d; }
+    .kanban-stat-em-andamento .kanban-stat-numero { color: #b89323; }
+    .kanban-stat-concluido .kanban-stat-numero { color: #74805c; }
+    .kanban-resumo-carregando, .kanban-resumo-erro {
+      font-size: 0.78rem;
+      color: var(--text-muted);
+      margin-top: 0.6rem;
+    }
+
+    /* ---------- Lista de módulos (vertical, 1 por linha) ---------- */
+    .lista-opcoes {
+      display: flex;
+      flex-direction: column;
       gap: 0.6rem;
     }
     .opcao {
       display: flex;
-      flex-direction: column;
       align-items: center;
-      text-align: center;
-      gap: 0.35rem;
+      gap: 0.85rem;
       background: var(--card-bg);
       border: 1px solid var(--border);
       border-radius: 14px;
-      padding: 0.85rem 0.4rem;
+      padding: 0.75rem 0.95rem;
       text-decoration: none;
       color: var(--text);
       transition: transform 0.1s ease;
     }
-    .opcao:active { transform: scale(0.96); }
+    .opcao:active { transform: scale(0.98); }
     .opcao-icone {
-      font-size: 1.5rem;
-      width: 2.4rem;
-      height: 2.4rem;
+      font-size: 1.35rem;
+      width: 2.5rem;
+      height: 2.5rem;
+      flex-shrink: 0;
       display: flex;
       align-items: center;
       justify-content: center;
       border-radius: 50%;
       background: rgba(183,155,108,0.15);
     }
-    .opcao-titulo { font-size: 0.7rem; font-weight: 700; line-height: 1.25; }
-    .opcao-desc { display: none; }
-
-    @media (max-width: 480px) {
-      .grid-opcoes { grid-template-columns: repeat(4, 1fr); gap: 0.4rem; }
-      .opcao { padding: 0.65rem 0.2rem; }
-      .opcao-icone { font-size: 1.25rem; width: 2.1rem; height: 2.1rem; }
-      .opcao-titulo { font-size: 0.62rem; }
-    }
+    .opcao-texto { flex: 1; min-width: 0; }
+    .opcao-titulo { font-size: 0.9rem; font-weight: 700; line-height: 1.3; }
+    .opcao-desc { font-size: 0.78rem; color: var(--text-muted); line-height: 1.35; margin-top: 0.1rem; }
 
     .dica {
       margin-top: 1.4rem;
@@ -89,76 +116,136 @@
   </header>
 
   <main>
-    <div class="grid-opcoes">
+    <a class="kanban-resumo" id="kanban-resumo" href="https://script.google.com/macros/s/AKfycbzAA1-03ZTdzf2c23tQi6uxuM7gHV-bqcBa8wuuwkrzNhzW5vVkEDC1Jbfu15ClFnSmtg/exec?tela=kanban">
+      <div class="kanban-resumo-topo">
+        <span class="kanban-resumo-titulo">🗂️ Kanban de Atividades</span>
+        <span class="kanban-resumo-seta">›</span>
+      </div>
+      <div class="kanban-resumo-carregando" id="kanban-resumo-stats">Carregando…</div>
+    </a>
+
+    <div class="lista-opcoes">
     <a class="opcao" href="https://script.google.com/macros/s/AKfycbxg34g07LP6huO-f9AA4FCyOrg-xgKRTheRWxKrZyJfiTlj3qJCFZCzkl7drhs5jv3b/exec?tela=compras">
       <div class="opcao-icone">🛒</div>
-      <div class="opcao-titulo">Compras</div>
-      <div class="opcao-desc">Registrar, editar e acompanhar compras.</div>
+      <div class="opcao-texto">
+        <div class="opcao-titulo">Compras</div>
+        <div class="opcao-desc">Registrar, editar e acompanhar compras.</div>
+      </div>
     </a>
 
     <a class="opcao" href="https://script.google.com/macros/s/AKfycbzAA1-03ZTdzf2c23tQi6uxuM7gHV-bqcBa8wuuwkrzNhzW5vVkEDC1Jbfu15ClFnSmtg/exec?tela=insumos">
       <div class="opcao-icone">📦</div>
-      <div class="opcao-titulo">Insumos Críticos</div>
-      <div class="opcao-desc">Atualizar a quantidade de cada insumo.</div>
+      <div class="opcao-texto">
+        <div class="opcao-titulo">Insumos Críticos</div>
+        <div class="opcao-desc">Atualizar a quantidade de cada insumo.</div>
+      </div>
     </a>
 
     <a class="opcao" href="https://script.google.com/macros/s/AKfycbzAA1-03ZTdzf2c23tQi6uxuM7gHV-bqcBa8wuuwkrzNhzW5vVkEDC1Jbfu15ClFnSmtg/exec?tela=auditoria">
       <div class="opcao-icone">🧼</div>
-      <div class="opcao-titulo">Auditoria</div>
-      <div class="opcao-desc">Checklist, não conformidades, assinatura e finalizar.</div>
+      <div class="opcao-texto">
+        <div class="opcao-titulo">Auditoria</div>
+        <div class="opcao-desc">Checklist, não conformidades, assinatura e finalizar.</div>
+      </div>
     </a>
 
     <a class="opcao" href="https://script.google.com/macros/s/AKfycbzAA1-03ZTdzf2c23tQi6uxuM7gHV-bqcBa8wuuwkrzNhzW5vVkEDC1Jbfu15ClFnSmtg/exec?tela=dedetizacao">
       <div class="opcao-icone">🐜</div>
-      <div class="opcao-titulo">Dedetização</div>
-      <div class="opcao-desc">Registrar dedetização e troca de armadilhas luminosas.</div>
+      <div class="opcao-texto">
+        <div class="opcao-titulo">Dedetização</div>
+        <div class="opcao-desc">Registrar dedetização e troca de armadilhas luminosas.</div>
+      </div>
     </a>
 
     <a class="opcao" href="https://script.google.com/macros/s/AKfycbxN_cFnGJpZgwVaCAegqB0HwrBsw_wKQd56wXyeq3RK5LZbumHrFaudxu9VjQMPBuOauQ/exec">
       <div class="opcao-icone">🔧</div>
-      <div class="opcao-titulo">Ordens de Serviço</div>
-      <div class="opcao-desc">Abrir e fechar OS de manutenção (app já existente).</div>
+      <div class="opcao-texto">
+        <div class="opcao-titulo">Ordens de Serviço</div>
+        <div class="opcao-desc">Abrir e fechar OS de manutenção (app já existente).</div>
+      </div>
     </a>
 
     <a class="opcao" href="https://script.google.com/macros/s/AKfycbwAY8w7ZffliLuNu19FKOCu0kyTSdXCyUWD8rQTdN5PgPJ5jcuhG3ThjA96kN8_jn9ASQ/exec">
       <div class="opcao-icone">🍽️</div>
-      <div class="opcao-titulo">Refeitório</div>
-      <div class="opcao-desc">Presença, produção e sobra do refeitório (app já existente).</div>
+      <div class="opcao-texto">
+        <div class="opcao-titulo">Refeitório</div>
+        <div class="opcao-desc">Presença, produção e sobra do refeitório (app já existente).</div>
+      </div>
     </a>
 
     <a class="opcao" href="https://script.google.com/macros/s/AKfycbzAA1-03ZTdzf2c23tQi6uxuM7gHV-bqcBa8wuuwkrzNhzW5vVkEDC1Jbfu15ClFnSmtg/exec?tela=avisos">
       <div class="opcao-icone">📌</div>
-      <div class="opcao-titulo">Avisos</div>
-      <div class="opcao-desc">Mural de post-its do painel — criar, editar e remover.</div>
+      <div class="opcao-texto">
+        <div class="opcao-titulo">Avisos</div>
+        <div class="opcao-desc">Mural de post-its do painel — criar, editar e remover.</div>
+      </div>
     </a>
 
     <a class="opcao" href="https://verificacao-operacional-mammamia.vercel.app/">
       <div class="opcao-icone">🔍</div>
-      <div class="opcao-titulo">VTO</div>
-      <div class="opcao-desc">Verificação Técnica Operacional (app já existente).</div>
+      <div class="opcao-texto">
+        <div class="opcao-titulo">VTO</div>
+        <div class="opcao-desc">Verificação Técnica Operacional (app já existente).</div>
+      </div>
     </a>
 
     <a class="opcao" href="https://script.google.com/macros/s/AKfycbzAA1-03ZTdzf2c23tQi6uxuM7gHV-bqcBa8wuuwkrzNhzW5vVkEDC1Jbfu15ClFnSmtg/exec?tela=pipa">
       <div class="opcao-icone">🚚</div>
-      <div class="opcao-titulo">Caminhão Pipa</div>
-      <div class="opcao-desc">Registrar abastecimento (pedido, quantidades, placa, recibo).</div>
+      <div class="opcao-texto">
+        <div class="opcao-titulo">Caminhão Pipa</div>
+        <div class="opcao-desc">Registrar abastecimento (pedido, quantidades, placa, recibo).</div>
+      </div>
     </a>
 
     <a class="opcao" href="https://script.google.com/macros/s/AKfycbzAA1-03ZTdzf2c23tQi6uxuM7gHV-bqcBa8wuuwkrzNhzW5vVkEDC1Jbfu15ClFnSmtg/exec?tela=higienizacao">
       <div class="opcao-icone">🧴</div>
-      <div class="opcao-titulo">Higienização de Motores</div>
-      <div class="opcao-desc">Registrar higienização de equipamentos refrigerados por unidade.</div>
-    </a>
-
-    <a class="opcao" href="https://script.google.com/macros/s/AKfycbzAA1-03ZTdzf2c23tQi6uxuM7gHV-bqcBa8wuuwkrzNhzW5vVkEDC1Jbfu15ClFnSmtg/exec?tela=kanban">
-      <div class="opcao-icone">🗂️</div>
-      <div class="opcao-titulo">Kanban</div>
-      <div class="opcao-desc">Quadro de atividades gerais — arrastar e soltar entre colunas.</div>
+      <div class="opcao-texto">
+        <div class="opcao-titulo">Higienização de Motores</div>
+        <div class="opcao-desc">Registrar higienização de equipamentos refrigerados por unidade.</div>
+      </div>
     </a>
 
     </div>
 
     <p class="dica">Todos os módulos previstos já estão ligados aqui.</p>
   </main>
+
+  <script>
+    // Resumo ao vivo do Kanban (contagem por coluna) — reaproveita o
+    // mesmo backend/ação já usada pelo Kanban.html (avisos-appscript,
+    // ?dados=kanban). Se falhar, o card continua funcionando como link
+    // normal pro quadro, só sem o resumo. Ver
+    // docs/superpowers/specs/2026-10-02-painel-qualidade-menu-vertical-resumo-kanban-design.md.
+    var KANBAN_EXEC_URL = 'https://script.google.com/macros/s/AKfycbzHvvPZzBDSB730gShVCl7CPQb23h37w8k8B-cY8n1RI-NkBJzp0eUP5m-rbtj3nGdwpw/exec';
+
+    function carregarResumoKanban() {
+      fetch(KANBAN_EXEC_URL + '?dados=kanban', { cache: 'no-store' })
+        .then(function (resposta) {
+          if (!resposta.ok) throw new Error('HTTP ' + resposta.status);
+          return resposta.json();
+        })
+        .then(function (resultado) {
+          if (!resultado.ok) throw new Error(resultado.erro || 'Erro desconhecido');
+          var cards = resultado.cards || [];
+          var contagem = { 'A Fazer': 0, 'Em Andamento': 0, 'Concluído': 0 };
+          cards.forEach(function (c) {
+            if (contagem.hasOwnProperty(c.coluna)) contagem[c.coluna]++;
+          });
+          document.getElementById('kanban-resumo-stats').outerHTML =
+            '<div class="kanban-resumo-stats" id="kanban-resumo-stats">' +
+              '<div class="kanban-stat kanban-stat-a-fazer"><div class="kanban-stat-numero">' + contagem['A Fazer'] + '</div><div class="kanban-stat-rotulo">A Fazer</div></div>' +
+              '<div class="kanban-stat kanban-stat-em-andamento"><div class="kanban-stat-numero">' + contagem['Em Andamento'] + '</div><div class="kanban-stat-rotulo">Em Andamento</div></div>' +
+              '<div class="kanban-stat kanban-stat-concluido"><div class="kanban-stat-numero">' + contagem['Concluído'] + '</div><div class="kanban-stat-rotulo">Concluído</div></div>' +
+            '</div>';
+        })
+        .catch(function (erro) {
+          console.error('[MENU]', erro);
+          var alvo = document.getElementById('kanban-resumo-stats');
+          if (alvo) { alvo.className = 'kanban-resumo-erro'; alvo.textContent = 'Não foi possível carregar o resumo.'; }
+        });
+    }
+
+    carregarResumoKanban();
+  </script>
 </body>
 </html>
