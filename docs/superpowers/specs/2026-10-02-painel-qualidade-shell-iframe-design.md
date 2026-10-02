@@ -29,19 +29,22 @@ com rolagem própria) e o iframe ocupa o resto embaixo — mesma ideia do desenh
 ### O problema técnico central: X-Frame-Options
 
 Apps Script, por padrão, serve HTML com `X-Frame-Options: SAMEORIGIN` — ou seja, só pode ser exibido
-dentro de um `<iframe>` se a página "pai" for **da mesma origem**. Isso tem duas consequências diferentes
-dependendo de qual módulo:
+dentro de um `<iframe>` se a página "pai" for **da mesma origem**.
 
-- **Módulos do PRÓPRIO projeto Painel Qualidade** (Insumos, Auditoria, Dedetização, Avisos, Pipa,
-  Higienização, Kanban — todos servidos pelo `doGet` deste mesmo `Code.gs`): são a MESMA origem do
-  `Menu.html` que os embute, então **já funcionam sem nenhuma mudança de permissão**.
-- **Módulos de OUTRO projeto Apps Script** (Compras → `compras-appsscript`; Ordens de Serviço →
-  `manutencao-appsscript`): são origens DIFERENTES — por padrão, o navegador BLOQUEARIA o iframe
-  (painel em branco). Pra esses dois, adicionei `.setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL)`
-  no `doGet()` de cada um, que remove essa restrição. **Efeito colateral a saber:** isso também permite
-  que QUALQUER outro site, não só o Painel Qualidade, exiba essas páginas dentro de um iframe — risco baixo
-  pra uma ferramenta interna da empresa, mas é uma troca real (segurança por "ninguém mais tenta" vira
-  segurança só pelo login do Google).
+**Correção pós-teste (mesmo dia):** a primeira versão desta spec dizia que os módulos do PRÓPRIO projeto
+Painel Qualidade (Insumos, Auditoria, Dedetização, Avisos, Pipa, Higienização, Kanban) já funcionariam sem
+nenhuma mudança, por serem "a mesma origem" do `Menu.html`. **Isso estava errado** — a usuária testou e
+TODOS vieram com erro, painel em branco. Causa real: o Apps Script entrega o conteúdo de cada resposta do
+`doGet()` por um subdomínio PRÓPRIO de `script.googleusercontent.com` (gerado por conteúdo/sessão) — então
+mesmo duas telas do MESMO projeto (ex.: `Menu.html` e `Insumos.html`, ambos vindos do mesmo `Code.gs`)
+acabam em origens diferentes pro navegador, e o `SAMEORIGIN` padrão bloqueia o iframe de qualquer forma.
+
+**Correção:** `.setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL)` precisou entrar no `doGet()`
+de **TODO módulo que é embutido**, sem exceção — inclusive os do próprio projeto Painel Qualidade. Só o
+`Menu.html` (a tela que embute os outros, nunca é embutida por ninguém) ficou de fora. **Efeito colateral
+a saber:** isso também permite que QUALQUER outro site, não só o Painel Qualidade, exiba essas páginas
+dentro de um iframe — risco baixo pra uma ferramenta interna da empresa, mas é uma troca real (segurança
+por "ninguém mais tenta" vira segurança só pelo login do Google).
 
 ### Duas limitações aceitas (não dá pra resolver sem mudar mais coisa)
 
@@ -82,9 +85,9 @@ backend (`avisos-appscript`, `?dados=kanban`). Falha no fetch não quebra nada �
 
 **Três projetos Apps Script diferentes precisam ser atualizados e reimplantados — não é só um.**
 
-1. **Painel Qualidade**: colar `Menu.html` (reescrito), `Insumos.html`, `Auditoria.html`,
-   `Dedetizacao.html`, `Avisos.html`, `Pipa.html`, `Higienizacao.html`, `Kanban.html`, cada um por cima do
-   existente. Reimplantar (Nova versão).
+1. **Painel Qualidade**: colar `Code.gs` (ganhou `ALLOWALL` em cada `tela`), `Menu.html` (reescrito),
+   `Insumos.html`, `Auditoria.html`, `Dedetizacao.html`, `Avisos.html`, `Pipa.html`, `Higienizacao.html`,
+   `Kanban.html`, cada um por cima do existente. Reimplantar (Nova versão).
 2. **Compras** (`compras-appsscript`): colar `Code.gs` e `Compras.html` por cima dos existentes.
    Reimplantar.
 3. **Manutenção/OS** (`manutencao-appsscript`): colar `Code.completo.gs`, `Menu.html`, `AbrirOS.html`,

@@ -112,42 +112,58 @@
  *    correção valer.
  */
 
+// ALLOWALL (em vez do padrão SAMEORIGIN) em todo módulo embutido no
+// iframe do Menu — mesmo sendo do MESMO projeto Apps Script, cada
+// resposta do doGet acaba servida por um subdomínio diferente de
+// script.googleusercontent.com (a plataforma gera um por conteúdo), ou
+// seja, conta como origem DIFERENTE pro navegador. SAMEORIGIN (padrão)
+// bloqueava o iframe mesmo entre telas do mesmo projeto. Ver
+// docs/superpowers/specs/2026-10-02-painel-qualidade-shell-iframe-design.md
+// no repo controle-agua-mamma-mia. O Menu (abaixo, sem `tela`) não
+// precisa disso — ele nunca é embutido em nada, só embute os outros.
 function doGet(e) {
   var tela = e.parameter.tela;
   if (tela === 'insumos') {
     return HtmlService.createHtmlOutputFromFile('Insumos')
       .setTitle('Insumos Críticos — Mamma Mia')
-      .addMetaTag('viewport', 'width=device-width, initial-scale=1');
+      .addMetaTag('viewport', 'width=device-width, initial-scale=1')
+      .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
   }
   if (tela === 'auditoria') {
     return HtmlService.createHtmlOutputFromFile('Auditoria')
       .setTitle('Auditoria — Mamma Mia')
-      .addMetaTag('viewport', 'width=device-width, initial-scale=1');
+      .addMetaTag('viewport', 'width=device-width, initial-scale=1')
+      .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
   }
   if (tela === 'dedetizacao') {
     return HtmlService.createHtmlOutputFromFile('Dedetizacao')
       .setTitle('Dedetização — Mamma Mia')
-      .addMetaTag('viewport', 'width=device-width, initial-scale=1');
+      .addMetaTag('viewport', 'width=device-width, initial-scale=1')
+      .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
   }
   if (tela === 'avisos') {
     return HtmlService.createHtmlOutputFromFile('Avisos')
       .setTitle('Avisos — Mamma Mia')
-      .addMetaTag('viewport', 'width=device-width, initial-scale=1');
+      .addMetaTag('viewport', 'width=device-width, initial-scale=1')
+      .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
   }
   if (tela === 'pipa') {
     return HtmlService.createHtmlOutputFromFile('Pipa')
       .setTitle('Caminhão Pipa — Mamma Mia')
-      .addMetaTag('viewport', 'width=device-width, initial-scale=1');
+      .addMetaTag('viewport', 'width=device-width, initial-scale=1')
+      .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
   }
   if (tela === 'higienizacao') {
     return HtmlService.createHtmlOutputFromFile('Higienizacao')
       .setTitle('Higienização de Motores — Mamma Mia')
-      .addMetaTag('viewport', 'width=device-width, initial-scale=1');
+      .addMetaTag('viewport', 'width=device-width, initial-scale=1')
+      .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
   }
   if (tela === 'kanban') {
     return HtmlService.createHtmlOutputFromFile('Kanban')
       .setTitle('Kanban de Atividades — Mamma Mia')
-      .addMetaTag('viewport', 'width=device-width, initial-scale=1');
+      .addMetaTag('viewport', 'width=device-width, initial-scale=1')
+      .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
   }
   return HtmlService.createHtmlOutputFromFile('Menu')
     .setTitle('Painel Qualidade — Mamma Mia')
