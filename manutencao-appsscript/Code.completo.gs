@@ -1834,6 +1834,15 @@ function abrirOS(dados) {
  * ".../exec?tela=abrir" → tela de abrir OS (AbrirOS.html);
  * ".../exec?tela=fechar" → tela de fechar OS (Index.html).
  */
+// ALLOWALL (em vez do padrão SAMEORIGIN) em todo mundo aqui — permite
+// essas páginas serem exibidas dentro de um <iframe> do Painel
+// Qualidade (projeto Apps Script diferente, logo origem diferente;
+// SAMEORIGIN bloquearia). Ver
+// docs/superpowers/specs/2026-10-02-painel-qualidade-shell-iframe-design.md
+// no repo controle-agua-mamma-mia. Navegar ENTRE as telas (Abrir/
+// Fechar/Histórico) continua escapando do iframe de qualquer forma —
+// cada uma é um link com target="_top" (necessário à parte, pra não
+// quebrar no celular) — isso é uma limitação conhecida, não um bug.
 function doGet(e) {
   var tela = e && e.parameter && e.parameter.tela;
 
@@ -1841,27 +1850,31 @@ function doGet(e) {
     return HtmlService
       .createHtmlOutputFromFile("AbrirOS")
       .setTitle("Abrir OS — Manutenção Mamma Mia")
-      .addMetaTag("viewport", "width=device-width, initial-scale=1");
+      .addMetaTag("viewport", "width=device-width, initial-scale=1")
+      .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
   }
 
   if (tela === "fechar") {
     return HtmlService
       .createHtmlOutputFromFile("Index")
       .setTitle("Fechar OS — Manutenção Mamma Mia")
-      .addMetaTag("viewport", "width=device-width, initial-scale=1");
+      .addMetaTag("viewport", "width=device-width, initial-scale=1")
+      .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
   }
 
   if (tela === "historico") {
     return HtmlService
       .createHtmlOutputFromFile("Historico")
       .setTitle("Histórico de OS — Manutenção Mamma Mia")
-      .addMetaTag("viewport", "width=device-width, initial-scale=1");
+      .addMetaTag("viewport", "width=device-width, initial-scale=1")
+      .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
   }
 
   return HtmlService
     .createHtmlOutputFromFile("Menu")
     .setTitle("Manutenção Mamma Mia")
-    .addMetaTag("viewport", "width=device-width, initial-scale=1");
+    .addMetaTag("viewport", "width=device-width, initial-scale=1")
+    .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
 }
 
 /**

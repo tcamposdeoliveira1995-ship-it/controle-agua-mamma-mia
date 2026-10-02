@@ -1,7 +1,11 @@
 # Painel Qualidade — Menu vertical + resumo ao vivo do Kanban
 
 **Data:** 2026-10-02
-**Status:** Implementado, aguardando teste em produção
+**Status:** SUBSTITUÍDO no mesmo dia por
+`2026-10-02-painel-qualidade-shell-iframe-design.md` — a usuária viu essa versão (lista vertical + resumo
+em card) e mandou um desenho deixando claro que queria o menu lateral fixo com o módulo abrindo embutido
+no painel ao lado, não um resumo. Documento mantido pra contexto histórico; o Menu.html atual não
+corresponde mais ao que está descrito abaixo.
 
 ## Contexto
 

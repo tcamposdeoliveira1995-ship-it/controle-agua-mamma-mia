@@ -783,7 +783,13 @@ function verificarAlertasCompras() {
 function doGet(e) {
   return HtmlService.createHtmlOutputFromFile("Compras")
     .setTitle("Compras — Mamma Mia")
-    .addMetaTag("viewport", "width=device-width, initial-scale=1");
+    .addMetaTag("viewport", "width=device-width, initial-scale=1")
+    // ALLOWALL (em vez do padrão SAMEORIGIN) — permite esta página ser
+    // exibida dentro de um <iframe> do Painel Qualidade (projeto Apps
+    // Script diferente, logo origem diferente; SAMEORIGIN bloquearia).
+    // Ver docs/superpowers/specs/2026-10-02-painel-qualidade-shell-iframe-design.md
+    // no repo controle-agua-mamma-mia.
+    .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
 }
 
 function doPost(e) {
