@@ -1360,24 +1360,41 @@ function gerarPDFFechamentoOS(dados) {
   } catch (erroFoto) {
     Logger.log("Falha ao embutir foto do problema no PDF de fechamento da OS " + dados.os + ": " + erroFoto);
   }
-  // Foto da conclusão (depois) — sempre presente, já em memória.
-  var fotoConclusaoSrc = "data:" + dados.fotoConclusaoBlob.getContentType() + ";base64," + Utilities.base64Encode(dados.fotoConclusaoBlob.getBytes());
+  // Foto da conclusão (depois) — opcional agora: Thalita pode fechar OS
+  // sem foto (ver isenção em fecharOS), então fotoConclusaoBlob pode vir
+  // null daqui.
+  var fotoConclusaoSrc = dados.fotoConclusaoBlob
+    ? "data:" + dados.fotoConclusaoBlob.getContentType() + ";base64," + Utilities.base64Encode(dados.fotoConclusaoBlob.getBytes())
+    : "";
 
-  // Antes/depois lado a lado (quando há foto do problema original) com altura
-  // limitada, pra não deixar uma foto vertical do celular estourar a página e
-  // sobrar espaço em branco embaixo — tudo precisa caber numa página só.
-  var blocoFotos = fotoProblemaSrc
-    ? '<div class="bloco">' +
+  // Antes/depois lado a lado (quando há as duas) com altura limitada, pra
+  // não deixar uma foto vertical do celular estourar a página e sobrar
+  // espaço em branco embaixo — tudo precisa caber numa página só. Com só
+  // uma das duas, mostra só ela; sem nenhuma (Thalita fechando uma OS que
+  // também não tinha foto do problema original), não mostra bloco de foto.
+  var blocoFotos = "";
+  if (fotoProblemaSrc && fotoConclusaoSrc) {
+    blocoFotos =
+      '<div class="bloco">' +
         '<div class="secao">ANTES / DEPOIS</div>' +
         '<div class="fotos-lado-a-lado">' +
           '<div class="foto-item"><div class="foto-legenda">Antes</div><img src="' + fotoProblemaSrc + '"></div>' +
           '<div class="foto-item"><div class="foto-legenda">Depois</div><img src="' + fotoConclusaoSrc + '"></div>' +
         '</div>' +
-      '</div>'
-    : '<div class="bloco">' +
+      '</div>';
+  } else if (fotoConclusaoSrc) {
+    blocoFotos =
+      '<div class="bloco">' +
         '<div class="secao">FOTO DO PROBLEMA RESOLVIDO</div>' +
         '<img class="foto-unica" src="' + fotoConclusaoSrc + '">' +
       '</div>';
+  } else if (fotoProblemaSrc) {
+    blocoFotos =
+      '<div class="bloco">' +
+        '<div class="secao">FOTO DO PROBLEMA (ANTES)</div>' +
+        '<img class="foto-unica" src="' + fotoProblemaSrc + '">' +
+      '</div>';
+  }
 
   var html = `
 
@@ -1592,12 +1609,29 @@ function gerarPDFFechamentoOS(dados) {
   return { url: arquivo.getUrl(), blob: pdfBlob };
 }
 
+// Quem assina a baixa sem precisar anexar foto — pedido explícito da
+// usuária (Thalita assina pela equipe, sem necessariamente ter tirado a
+// foto do reparo). Comparação sem acento/maiúscula pra não falhar por
+// diferença de digitação no cadastro de técnicos.
+var ASSINANTES_SEM_FOTO_OBRIGATORIA = ["THALITA"];
+
+function fotoDispensadaPara(assinadoPor) {
+  var normalizado = (assinadoPor || "")
+    .toString()
+    .trim()
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .toUpperCase();
+  return ASSINANTES_SEM_FOTO_OBRIGATORIA.indexOf(normalizado) !== -1;
+}
+
 /**
  * Dá baixa numa OS: grava Status = Concluído, o que foi feito, data/hora
- * de conclusão, quem assinou e a foto do problema resolvido (obrigatória).
- * Gera o PDF de fechamento, tenta mover o card no Trello e avisar no
- * Telegram — se qualquer uma dessas três falhar, a baixa já gravada na
- * planilha NÃO é desfeita; a falha só fica registrada no Log.
+ * de conclusão, quem assinou e a foto do problema resolvido (obrigatória,
+ * exceto pra quem está em ASSINANTES_SEM_FOTO_OBRIGATORIA). Gera o PDF de
+ * fechamento, tenta mover o card no Trello e avisar no Telegram — se
+ * qualquer uma dessas três falhar, a baixa já gravada na planilha NÃO é
+ * desfeita; a falha só fica registrada no Log.
  */
 function fecharOS(osId, oQueFoiFeito, assinadoPor, fotoBase64, fotoTipo) {
   osId = (osId || "").toString().trim();
@@ -1607,7 +1641,9 @@ function fecharOS(osId, oQueFoiFeito, assinadoPor, fotoBase64, fotoTipo) {
   if (!osId) throw new Error("Selecione uma OS.");
   if (!oQueFoiFeito) throw new Error("Descreva o que foi feito antes de confirmar.");
   if (!assinadoPor) throw new Error("Selecione quem está assinando a baixa.");
-  if (!fotoBase64) throw new Error("Tire uma foto do problema resolvido antes de confirmar.");
+  if (!fotoBase64 && !fotoDispensadaPara(assinadoPor)) {
+    throw new Error("Tire uma foto do problema resolvido antes de confirmar.");
+  }
 
   var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheets()[0];
   var cols = obterMapaColunas(sheet);
@@ -1628,8 +1664,8 @@ function fecharOS(osId, oQueFoiFeito, assinadoPor, fotoBase64, fotoTipo) {
   // ninguém enquanto isso) — só a checagem+gravação do status, que é
   // rápida, fica protegida, pra duas pessoas fechando a mesma OS quase
   // junto não passarem as duas pela checagem "já foi concluída?" antes de
-  // qualquer uma gravar.
-  var resultadoFoto = salvarFotoConclusao(osId, fotoBase64, fotoTipo);
+  // qualquer uma gravar. Sem foto (Thalita), resultadoFoto fica null.
+  var resultadoFoto = fotoBase64 ? salvarFotoConclusao(osId, fotoBase64, fotoTipo) : null;
 
   var lock = LockService.getScriptLock();
   lock.waitLock(30000);
@@ -1645,7 +1681,7 @@ function fecharOS(osId, oQueFoiFeito, assinadoPor, fotoBase64, fotoTipo) {
     sheet.getRange(linhaEncontrada, cols.oQueFoiFeito).setValue(oQueFoiFeito);
     sheet.getRange(linhaEncontrada, cols.dataConclusao).setValue(agora);
     sheet.getRange(linhaEncontrada, cols.assinadoPor).setValue(assinadoPor);
-    sheet.getRange(linhaEncontrada, cols.fotoConclusao).setValue(resultadoFoto.url);
+    sheet.getRange(linhaEncontrada, cols.fotoConclusao).setValue(resultadoFoto ? resultadoFoto.url : "");
   } finally {
     lock.releaseLock();
   }
@@ -1665,7 +1701,7 @@ function fecharOS(osId, oQueFoiFeito, assinadoPor, fotoBase64, fotoTipo) {
       oQueFoiFeito: oQueFoiFeito,
       assinadoPor: assinadoPor,
       dataConclusao: agora,
-      fotoConclusaoBlob: resultadoFoto.blob,
+      fotoConclusaoBlob: resultadoFoto ? resultadoFoto.blob : null,
     });
     sheet.getRange(linhaEncontrada, cols.pdfFechamento).setValue(resultadoPdf.url);
   } catch (erroPdf) {

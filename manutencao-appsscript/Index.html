@@ -186,6 +186,7 @@
     // Persiste entre "Voltar para a lista" (não reseta ao recarregar) —
     // só muda quando o técnico troca o filtro de propósito.
     var unidadeFiltro = 'TODAS';
+    var termoBusca = '';
 
     function iniciar() {
       google.script.run
@@ -213,6 +214,16 @@
       return div.innerHTML;
     }
 
+    // Quem assina a baixa sem precisar anexar foto — mesma lista e mesma
+    // lógica de normalização (sem acento/maiúscula) do backend
+    // (fotoDispensadaPara em Code.completo.gs), pra mostrar a dica certa
+    // na tela antes mesmo de enviar.
+    var ASSINANTES_SEM_FOTO = ['THALITA'];
+    function fotoDispensadaPara(nome) {
+      var normalizado = (nome || '').toString().trim().normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase();
+      return ASSINANTES_SEM_FOTO.indexOf(normalizado) !== -1;
+    }
+
     function classeBadge(prioridade) {
       switch (prioridade) {
         case 'Crítica': return 'badge-critica';
@@ -227,6 +238,9 @@
       var opcoes = ['TODAS', 'TC', 'YUKA', 'CD'];
       var rotulos = { TODAS: 'Todas', TC: 'TC', YUKA: 'YUKA', CD: 'CD' };
       return (
+        '<label for="campo-busca-os" style="display:block;font-size:0.8rem;font-weight:600;color:var(--text-muted);margin-bottom:0.35rem;">Buscar</label>' +
+        '<input type="text" id="campo-busca-os" placeholder="OS, setor, equipamento, técnico..." value="' + escaparHtml(termoBusca) + '" ' +
+          'style="width:100%;font-size:0.9rem;padding:0.55rem 0.7rem;border-radius:8px;border:1px solid var(--border);font-family:inherit;margin-bottom:0.8rem;">' +
         '<label for="filtro-unidade" style="display:block;font-size:0.8rem;font-weight:600;color:var(--text-muted);margin-bottom:0.35rem;">Unidade</label>' +
         '<select id="filtro-unidade" style="margin-bottom:0.6rem;">' +
           opcoes.map(function (op) {
@@ -242,6 +256,16 @@
       if (sel) sel.addEventListener('change', function () { unidadeFiltro = sel.value; renderizarLista(); });
       var btnPdf = document.getElementById('btn-gerar-pdf-lista');
       if (btnPdf) btnPdf.addEventListener('click', gerarPDFListaAberta);
+      var campoBusca = document.getElementById('campo-busca-os');
+      if (campoBusca) {
+        campoBusca.addEventListener('input', function () { termoBusca = campoBusca.value; renderizarLista(); });
+        // Foco de volta no campo depois de re-renderizar a cada letra
+        // digitada, senão o cursor "sai" do campo a cada tecla — e no
+        // fim do texto, não no começo, pra continuar digitando normal.
+        campoBusca.focus();
+        var posicao = campoBusca.value.length;
+        campoBusca.setSelectionRange(posicao, posicao);
+      }
     }
 
     function gerarPDFListaAberta() {
@@ -275,8 +299,21 @@
         ? todasOSAbertas
         : todasOSAbertas.filter(function (os) { return os.unidade === unidadeFiltro; });
 
+      var termo = termoBusca.trim().toLowerCase();
+      if (termo) {
+        filtradas = filtradas.filter(function (os) {
+          return (
+            (os.os || '').toLowerCase().indexOf(termo) !== -1 ||
+            (os.setor || '').toLowerCase().indexOf(termo) !== -1 ||
+            (os.equipamento || '').toLowerCase().indexOf(termo) !== -1 ||
+            (os.descricao || '').toLowerCase().indexOf(termo) !== -1 ||
+            (os.tecnicoResponsavel || '').toLowerCase().indexOf(termo) !== -1
+          );
+        });
+      }
+
       if (!filtradas || filtradas.length === 0) {
-        app.innerHTML = htmlFiltroUnidade() + '<div class="estado-vazio">✅ Nenhuma OS em aberto' + (unidadeFiltro === 'TODAS' ? ' no momento.' : ' nessa unidade.') + '</div>';
+        app.innerHTML = htmlFiltroUnidade() + '<div class="estado-vazio">✅ Nenhuma OS encontrada' + (termo ? ' pra essa busca.' : (unidadeFiltro === 'TODAS' ? ' em aberto no momento.' : ' em aberto nessa unidade.')) + '</div>';
         wireFiltroUnidade();
         return;
       }
@@ -329,7 +366,7 @@
             '<option value="">Selecione seu nome...</option>' +
             opcoesTecnicos +
           '</select>' +
-          '<label>Foto do problema resolvido</label>' +
+          '<label id="label-foto">Foto do problema resolvido</label>' +
           '<label class="btn-foto" id="btn-foto" for="campo-foto">📷 Tirar foto ou escolher da galeria</label>' +
           '<input type="file" id="campo-foto" accept="image/*">' +
           '<img class="preview-foto" id="preview-foto" alt="Prévia da foto">' +
@@ -346,6 +383,19 @@
       document.getElementById('btn-precisa-peca').addEventListener('click', renderizarFormularioPeca);
       document.getElementById('btn-cancelar-os').addEventListener('click', renderizarFormularioCancelar);
       document.getElementById('campo-foto').addEventListener('change', mostrarPreviewFoto);
+      document.getElementById('campo-assinado').addEventListener('change', atualizarDicaFoto);
+    }
+
+    // Atualiza o rótulo da foto quando troca quem está assinando — só
+    // texto/visual, a validação de verdade (impedir confirmar sem foto
+    // pra quem não está na lista de isenção) continua em confirmarBaixa.
+    function atualizarDicaFoto() {
+      var assinadoPor = document.getElementById('campo-assinado').value;
+      var label = document.getElementById('label-foto');
+      if (!label) return;
+      label.textContent = fotoDispensadaPara(assinadoPor)
+        ? 'Foto do problema resolvido (opcional pra Thalita)'
+        : 'Foto do problema resolvido';
     }
 
     function renderizarFormularioCancelar() {
@@ -512,7 +562,7 @@
         areaErro.innerHTML = '<div class="alerta">Selecione quem está assinando a baixa.</div>';
         return;
       }
-      if (!arquivoFoto) {
+      if (!arquivoFoto && !fotoDispensadaPara(assinadoPor)) {
         areaErro.innerHTML = '<div class="alerta">Tire uma foto do problema resolvido antes de confirmar.</div>';
         return;
       }
@@ -520,11 +570,7 @@
       botao.disabled = true;
       botao.textContent = 'Enviando...';
 
-      var leitorFoto = new FileReader();
-      leitorFoto.onload = function () {
-        var base64Completo = leitorFoto.result; // "data:image/jpeg;base64,AAAA..."
-        var base64Dados = base64Completo.split(',')[1];
-
+      function enviar(base64Dados, mimeType) {
         google.script.run
           .withSuccessHandler(function (resultado) { renderizarSucesso(resultado); })
           .withFailureHandler(function (erro) {
@@ -532,7 +578,20 @@
             botao.textContent = 'Confirmar baixa ✅';
             areaErro.innerHTML = '<div class="alerta">' + escaparHtml(erro.message || String(erro)) + '</div>';
           })
-          .fecharOS(osSelecionada.os, oQueFoiFeito, assinadoPor, base64Dados, arquivoFoto.type);
+          .fecharOS(osSelecionada.os, oQueFoiFeito, assinadoPor, base64Dados, mimeType);
+      }
+
+      if (!arquivoFoto) {
+        // Thalita sem foto — nada pra ler, manda direto.
+        enviar('', '');
+        return;
+      }
+
+      var leitorFoto = new FileReader();
+      leitorFoto.onload = function () {
+        var base64Completo = leitorFoto.result; // "data:image/jpeg;base64,AAAA..."
+        var base64Dados = base64Completo.split(',')[1];
+        enviar(base64Dados, arquivoFoto.type);
       };
       leitorFoto.onerror = function () {
         botao.disabled = false;
