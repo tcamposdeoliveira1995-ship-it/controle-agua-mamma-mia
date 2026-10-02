@@ -33,7 +33,9 @@
 
     .grid-opcoes {
       display: grid;
-      grid-template-columns: repeat(5, 1fr);
+      /* 4 por linha (não 5) — com os 11 módulos de hoje, 4+4+3 fica mais
+         equilibrado que 5+5+1 (última linha com 1 card sozinho). */
+      grid-template-columns: repeat(4, 1fr);
       gap: 0.6rem;
     }
     .opcao {
@@ -65,7 +67,7 @@
     .opcao-desc { display: none; }
 
     @media (max-width: 480px) {
-      .grid-opcoes { grid-template-columns: repeat(5, 1fr); gap: 0.4rem; }
+      .grid-opcoes { grid-template-columns: repeat(4, 1fr); gap: 0.4rem; }
       .opcao { padding: 0.65rem 0.2rem; }
       .opcao-icone { font-size: 1.25rem; width: 2.1rem; height: 2.1rem; }
       .opcao-titulo { font-size: 0.62rem; }
