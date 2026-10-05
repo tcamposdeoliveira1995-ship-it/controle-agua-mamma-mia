@@ -40,9 +40,10 @@ function getConfig() {
     // 4) — configurável via Propriedades do Script (META_INDIVIDUAL_M3)
     // sem precisar mexer em código; 20 é só o valor padrão de hoje.
     metaIndividualM3: Number(props.getProperty("META_INDIVIDUAL_M3")) || 20,
-    // Dia do mês em que o ciclo de faturamento começa (ex: 7 = todo dia
-    // 7). Também configurável via Propriedade do Script.
-    diaInicioCiclo: Number(props.getProperty("DIA_INICIO_CICLO")) || 7
+    // Dia do mês em que o ciclo de faturamento começa (ex: 6 = todo dia
+    // 6, até o dia 5 do mês seguinte). Também configurável via
+    // Propriedade do Script.
+    diaInicioCiclo: Number(props.getProperty("DIA_INICIO_CICLO")) || 6
   };
 }
 
@@ -101,9 +102,9 @@ function marcarComoEnviado(relogio) {
 
 // ================= CICLO DE CONSUMO (alertas de 20/40/60/80%/meta) =================
 // O ciclo de faturamento não é mês corrente — começa no dia
-// c.diaInicioCiclo (hoje, dia 7) e vai até o dia anterior ao próximo
-// início. Ex: hoje é dia 15 → ciclo começou dia 7 deste mês. Hoje é dia
-// 3 → ciclo começou dia 7 do mês PASSADO (ainda não virou).
+// c.diaInicioCiclo (hoje, dia 6) e vai até o dia anterior ao próximo
+// início (dia 5). Ex: hoje é dia 15 → ciclo começou dia 6 deste mês.
+// Hoje é dia 5 → ciclo começou dia 6 do mês PASSADO (ainda não virou).
 function calcularInicioCiclo(dataReferencia, diaInicioCiclo) {
   var ano = dataReferencia.getFullYear();
   var mes = dataReferencia.getMonth();

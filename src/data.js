@@ -54,6 +54,8 @@ export function saveAppSettings(settings) {
   localStorage.setItem('mamma_mia_water_settings_v2', JSON.stringify(settings));
 }
 
+// Ciclo de faturamento: começa no dia 6 (00:00) e termina no dia 5
+// do mês seguinte (23:59:59.999). Regra da Tita, 05/10/2026.
 export function getCycleInfo(date) {
   const d = new Date(date);
   const year = d.getFullYear();
@@ -62,7 +64,7 @@ export function getCycleInfo(date) {
 
   let startYear, startMonth, endYear, endMonth;
 
-  if (day >= 7) {
+  if (day >= 6) {
     startYear = year;
     startMonth = month;
     endYear = month === 11 ? year + 1 : year;
@@ -74,8 +76,8 @@ export function getCycleInfo(date) {
     endMonth = month;
   }
 
-  const start = new Date(startYear, startMonth, 7, 0, 0, 0, 0);
-  const end = new Date(endYear, endMonth, 6, 23, 59, 59, 999);
+  const start = new Date(startYear, startMonth, 6, 0, 0, 0, 0);
+  const end = new Date(endYear, endMonth, 5, 23, 59, 59, 999);
 
   const startLabel = start.toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' }).replace('.', '');
   const endLabel = end.toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' }).replace('.', '');
@@ -150,7 +152,7 @@ function generateMockReadings() {
         case 'Y21T156506': dailyBase = 0.52; break;
         case 'A25LM0975882': dailyBase = 0.40; break;
         case 'A25LM0975883':
-          const isMayCycle = currentDay >= new Date(2026, 4, 7) && currentDay <= new Date(2026, 5, 6);
+          const isMayCycle = currentDay >= new Date(2026, 4, 6) && currentDay <= new Date(2026, 5, 5);
           dailyBase = isMayCycle ? 0.78 : 0.55; break;
         case 'A25LM0975884': dailyBase = 0.22; break;
       }

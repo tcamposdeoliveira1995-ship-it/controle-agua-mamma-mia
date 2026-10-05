@@ -102,7 +102,7 @@ export function parseContasAguaCsv(csv) {
   return Array.from(porChave.values());
 }
 
-// Ciclo "2026-09" (dia 7 a dia 6) -> competência "09/2026" da conta.
+// Ciclo "2026-09" (dia 6 a dia 5) -> competência "09/2026" da conta.
 export function mesCompetenciaDoCiclo(cycleKey) {
   const m = /^(\d{4})-(\d{2})$/.exec(String(cycleKey || ''));
   if (!m) return null;
