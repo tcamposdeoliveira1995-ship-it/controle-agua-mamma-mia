@@ -1247,6 +1247,150 @@ function chaveOrdenavelDataBR_(dataBR) {
   return Number(partes[2] + partes[1] + partes[0]);
 }
 
+// ================= VALOR DAS CONTAS (por relógio, por mês) =================
+// Aba VALOR CONTAS, na mesma planilha de água (cabeçalho: MES | RELOGIO
+// | VALOR | | TOTAL MES — com uma coluna em branco entre VALOR e TOTAL
+// MES, exatamente como a usuária já criou). Lançamento manual: a
+// usuária digita o valor da conta de cada relógio quando ela chega,
+// pela tela "💧 Valor das Contas" do Painel Qualidade — não é calculado
+// a partir do consumo (tarifa com taxa fixa/faixa de preço não dá pra
+// calcular certo só multiplicando m³ × preço). MES é sempre "MM/yyyy"
+// (ex.: "10/2026") — é por competência (mês da conta), não pela data em
+// que foi lançada. TOTAL MES é preenchido sozinho pelo código (soma de
+// todos os relógios daquele MES), repetido em toda linha daquele mês —
+// não depende de fórmula manual na planilha. Ver
+// docs/superpowers/specs/2026-10-05-painel-qualidade-valor-contas-design.md.
+
+var ABA_VALOR_CONTAS = "VALOR CONTAS";
+
+function obterAbaValorContas() {
+  var aba = SpreadsheetApp.openById(getConfig().planilhaId).getSheetByName(ABA_VALOR_CONTAS);
+  if (!aba) {
+    throw new Error('Aba "' + ABA_VALOR_CONTAS + '" não foi encontrada na planilha.');
+  }
+  return aba;
+}
+
+// Lista os códigos dos relógios dinamicamente, pelos cabeçalhos da aba
+// de leituras (todas as colunas, exceto a de data) — mesma ideia já
+// usada em processarRegistroTelegram pra achar a coluna de 1 relógio,
+// só que aqui devolve a lista inteira, pro formulário montar o seletor
+// sem precisar cadastrar relógio nenhum no código.
+function listarRelogios() {
+  var c = getConfig();
+  var sheet = SpreadsheetApp.openById(c.planilhaId).getSheetByName(c.nomeAba);
+  var cabecalhos = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+  var relogios = [];
+  for (var i = 0; i < cabecalhos.length; i++) {
+    var nome = (cabecalhos[i] || "").toString().trim();
+    if (!nome || nome.toUpperCase() === "CARIMBO DE DATA/HORA") continue;
+    relogios.push(nome);
+  }
+  return { ok: true, relogios: relogios };
+}
+
+// "MM/yyyy" -> número yyyyMM, só pra poder comparar/ordenar meses
+// gravados como texto.
+function chaveOrdenavelMes_(mesStr) {
+  var partes = (mesStr || "").split("/");
+  if (partes.length !== 2) return 0;
+  var mm = partes[0].length === 1 ? "0" + partes[0] : partes[0];
+  return Number(partes[1] + mm);
+}
+
+function listarContasAgua() {
+  var aba = obterAbaValorContas();
+  var mapa = mapaColunas(aba);
+  var colMes = colunaObrigatoria(mapa, ABA_VALOR_CONTAS, "MES");
+  var colRelogio = colunaObrigatoria(mapa, ABA_VALOR_CONTAS, "RELOGIO");
+  var colValor = colunaObrigatoria(mapa, ABA_VALOR_CONTAS, "VALOR");
+  var colTotalMes = mapa["TOTAL MES"];
+
+  var dados = aba.getDataRange().getValues();
+  var contas = [];
+  for (var i = 1; i < dados.length; i++) {
+    var mes = (dados[i][colMes - 1] || "").toString().trim();
+    var relogio = (dados[i][colRelogio - 1] || "").toString().trim();
+    if (!mes || !relogio) continue;
+    contas.push({
+      mes: mes,
+      relogio: relogio,
+      valor: Number(dados[i][colValor - 1]) || 0,
+      totalMes: colTotalMes ? (Number(dados[i][colTotalMes - 1]) || 0) : null,
+    });
+  }
+  // Mais recente primeiro.
+  contas.sort(function (a, b) { return chaveOrdenavelMes_(b.mes) - chaveOrdenavelMes_(a.mes); });
+  return { ok: true, contas: contas };
+}
+
+// Upsert por MES+RELOGIO — lançar de novo o mesmo mês/relógio corrige o
+// valor em vez de duplicar linha (não precisa apagar nada na mão pra
+// corrigir um valor digitado errado).
+function registrarContaAgua(mes, relogio, valor) {
+  mes = (mes || "").toString().trim();
+  relogio = (relogio || "").toString().trim();
+  valor = Number(valor);
+  if (!mes) throw new Error("Informe o mês da conta.");
+  if (!relogio) throw new Error("Selecione o relógio.");
+  if (!valor || valor <= 0) throw new Error("Informe um valor válido.");
+
+  var lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    var aba = obterAbaValorContas();
+    var mapa = mapaColunas(aba);
+    var colMes = colunaObrigatoria(mapa, ABA_VALOR_CONTAS, "MES");
+    var colRelogio = colunaObrigatoria(mapa, ABA_VALOR_CONTAS, "RELOGIO");
+    var colValor = colunaObrigatoria(mapa, ABA_VALOR_CONTAS, "VALOR");
+    var colTotalMes = mapa["TOTAL MES"];
+
+    var dados = aba.getDataRange().getValues();
+
+    var linhaExistente = -1;
+    for (var i = 1; i < dados.length; i++) {
+      var mesLinha = (dados[i][colMes - 1] || "").toString().trim();
+      var relogioLinha = (dados[i][colRelogio - 1] || "").toString().trim();
+      if (mesLinha === mes && relogioLinha === relogio) {
+        linhaExistente = i + 1;
+        break;
+      }
+    }
+
+    if (linhaExistente !== -1) {
+      aba.getRange(linhaExistente, colValor).setValue(valor);
+    } else {
+      var linha = new Array(aba.getLastColumn()).fill("");
+      linha[colMes - 1] = mes;
+      linha[colRelogio - 1] = relogio;
+      linha[colValor - 1] = valor;
+      aba.appendRow(linha);
+    }
+
+    // Recalcula e grava o TOTAL MES (soma de todos os relógios daquele
+    // mês) em toda linha desse mês — mantém as linhas já existentes em
+    // dia, não só a que acabou de ser lançada agora.
+    if (colTotalMes) {
+      var dadosAtualizados = aba.getDataRange().getValues();
+      var total = 0;
+      var linhasDoMes = [];
+      for (var j = 1; j < dadosAtualizados.length; j++) {
+        var mesLinhaJ = (dadosAtualizados[j][colMes - 1] || "").toString().trim();
+        if (mesLinhaJ !== mes) continue;
+        linhasDoMes.push(j + 1);
+        total += Number(dadosAtualizados[j][colValor - 1]) || 0;
+      }
+      linhasDoMes.forEach(function (numLinha) {
+        aba.getRange(numLinha, colTotalMes).setValue(total);
+      });
+    }
+
+    return { ok: true };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
 // ================= TELEGRAM VIA POLLING (não usa mais webhook) =================
 // Por que a troca: o Apps Script, por natureza da plataforma, responde
 // chamadas externas com um redirecionamento (302) antes de servir o
@@ -1403,6 +1547,12 @@ function doGet(e) {
       .addMetaTag("viewport", "width=device-width, initial-scale=1")
       .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
   }
+  if (tela === "contas") {
+    return HtmlService.createHtmlOutputFromFile("ContasAgua")
+      .setTitle("Valor das Contas — Mamma Mia")
+      .addMetaTag("viewport", "width=device-width, initial-scale=1")
+      .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+  }
   if (!tela && e.parameter.dados == null) {
     return HtmlService.createHtmlOutputFromFile("Menu")
       .setTitle("Painel Qualidade — Mamma Mia")
@@ -1412,6 +1562,8 @@ function doGet(e) {
   try {
     if (e.parameter.dados === "kanban") return respostaJson(listarCards());
     if (e.parameter.dados === "rotinas") return respostaJson(listarRotinas());
+    if (e.parameter.dados === "relogios") return respostaJson(listarRelogios());
+    if (e.parameter.dados === "contas_agua") return respostaJson(listarContasAgua());
     return respostaJson(listarAvisos());
   } catch (erro) {
     return respostaJson({ ok: false, erro: erro.message });
@@ -1426,9 +1578,11 @@ function doGet(e) {
  * relInicio, relFim, recibo}), Higienização de Motores
  * ({acao: "criar_higienizacao", dataHigienizacao, responsavel, unidade}),
  * Kanban ({acao: "criar_card"|"editar_card"|"excluir_card"|"mover_card",
- * ...}) e o CADASTRO de Rotinas ({acao: "criar_rotina"|"editar_rotina"|
- * "excluir_rotina", ...}) — o card do dia em si é gerado sozinho dentro
- * de listarCards() (doGet), não por uma ação aqui.
+ * ...}), o CADASTRO de Rotinas ({acao: "criar_rotina"|"editar_rotina"|
+ * "excluir_rotina", ...}) e Valor das Contas
+ * ({acao: "registrar_conta_agua", mes, relogio, valor}) — o card do dia
+ * em si é gerado sozinho dentro de listarCards() (doGet), não por uma
+ * ação aqui.
  */
 function doPost(e) {
   var dados = JSON.parse(e.postData.contents);
@@ -1446,6 +1600,7 @@ function doPost(e) {
     if (dados.acao === "criar_rotina") return respostaJson(criarRotina(dados.texto, dados.horario, dados.frequencia, dados.diaSemana, dados.diaMes));
     if (dados.acao === "editar_rotina") return respostaJson(editarRotina(dados.id, dados.texto, dados.horario, dados.frequencia, dados.diaSemana, dados.diaMes));
     if (dados.acao === "excluir_rotina") return respostaJson(excluirRotina(dados.id));
+    if (dados.acao === "registrar_conta_agua") return respostaJson(registrarContaAgua(dados.mes, dados.relogio, dados.valor));
     throw new Error("Ação inválida: " + dados.acao);
   } catch (erro) {
     return respostaJson({ ok: false, erro: erro.message });

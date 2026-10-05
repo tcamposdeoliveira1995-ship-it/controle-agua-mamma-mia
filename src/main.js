@@ -31,7 +31,7 @@ const PRODUCAO_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTrD-G
 const CONFIG_RENDIMENTO_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTrD-GbjBDnRbfpgiYcTd6W8wHcQMVE37hMs2l_a7xNvvFrZ0A1TydyWGRxI90AfTXa6Hbht2JvIbUK/pub?gid=289097055&single=true&output=csv';
 // Mesmo projeto Apps Script do webhook de leitura de água (Telegram) —
 // o doPost de lá roteia entre os dois usos pelo formato do corpo.
-const AVISOS_EXEC_URL = 'https://script.google.com/macros/s/AKfycbzHvvPZzBDSB730gShVCl7CPQb23h37w8k8B-cY8n1RI-NkBJzp0eUP5m-rbtj3nGdwpw/exec';
+const AVISOS_EXEC_URL = 'https://script.google.com/macros/s/AKfycbw8SVtHjELPLVXkY6QGlSFpP-7P-53hjBg2wxMLoYL1a10Kt_Ce8qn1HhQnUmzz3kTW_Q/exec';
 // INSUMOS_EXEC_URL não é mais usado aqui — atualizar quantidade agora é
 // feito no Painel Qualidade (painel-qualidade-appscript/Insumos.html).
 const DEDETIZACAO_EXEC_URL = 'https://script.google.com/macros/s/AKfycbzboegVJXJT55v2iOPr51DvgHFRShIN-dLnZzhGdfpTh1pnohV92k9LiIn6M6jE9ekt/exec';

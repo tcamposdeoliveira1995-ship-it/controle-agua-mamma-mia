@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    :root {
+      --bg: #f7f3ee;
+      --card-bg: #ffffff;
+      --border: #e8ddd0;
+      --text: #4b433c;
+      --text-muted: #8a8570;
+      --gold: #b79b6c;
+      --green: #8f9b72;
+      --red: #c07a6c;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      -webkit-tap-highlight-color: transparent;
+    }
+    header {
+      background: var(--text);
+      color: #fff;
+      padding: 1rem 1.1rem;
+      position: sticky;
+      top: 0;
+      z-index: 5;
+    }
+    header h1 { font-size: 1.05rem; margin: 0; font-weight: 700; }
+    header p { margin: 0.15rem 0 0; font-size: 0.78rem; color: #d8d2c6; }
+    .link-menu { display: inline-block; margin-bottom: 0.5rem; font-size: 0.78rem; color: #d8d2c6; text-decoration: none; }
+    main { padding: 1rem; max-width: 560px; margin: 0 auto; padding-bottom: 3rem; }
+
+    .panel-card { background: var(--card-bg); border: 1px solid var(--border); border-radius: 14px; padding: 1.25rem; margin-bottom: 1.25rem; }
+    .panel-header h2 { font-size: 1.05rem; font-weight: 700; margin: 0 0 0.9rem; }
+
+    .form-group { margin-bottom: 1.1rem; }
+    .form-label { display: block; font-size: 0.82rem; font-weight: 600; color: var(--text-muted); margin-bottom: 0.4rem; }
+    .form-control, select.form-control {
+      width: 100%; background: #fff; border: 1px solid var(--border); color: var(--text);
+      font-family: inherit; padding: 0.65rem 0.85rem; border-radius: 10px; font-size: 0.92rem; outline: none;
+    }
+
+    .btn {
+      font-family: inherit; padding: 0.65rem 1.2rem; border-radius: 10px; font-weight: 700; font-size: 0.9rem;
+      cursor: pointer; border: none; width: 100%;
+    }
+    .btn-primary { background: var(--green); color: #fff; }
+    .btn-primary:disabled { opacity: 0.6; }
+
+    .estado-carregando, .estado-vazio { text-align: center; color: var(--text-muted); padding: 1rem; font-size: 0.88rem; }
+    table.data-table { width: 100%; border-collapse: collapse; font-size: 0.8rem; }
+    table.data-table th, table.data-table td { padding: 6px 8px; text-align: left; border-bottom: 1px solid var(--border); }
+    table.data-table th { color: var(--text-muted); font-size: 0.72rem; text-transform: uppercase; }
+    .mes-grupo-total { font-weight: 700; color: var(--gold); }
+  </style>
+</head>
+<body>
+  <header>
+    <a class="link-menu" href="https://script.google.com/macros/s/AKfycbw8SVtHjELPLVXkY6QGlSFpP-7P-53hjBg2wxMLoYL1a10Kt_Ce8qn1HhQnUmzz3kTW_Q/exec">‹ Menu</a>
+    <script>if (window.self !== window.top) { var _lm = document.querySelector('.link-menu'); if (_lm) _lm.style.display = 'none'; }</script>
+    <h1>💧 Valor das Contas</h1>
+    <p>Painel Qualidade — Mamma Mia</p>
+  </header>
+
+  <main>
+    <div class="panel-card">
+      <div class="panel-header"><h2>Lançar valor da conta</h2></div>
+      <form id="form-conta">
+        <div class="form-group">
+          <label class="form-label">Mês da conta *</label>
+          <input type="month" id="conta-mes" class="form-control" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Relógio *</label>
+          <select id="conta-relogio" class="form-control" required>
+            <option value="">Carregando relógios…</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Valor da conta (R$) *</label>
+          <input type="number" id="conta-valor" class="form-control" step="0.01" min="0.01" required>
+        </div>
+        <button type="submit" id="btn-salvar-conta" class="btn btn-primary">Salvar</button>
+      </form>
+    </div>
+
+    <div class="panel-card">
+      <div class="panel-header"><h2>Lançamentos</h2></div>
+      <div id="contas-lista"><div class="estado-carregando">Carregando…</div></div>
+    </div>
+  </main>
+
+  <script>
+    // Mesmo backend do mural de Avisos (mesma planilha de água) — ganhou
+    // 2 ações novas: listar_relogios (dinâmico, pelos cabeçalhos da aba
+    // de leituras) e registrar_conta_agua (upsert por MES+RELOGIO, aba
+    // VALOR CONTAS). Ver
+    // docs/superpowers/specs/2026-10-05-painel-qualidade-valor-contas-design.md.
+    var CONTAS_EXEC_URL = 'https://script.google.com/macros/s/AKfycbw8SVtHjELPLVXkY6QGlSFpP-7P-53hjBg2wxMLoYL1a10Kt_Ce8qn1HhQnUmzz3kTW_Q/exec';
+
+    function escaparHtml(texto) {
+      var div = document.createElement('div');
+      div.textContent = texto == null ? '' : String(texto);
+      return div.innerHTML;
+    }
+
+    function formatarReais(valor) {
+      return 'R$ ' + Number(valor || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+
+    // "yyyy-MM" (input type=month) <-> "MM/yyyy" (formato gravado na planilha)
+    function mesInputParaPlanilha(valorInput) {
+      var partes = valorInput.split('-');
+      return partes[1] + '/' + partes[0];
+    }
+
+    function carregarRelogios() {
+      var select = document.getElementById('conta-relogio');
+      fetch(CONTAS_EXEC_URL + '?dados=relogios', { cache: 'no-store' })
+        .then(function (r) { return r.json(); })
+        .then(function (resultado) {
+          if (!resultado.ok) throw new Error(resultado.erro || 'Erro desconhecido');
+          var relogios = resultado.relogios || [];
+          if (relogios.length === 0) {
+            select.innerHTML = '<option value="">Nenhum relógio encontrado</option>';
+            return;
+          }
+          select.innerHTML = '<option value="">Selecione…</option>' +
+            relogios.map(function (r) { return '<option value="' + escaparHtml(r) + '">' + escaparHtml(r) + '</option>'; }).join('');
+        })
+        .catch(function () {
+          select.innerHTML = '<option value="">Não foi possível carregar os relógios</option>';
+        });
+    }
+
+    function carregarLista() {
+      var container = document.getElementById('contas-lista');
+      fetch(CONTAS_EXEC_URL + '?dados=contas_agua', { cache: 'no-store' })
+        .then(function (r) { return r.json(); })
+        .then(function (resultado) {
+          if (!resultado.ok) throw new Error(resultado.erro || 'Erro desconhecido');
+          var contas = resultado.contas || [];
+          if (contas.length === 0) {
+            container.innerHTML = '<p class="estado-vazio">Nenhum lançamento ainda.</p>';
+            return;
+          }
+          var linhasHtml = contas.map(function (c) {
+            return '<tr><td>' + escaparHtml(c.mes) + '</td>' +
+              '<td>' + escaparHtml(c.relogio) + '</td>' +
+              '<td>' + formatarReais(c.valor) + '</td>' +
+              '<td class="mes-grupo-total">' + (c.totalMes != null ? formatarReais(c.totalMes) : '-') + '</td></tr>';
+          }).join('');
+          container.innerHTML = '<table class="data-table"><thead><tr><th>Mês</th><th>Relógio</th><th>Valor</th><th>Total do mês</th></tr></thead><tbody>' + linhasHtml + '</tbody></table>';
+        })
+        .catch(function () {
+          container.innerHTML = '<p class="estado-vazio">Não foi possível carregar os lançamentos.</p>';
+        });
+    }
+
+    document.getElementById('form-conta').addEventListener('submit', function (e) {
+      e.preventDefault();
+      var btn = document.getElementById('btn-salvar-conta');
+      var mesInput = document.getElementById('conta-mes').value;
+      if (!mesInput) { alert('Selecione o mês da conta.'); return; }
+      var payload = {
+        acao: 'registrar_conta_agua',
+        mes: mesInputParaPlanilha(mesInput),
+        relogio: document.getElementById('conta-relogio').value,
+        valor: document.getElementById('conta-valor').value,
+      };
+      btn.disabled = true;
+      btn.textContent = 'Salvando...';
+      fetch(CONTAS_EXEC_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify(payload),
+      })
+        .then(function (r) { return r.json(); })
+        .then(function (resultado) {
+          if (!resultado.ok) throw new Error(resultado.erro || 'Erro desconhecido');
+          document.getElementById('form-conta').reset();
+          carregarLista();
+          alert('Valor da conta registrado!');
+        })
+        .catch(function (erro) {
+          alert('Erro ao salvar: ' + erro.message);
+        })
+        .finally(function () {
+          btn.disabled = false;
+          btn.textContent = 'Salvar';
+        });
+    });
+
+    carregarRelogios();
+    carregarLista();
+  </script>
+</body>
+</html>
