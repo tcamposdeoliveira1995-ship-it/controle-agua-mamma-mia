@@ -22,13 +22,21 @@ const MP_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTFEg4Bpk7ev
 const PERDAS_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQ0QXaxvuAAaF7XzQWayifLZIflDtS1psT3gNJTmkQ0BvPWbuKPttlJ6EAcE8Zv8IG_UlAbScrhD4Nb/pub?output=csv';
 const OS_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSyKnl6d4trSwtVru3JQIcoqb_h2gTHKBqn-3zXM1JW7MTzm_Xj01UJh62eDPDNEOYjisMWrGrWfFJt/pub?gid=1728678619&single=true&output=csv';
 const INSUMOS_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTxAviEilfLLSjTjSznB3EyWWtrHVp6ClhabTSuzu5gQh2aoYbLeYKKoH6CcfRPkBpelcOG9bU2a0b3/pub?output=csv';
-const REFEICOES_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTrD-GbjBDnRbfpgiYcTd6W8wHcQMVE37hMs2l_a7xNvvFrZ0A1TydyWGRxI90AfTXa6Hbht2JvIbUK/pub?gid=1519326032&single=true&output=csv';
-const AUSENCIAS_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTrD-GbjBDnRbfpgiYcTd6W8wHcQMVE37hMs2l_a7xNvvFrZ0A1TydyWGRxI90AfTXa6Hbht2JvIbUK/pub?gid=632854171&single=true&output=csv';
-const PRODUCAO_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTrD-GbjBDnRbfpgiYcTd6W8wHcQMVE37hMs2l_a7xNvvFrZ0A1TydyWGRxI90AfTXa6Hbht2JvIbUK/pub?gid=1492952412&single=true&output=csv';
-// CONFIG_RENDIMENTO — linhas TIPO=USO são os ingredientes extras
-// lançados na tela de Produção (ver refeitorio-mamma-mia); linhas sem
-// TIPO são a config de rendimento esperado, ignoradas aqui.
-const CONFIG_RENDIMENTO_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTrD-GbjBDnRbfpgiYcTd6W8wHcQMVE37hMs2l_a7xNvvFrZ0A1TydyWGRxI90AfTXa6Hbht2JvIbUK/pub?gid=289097055&single=true&output=csv';
+// REFEITORIO_PUBLICO — substitui a planilha "CONTROLE DE REFEICOES"
+// (INC-001: aquela expunha nome e CPF por link publicado; a publicação
+// foi interrompida e as URLs antigas, chave 2PACX-1vTrD…, agora dão
+// HTTP 401). Esta só tem agregados, nenhum nome — ver
+// docs/superpowers/specs/2026-09-30-refeicoes-refeitorio-publico-design.md.
+const REFEITORIO_PUB_BASE = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTq52sR0OVsuMbCvmS4PwPApj3uyq118RQQ5_PB29zE6YlyMH-CqPPtiu7wv_1umAMEOH3m_FtAEhWH/pub';
+const refeitorioCsv = gid => `${REFEITORIO_PUB_BASE}?gid=${gid}&single=true&output=csv`;
+const REFEICOES_CSV_URL = refeitorioCsv(0);            // REFEICOES_DIA
+const PRESENCA_DIA_CSV_URL = refeitorioCsv(2033071160); // novo — total de pessoas por dia, sem nome
+const AUSENCIAS_CSV_URL = refeitorioCsv(1350726329);    // AUSENCIAS_PUB
+const PRODUCAO_CSV_URL = refeitorioCsv(1660038276);     // PRODUCAO_PUB
+// EXTRAS_USO — linhas TIPO=USO são os ingredientes extras lançados na
+// tela de Produção (ver refeitorio-mamma-mia); linhas sem TIPO são a
+// config de rendimento esperado, ignoradas aqui.
+const CONFIG_RENDIMENTO_CSV_URL = refeitorioCsv(744216876);
 // Mesmo projeto Apps Script do webhook de leitura de água (Telegram) —
 // o doPost de lá roteia entre os dois usos pelo formato do corpo.
 const AVISOS_EXEC_URL = 'https://script.google.com/macros/s/AKfycbw8SVtHjELPLVXkY6QGlSFpP-7P-53hjBg2wxMLoYL1a10Kt_Ce8qn1HhQnUmzz3kTW_Q/exec';
@@ -2929,12 +2937,6 @@ let ultimoEstadoRefeicoes = null;
 let previsaoDiasAlvo = 7;
 let ultimoEstadoPrevisao = null;
 
-// Lista de Presença recolhida ou não — estado do módulo (não do PDF, que
-// sempre mostra a lista inteira independente disso) porque o card só
-// serve de referência rápida na tela; recolhido por padrão não faz
-// sentido, então começa aberto.
-let presencaRecolhida = false;
-
 // Junta o ingrediente principal (Frango, Farofa — "Qual?" no formulário)
 // com os extras (calabresa, cenoura...) num texto só, pra uma coluna só
 // na tabela/PDF: "Frango · calabresa, cenoura". Módulo-escopo (não
@@ -2946,6 +2948,23 @@ function textoIngredientes(ingredientePrincipal, extras) {
   if (ingredientePrincipal) partes.push(ingredientePrincipal);
   if (extrasUnicos.length) partes.push(extrasUnicos.join(', '));
   return partes.length ? partes.join(' · ') : '-';
+}
+
+// Agrupa ausências por tipo+período com uma contagem (Qtd) — AUSENCIAS_PUB
+// não tem nome (INC-001), então sem agrupar a tabela ficaria com várias
+// linhas idênticas ("Falta | 28/09/2026" repetido 9x). Módulo-escopo pelo
+// mesmo motivo de textoIngredientes/textoSobra: tela e PDF
+// (refeicoesGerarPDF) usam o mesmo agrupamento.
+function agruparAusencias(lista) {
+  const grupos = {};
+  (lista || []).forEach(a => {
+    const chave = a.tipo + '|' + a.dataInicio + '|' + (a.dataFim || a.dataInicio);
+    if (!grupos[chave]) grupos[chave] = { tipo: a.tipo, dataInicio: a.dataInicio, dataFim: a.dataFim, qtd: 0 };
+    grupos[chave].qtd++;
+  });
+  return Object.values(grupos).sort((a, b) => {
+    return a.tipo.localeCompare(b.tipo) || _dataBRParaDate(a.dataInicio) - _dataBRParaDate(b.dataInicio);
+  });
 }
 
 // Arredonda pra 1 casa decimal evitando erro de ponto flutuante (ex.:
@@ -3096,12 +3115,35 @@ async function carregarRefeicoes() {
       console.warn('[REFEICOES] Ingredientes extras não carregados', erroConfigRendimento);
     }
 
+    // Total de pessoas presentes por dia (PRESENCA_DIA) — null = não
+    // carregou, tratado à parte na tela (mostra "—" em vez de derrubar
+    // a aba inteira, mesmo padrão de Produção/Config acima).
+    let presencaPorData = null;
+    try {
+      const respostaPresenca = await fetch(PRESENCA_DIA_CSV_URL, { cache: 'no-store' });
+      if (respostaPresenca.ok) {
+        const linhasPresenca = parseCSVLinhas(await respostaPresenca.text());
+        const cabecalhoPresenca = (linhasPresenca[0] || []).map(c => c.trim().toUpperCase());
+        const idxDataPresenca = cabecalhoPresenca.indexOf('DATA');
+        const idxPessoas = cabecalhoPresenca.indexOf('PESSOAS');
+        if (idxDataPresenca !== -1 && idxPessoas !== -1) {
+          presencaPorData = {};
+          linhasPresenca.slice(1).forEach(cols => {
+            const data = (cols[idxDataPresenca] || '').trim();
+            if (data) presencaPorData[data] = Number((cols[idxPessoas] || '0').trim()) || 0;
+          });
+        }
+      }
+    } catch (erroPresenca) {
+      console.warn('[REFEICOES] Presença não carregada', erroPresenca);
+    }
+
     let registros = [];
     if (linhasRefeicoes.length >= 2) {
       const cabecalho = linhasRefeicoes[0].map(c => c.trim().toUpperCase());
       const idxData = cabecalho.findIndex(c => c === 'DATA');
       const idxRefeicao = cabecalho.findIndex(c => c.includes('REFEICAO') || c.includes('REFEIÇÃO'));
-      const idxNomeRefeicao = cabecalho.findIndex(c => c === 'NOME');
+      const idxQtd = cabecalho.findIndex(c => c === 'QTD');
 
       // Conta quem tem "ALMOÇO" no nome da refeição (registro antigo, feito
       // pelo Totem) OU refeição em branco (registro novo, feito pela tela de
@@ -3112,7 +3154,7 @@ async function carregarRefeicoes() {
         .map(cols => ({
           data: (cols[idxData] || '').trim(),
           refeicao: (cols[idxRefeicao] || '').trim(),
-          nome: idxNomeRefeicao === -1 ? '' : (cols[idxNomeRefeicao] || '').trim(),
+          qtd: Number((cols[idxQtd] || '0').trim().replace(',', '.')) || 0,
         }))
         .filter(r => {
           const nome = r.refeicao.toUpperCase();
@@ -3123,20 +3165,20 @@ async function carregarRefeicoes() {
     let ausencias = [];
     if (linhasAusencias.length >= 2) {
       const cabecalhoAus = linhasAusencias[0].map(c => c.trim().toUpperCase());
-      const idxNome = cabecalhoAus.findIndex(c => c === 'NOME');
       const idxTipo = cabecalhoAus.findIndex(c => c === 'TIPO');
       const idxInicio = cabecalhoAus.findIndex(c => c.includes('INICIO') || c.includes('INÍCIO'));
       const idxFim = cabecalhoAus.findIndex(c => c.includes('FIM'));
 
+      // AUSENCIAS_PUB não tem NOME (INC-001) — filtra por dataInicio em vez
+      // de nome, senão descartaria 100% das linhas em silêncio.
       ausencias = linhasAusencias.slice(1)
         .filter(cols => cols.some(c => c.trim() !== ''))
         .map(cols => ({
-          nome: (cols[idxNome] || '').trim(),
           tipo: (cols[idxTipo] || '').trim(),
           dataInicio: (cols[idxInicio] || '').trim(),
           dataFim: (cols[idxFim] || '').trim(),
         }))
-        .filter(a => a.nome);
+        .filter(a => a.dataInicio);
 
       // Mais recente primeiro — mais útil pra conferir os últimos lançamentos.
       ausencias.sort((a, b) => converterDataBRParaOrdenacao(b.dataInicio) - converterDataBRParaOrdenacao(a.dataInicio));
@@ -3195,11 +3237,11 @@ async function carregarRefeicoes() {
         ingredientesExtras = linhasConfigRendimento.slice(1)
           .filter(cols => (cols[idxTipoExtra] || '').trim().toUpperCase() === 'USO')
           .map(cols => ({
-            nome: (cols[idxCategoriaExtra] || '').trim(),
+            ingrediente: (cols[idxCategoriaExtra] || '').trim(),
             data: (cols[idxDataExtra] || '').trim(),
             item: (cols[idxItemExtra] || '').trim(),
           }))
-          .filter(e => e.nome);
+          .filter(e => e.ingrediente);
       }
     }
 
@@ -3218,7 +3260,7 @@ async function carregarRefeicoes() {
       const periodo = a.tipo === 'Férias' && a.dataFim && a.dataFim !== a.dataInicio
         ? `${a.dataInicio} até ${a.dataFim}`
         : a.dataInicio;
-      return `<tr><td>${a.nome}</td><td>${a.tipo}</td><td>${periodo}</td></tr>`;
+      return `<tr><td>${escaparHtmlAviso(a.tipo)}</td><td>${escaparHtmlAviso(periodo)}</td><td>${a.qtd}</td></tr>`;
     }
 
     function renderizar() {
@@ -3229,19 +3271,18 @@ async function carregarRefeicoes() {
       const dataSelecionadaBR = dataInputParaBR(inputData.value);
       const doDia = registros.filter(r => r.data === dataSelecionadaBR);
 
-      // Nomes de quem comeu no dia selecionado — um funcionário pode ter
-      // mais de um registro no mesmo dia (ex.: Totem antigo lançando
-      // Almoço 1 e 2 separados), então dedupe por nome. Sem coluna NOME
-      // na aba (idxNomeRefeicao === -1 lá em cima), fica lista vazia sem
-      // quebrar o resto da tela.
-      const presentesDoDia = [...new Set(doDia.map(r => r.nome).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+      // Total do dia = soma de QTD (REFEICOES_DIA já vem agregada por
+      // AUSENCIAS_PUB/INC-001 — não tem mais nome, 1 linha por
+      // refeição+data com a contagem em QTD, não 1 linha por pessoa).
+      const totalDoDia = doDia.reduce((soma, r) => soma + r.qtd, 0);
+      const pessoasNoDia = presencaPorData ? (presencaPorData[dataSelecionadaBR] || 0) : null;
 
       const porHorario = {};
-      doDia.forEach(r => { porHorario[r.refeicao] = (porHorario[r.refeicao] || 0) + 1; });
+      doDia.forEach(r => { porHorario[r.refeicao] = (porHorario[r.refeicao] || 0) + r.qtd; });
       const horarios = Object.keys(porHorario).sort();
 
       const cardsHorarios = horarios.length
-        ? horarios.map(h => `<div class="kpi-card"><div class="kpi-label">🍽️ ${h}</div><div class="kpi-value">${porHorario[h]}</div></div>`).join('')
+        ? horarios.map(h => `<div class="kpi-card"><div class="kpi-label">🍽️ ${escaparHtmlAviso(h || 'Almoço (sem horário)')}</div><div class="kpi-value">${porHorario[h]}</div></div>`).join('')
         : '';
 
       // Só mostra quem está ausente no dia selecionado (período
@@ -3254,11 +3295,13 @@ async function carregarRefeicoes() {
           const inicio = converterDataBRParaOrdenacao(a.dataInicio);
           const fim = converterDataBRParaOrdenacao(a.dataFim || a.dataInicio);
           return timestampSelecionado >= inicio && timestampSelecionado <= fim;
-        })
-        .sort((a, b) => a.nome.localeCompare(b.nome));
+        });
 
-      const linhasAusenciasHtml = ausenciasNoDia.length
-        ? ausenciasNoDia.map(linhaTabelaAusencia).join('')
+      // Agrupada por tipo+período com Qtd (ver agruparAusencias) — sem nome
+      // (INC-001), várias pessoas com o mesmo tipo/período viram 1 linha só.
+      const ausenciasAgrupadas = agruparAusencias(ausenciasNoDia);
+      const linhasAusenciasHtml = ausenciasAgrupadas.length
+        ? ausenciasAgrupadas.map(linhaTabelaAusencia).join('')
         : '<tr><td colspan="3" style="color:var(--text-muted);">Ninguém ausente nesse dia.</td></tr>';
 
       // Soma produzido/sobra/cru por categoria do dia selecionado — pode
@@ -3294,7 +3337,7 @@ async function carregarRefeicoes() {
       // registrada nesse dia (senão não haveria onde mostrar).
       ingredientesExtras
         .filter(e => e.data === dataSelecionadaBR && porCategoria[e.item])
-        .forEach(e => porCategoria[e.item].extras.push(e.nome));
+        .forEach(e => porCategoria[e.item].extras.push(e.ingrediente));
 
       const categorias = Object.keys(porCategoria).sort();
       const linhasProducaoHtml = categorias.length
@@ -3302,15 +3345,11 @@ async function carregarRefeicoes() {
             const d = porCategoria[c];
             const cru = d.cru > 0 ? `${d.cru.toFixed(1)} kg` : '-';
             const rendimento = d.cru > 0 ? `${((d.produzido / d.cru) * 100).toFixed(0)}%` : '-';
-            const ingredientes = textoIngredientes(d.ingrediente, d.extras);
+            const ingredientes = escaparHtmlAviso(textoIngredientes(d.ingrediente, d.extras));
             const sobra = textoSobra(d.sobra, d.sobraPorUnidade);
-            return `<tr><td>${c}</td><td>${cru}</td><td>${d.produzido.toFixed(1)} kg</td><td>${sobra}</td><td>${rendimento}</td><td>${ingredientes}</td></tr>`;
+            return `<tr><td>${escaparHtmlAviso(c)}</td><td>${cru}</td><td>${d.produzido.toFixed(1)} kg</td><td>${sobra}</td><td>${rendimento}</td><td>${ingredientes}</td></tr>`;
           }).join('')
         : '<tr><td colspan="6" style="color:var(--text-muted);">Nenhuma produção registrada nesse dia.</td></tr>';
-
-      const linhasPresencaHtml = presentesDoDia.length
-        ? presentesDoDia.map(nome => `<tr><td>${nome}</td></tr>`).join('')
-        : '<tr><td style="color:var(--text-muted);">Ninguém registrado nesse dia.</td></tr>';
 
       // Previsão de compra — não depende da data selecionada no filtro
       // (é sobre um período pra frente, não um dia específico); só do
@@ -3320,7 +3359,7 @@ async function carregarRefeicoes() {
       const linhasPrevisaoHtml = previsaoItens.length
         ? previsaoItens.map(p => {
             const aviso = p.diasHistorico < 7 ? ' <span style="color:var(--text-muted);font-size:0.75rem;">⚠️ poucos dados</span>' : '';
-            return `<tr><td>${p.ingrediente}</td><td>${p.previsaoKg.toFixed(1)} kg</td><td>${p.mediaDiaria.toFixed(1)} kg/dia</td><td>${p.diasHistorico} dias${aviso}</td></tr>`;
+            return `<tr><td>${escaparHtmlAviso(p.ingrediente)}</td><td>${p.previsaoKg.toFixed(1)} kg</td><td>${p.mediaDiaria.toFixed(1)} kg/dia</td><td>${p.diasHistorico} dias${aviso}</td></tr>`;
           }).join('')
         : '';
 
@@ -3332,25 +3371,17 @@ async function carregarRefeicoes() {
 
       conteudo.innerHTML = `
         <div class="dashboard-grid" style="margin-bottom:1rem;">
-          <div class="kpi-card"><div class="kpi-label">👥 TOTAL DO DIA</div><div class="kpi-value">${doDia.length}</div></div>
+          <div class="kpi-card"><div class="kpi-label">👥 TOTAL DO DIA</div><div class="kpi-value">${totalDoDia}</div></div>
         </div>
         ${horarios.length
           ? `<div class="dashboard-grid">${cardsHorarios}</div>`
-          : (doDia.length === 0 ? '<p style="color:var(--text-muted);">Nenhum almoço registrado nesse dia.</p>' : '')}
+          : (totalDoDia === 0 ? '<p style="color:var(--text-muted);">Nenhum almoço registrado nesse dia.</p>' : '')}
 
         <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:1rem;margin-top:1.8rem;">
           <div style="${estiloCartaoAninhado}">
-            <div class="panel-header">
-              <h3>👥 Lista de Presença</h3>
-              <button id="presenca-toggle" class="btn btn-secondary" type="button" style="font-size:0.78rem;padding:0.35rem 0.7rem;">${presencaRecolhida ? `▸ Mostrar (${presentesDoDia.length})` : '▾ Recolher'}</button>
-            </div>
-            ${presencaRecolhida ? '' : `
-            <div class="table-responsive">
-              <table class="modern-table">
-                <thead><tr><th>Nome</th></tr></thead>
-                <tbody>${linhasPresencaHtml}</tbody>
-              </table>
-            </div>`}
+            <div class="panel-header"><h3>👥 Lista de Presença</h3></div>
+            <div class="kpi-card"><div class="kpi-label">PESSOAS NO DIA</div><div class="kpi-value">${pessoasNoDia === null ? '—' : pessoasNoDia}</div></div>
+            ${pessoasNoDia === null ? '<p style="color:var(--text-muted);">Presença indisponível no momento.</p>' : ''}
           </div>
 
           <div style="${estiloCartaoAninhado}">
@@ -3377,7 +3408,7 @@ async function carregarRefeicoes() {
         <div class="panel-header" style="margin-top:1.8rem;"><h3>📋 Ausências (faltas e férias)</h3></div>
         <div class="table-responsive">
           <table class="modern-table">
-            <thead><tr><th>Nome</th><th>Tipo</th><th>Data</th></tr></thead>
+            <thead><tr><th>Tipo</th><th>Data</th><th>Qtd</th></tr></thead>
             <tbody>${linhasAusenciasHtml}</tbody>
           </table>
         </div>
@@ -3396,7 +3427,8 @@ async function carregarRefeicoes() {
       // rebuscar nada na hora de gerar.
       ultimoEstadoRefeicoes = {
         dataSelecionadaBR,
-        presentesDoDia,
+        totalDoDia,
+        pessoasNoDia,
         ausenciasNoDia,
         categorias,
         porCategoria,
@@ -3413,7 +3445,6 @@ async function carregarRefeicoes() {
       document.getElementById('previsao-btn-pdf')?.addEventListener('click', () => {
         if (ultimoEstadoPrevisao) previsaoComprarGerarPDF(ultimoEstadoPrevisao);
       });
-      document.getElementById('presenca-toggle')?.addEventListener('click', () => { presencaRecolhida = !presencaRecolhida; renderizar(); });
     }
 
     if (!inputData._refEvt) {
@@ -3443,19 +3474,16 @@ async function carregarRefeicoes() {
 // salva como PDF pelo diálogo do navegador). Recebe só o estado já
 // calculado pela tela (ultimoEstadoRefeicoes) — não busca nada de novo.
 function refeicoesGerarPDF(estado) {
-  const { dataSelecionadaBR, presentesDoDia, ausenciasNoDia, categorias, porCategoria } = estado;
+  const { dataSelecionadaBR, totalDoDia, pessoasNoDia, ausenciasNoDia, categorias, porCategoria } = estado;
   const agora = new Date().toLocaleString('pt-BR');
 
-  const linhasPresenca = presentesDoDia.length
-    ? presentesDoDia.map(nome => `<tr><td style="font-size:11px;padding:5px 6px;">${nome}</td></tr>`).join('')
-    : '<tr><td style="font-size:11px;padding:5px 6px;color:#a09284;">Ninguém registrado nesse dia.</td></tr>';
-
-  const linhasAusencias = ausenciasNoDia.length
-    ? ausenciasNoDia.map(a => {
+  const ausenciasAgrupadas = agruparAusencias(ausenciasNoDia);
+  const linhasAusencias = ausenciasAgrupadas.length
+    ? ausenciasAgrupadas.map(a => {
         const periodo = a.tipo === 'Férias' && a.dataFim && a.dataFim !== a.dataInicio
           ? `${a.dataInicio} até ${a.dataFim}`
           : a.dataInicio;
-        return `<tr><td style="font-size:11px;padding:5px 6px;">${a.nome}</td><td style="font-size:11px;padding:5px 6px;">${a.tipo}</td><td style="font-size:11px;padding:5px 6px;">${periodo}</td></tr>`;
+        return `<tr><td style="font-size:11px;padding:5px 6px;">${escaparHtmlAviso(a.tipo)}</td><td style="font-size:11px;padding:5px 6px;">${escaparHtmlAviso(periodo)}</td><td style="font-size:11px;padding:5px 6px;">${a.qtd}</td></tr>`;
       }).join('')
     : '<tr><td colspan="3" style="font-size:11px;padding:5px 6px;color:#a09284;">Ninguém ausente nesse dia.</td></tr>';
 
@@ -3464,10 +3492,10 @@ function refeicoesGerarPDF(estado) {
         const d = porCategoria[c];
         const cru = d.cru > 0 ? `${d.cru.toFixed(1)} kg` : '-';
         const rendimento = d.cru > 0 ? `${((d.produzido / d.cru) * 100).toFixed(0)}%` : '-';
-        const ingredientes = textoIngredientes(d.ingrediente, d.extras);
+        const ingredientes = escaparHtmlAviso(textoIngredientes(d.ingrediente, d.extras));
         const sobra = textoSobra(d.sobra, d.sobraPorUnidade);
         return `<tr>
-          <td style="font-size:11px;padding:5px 6px;">${c}</td>
+          <td style="font-size:11px;padding:5px 6px;">${escaparHtmlAviso(c)}</td>
           <td style="font-size:11px;padding:5px 6px;">${cru}</td>
           <td style="font-size:11px;padding:5px 6px;">${d.produzido.toFixed(1)} kg</td>
           <td style="font-size:11px;padding:5px 6px;">${sobra}</td>
@@ -3506,13 +3534,18 @@ function refeicoesGerarPDF(estado) {
         </div>
       </div>
 
-      <div style="background:#f9f5f0;border:1px solid #e8ddd0;border-radius:8px;padding:10px 14px;display:inline-block;min-width:130px;margin-bottom:6px;">
-        <div style="font-size:9px;color:#8a8570;font-weight:600;text-transform:uppercase;">Total de Presentes</div>
-        <div style="font-size:18px;font-weight:800;color:#4b433c;">${presentesDoDia.length}</div>
+      <div style="display:flex;gap:10px;margin-bottom:6px;">
+        <div style="background:#f9f5f0;border:1px solid #e8ddd0;border-radius:8px;padding:10px 14px;display:inline-block;min-width:130px;">
+          <div style="font-size:9px;color:#8a8570;font-weight:600;text-transform:uppercase;">Total de Presentes</div>
+          <div style="font-size:18px;font-weight:800;color:#4b433c;">${pessoasNoDia === null ? '—' : pessoasNoDia}</div>
+        </div>
+        <div style="background:#f9f5f0;border:1px solid #e8ddd0;border-radius:8px;padding:10px 14px;display:inline-block;min-width:130px;">
+          <div style="font-size:9px;color:#8a8570;font-weight:600;text-transform:uppercase;">Refeições Registradas</div>
+          <div style="font-size:18px;font-weight:800;color:#4b433c;">${totalDoDia}</div>
+        </div>
       </div>
 
-      ${secao('Lista de Presença', ['Nome'], linhasPresenca)}
-      ${secao('Ausências (faltas e férias)', ['Nome', 'Tipo', 'Data'], linhasAusencias)}
+      ${secao('Ausências (faltas e férias)', ['Tipo', 'Data', 'Qtd'], linhasAusencias)}
       ${secao('Produção e Sobra', ['Categoria', 'Cru', 'Produzido', 'Sobra', 'Rendimento', 'Ingredientes'], linhasProducao)}
 
       <div style="margin-top:24px;padding-top:12px;border-top:1px solid #e8ddd0;font-size:10px;color:#a09284;text-align:center;">
