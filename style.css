@@ -513,6 +513,15 @@ header {
 .daily-status-dot.danger { background-color: var(--color-red); box-shadow: 0 0 8px var(--color-red); }
 .stat-item.full-width { grid-column: 1 / span 2; margin-top: 0.25rem; }
 
+#contas-agua-section { margin-bottom: 2rem; }
+.contas-agua-mes + .contas-agua-mes { margin-top: 1.25rem; }
+.contas-agua-mes-header { display: flex; justify-content: space-between; align-items: baseline; gap: 0.75rem; flex-wrap: wrap; margin-bottom: 0.65rem; }
+.contas-agua-total { font-weight: 700; color: var(--color-green); }
+.contas-agua-vazio { color: var(--text-muted); margin: 0 0 0.75rem; }
+.contas-agua-vazio:last-child { margin-bottom: 0; }
+.contas-agua-badge { font-size: 0.72rem; font-weight: 700; color: var(--color-blue); border: 1px solid var(--card-border); border-radius: 999px; padding: 0.1rem 0.45rem; margin-left: 0.35rem; vertical-align: middle; }
+#contas-agua-section td:last-child, #contas-agua-section th:last-child { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+
 /* EXPORTAÇÕES */
 .export-actions-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
 .actions-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
