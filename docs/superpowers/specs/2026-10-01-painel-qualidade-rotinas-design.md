@@ -1,12 +1,12 @@
 # Painel Qualidade — Rotinas gerando card diário no Kanban
 
 **Data:** 2026-10-01
-**Status:** Implementado e validado em produção (testado pela usuária em 02/10/2026, incluindo o bug de
-duplicação corrigido no mesmo dia — ver seção no fim). **ATENÇÃO:** o desenho original deste documento
-(checklist com caixinha de marcar, abaixo) foi SUBSTITUÍDO no mesmo dia — ver a seção "Correção/complemento
-— Rotina vira card no Kanban" no fim, que é a versão que está valendo. O corpo do documento foi mantido
-pra contexto histórico (por que a 1ª versão foi desenhada daquele jeito), mas não reflete mais o código
-atual sozinho — leia a correção também.
+**Status:** Implementado, aguardando teste da usuária em produção da 2ª correção de duplicação (05/10/2026 —
+ver última seção). **ATENÇÃO:** o desenho original deste documento (checklist com caixinha de marcar,
+abaixo) foi SUBSTITUÍDO no dia seguinte — ver a seção "Correção/complemento — Rotina vira card no Kanban"
+no fim, que é a versão que está valendo. O corpo do documento foi mantido pra contexto histórico (por que a
+1ª versão foi desenhada daquele jeito), mas não reflete mais o código atual sozinho — leia as correções
+também, inclusive a última, que muda de novo como `gerarCardsRotinasDoDia()` funciona.
 
 ## Contexto
 
@@ -209,3 +209,54 @@ começado a mexer) e, se nenhum saiu de lá, o primeiro criado.
 
 Depois de colar o `Code.gs` novo do `avisos-appscript` e reimplantar, abrir o editor do Apps Script,
 selecionar **`limparCardsRotinaDuplicados`** no menu de funções e clicar em ▶ Executar — uma vez só.
+
+## Correção — rotina com 1 card só, resetando sozinho todo dia (05/10/2026)
+
+A correção de 02/10/2026 (acima) resolveu o bug de duas linhas criadas no MESMO dia pela mesma rotina —
+mas não era o problema todo. Reportado de novo pela usuária, com print do Quadro cheio de cards repetidos
+("Meu painel da Qualidade, está duplicando as coisas"): investigando, a causa era o próprio
+**comportamento pretendido** da versão de 01/10/2026 de `gerarCardsRotinasDoDia()` — ela só CRIAVA um card
+novo quando não achava um com `DATA_ROTINA = hoje`, mas nunca reaproveitava ou apagava os de dias
+anteriores. Então cada rotina foi literalmente acumulando 1 card por dia: um em "A Fazer" todo dia em que
+não foi movida, e mais um em "Concluído" a cada dia em que foi. Visualmente eram cards idênticos (o card
+não mostra a data em que foi gerado), por isso pareciam duplicados.
+
+Esclarecido com a usuária o comportamento esperado: *"Deve aparecer hj no a fazer, eu vou mover para
+concluído, e só amanhã voltar pro A fazer, não ficar criando novos."* — ou seja, cada rotina deveria ter
+**1 card só, sempre**, que é reaproveitado e resetado pra "A Fazer" a cada novo dia, não um card novo por
+dia.
+
+### O que muda em `gerarCardsRotinasDoDia()`
+
+Antes: pra cada rotina, procurava uma linha com `DATA_ROTINA = hoje`; se não achava, **criava uma linha
+nova** (deixando as de dias anteriores intactas, acumulando pra sempre).
+
+Agora: pra cada rotina, procura a (no máximo 1) linha já existente dela, independente da data:
+- **Não existe nenhuma ainda** → cria a primeira, em "A Fazer" (igual antes).
+- **Existe e `DATA_ROTINA` já é hoje** → não mexe, fica onde a usuária colocou (ela pode ter movido pra
+  "Em Andamento" ou "Concluído" hoje mesmo — não desfaz esse progresso).
+- **Existe mas `DATA_ROTINA` não é hoje** (dia novo) → a MESMA linha é reaproveitada: coluna volta pra "A
+  Fazer" (não importa se estava em "Concluído", "Em Andamento", ou ainda parada em "A Fazer" de um dia que
+  não foi mexida) e `DATA_ROTINA` é atualizada pra hoje. Nenhuma linha nova é criada.
+
+Resultado: cada rotina ativa tem sempre exatamente 1 linha/card no KANBAN, que "viaja" entre as colunas e
+volta pra "A Fazer" sozinho a cada novo dia — nunca mais que 1 por rotina.
+
+### Limpeza dos cards já acumulados
+
+Nova função `consolidarCardsRotinaUnica()` (`avisos-appscript/Code.gs`), **EXECUTAR 1 VEZ SÓ** manualmente
+pelo editor do Apps Script — pra cada `ROTINA_ID` com mais de 1 linha no KANBAN, mantém só a de
+`DATA_ROTINA` mais recente e apaga as outras. Depois de rodar, a próxima abertura do Quadro já reseta
+sozinha pra "A Fazer" quem não for de hoje (pela `gerarCardsRotinasDoDia()` corrigida) — não precisa fazer
+nada manual além de rodar essa função uma vez. Idempotente (rodar de novo sem duplicata não apaga nada).
+
+A função antiga `limparCardsRotinaDuplicados()` (da correção de 02/10/2026) foi removida do código — ela
+resolvia um caso particular (duplicata no mesmo dia) que `consolidarCardsRotinaUnica()` já cobre por
+completo (junto com o caso de dias diferentes), então ficou redundante.
+
+### Passos manuais pra usuária
+
+1. Colar `Code.gs` do `avisos-appscript` por cima do existente e reimplantar.
+2. Abrir o editor do Apps Script, selecionar **`consolidarCardsRotinaUnica`** no menu de funções e clicar
+   em ▶ Executar — uma vez só. Autorizar se pedir.
+3. Abrir o Quadro — cada rotina deve aparecer com só 1 card agora.

@@ -928,19 +928,28 @@ function excluirRotina(id) {
   }
 }
 
-// Garante que toda rotina ativa já tenha o card de HOJE no Kanban
-// (coluna A Fazer) — chamada sempre que o Kanban é aberto (dentro de
+// Garante que toda rotina ativa tenha HOJE o seu card em "A Fazer" no
+// Kanban — chamada sempre que o Kanban é aberto (dentro de
 // listarCards(), logo acima), não por nenhum gatilho/trigger agendado:
 // assim não depende de configurar nada à parte, nem do script
-// "acordar" sozinho um dia que a usuária não abrir o painel. Se o card
-// de ontem de uma rotina não foi movido pra Concluído, ele continua
-// aberto, parado — hoje ganha o seu próprio card novo mesmo assim
-// (decisão explícita: não tenta "esperar" o de ontem terminar pra
-// criar o de hoje, senão uma rotina atrasada um dia travaria de
-// aparecer nos dias seguintes). ROTINA_ID/DATA_ROTINA são colunas
-// opcionais no KANBAN — sem elas, esta função simplesmente não faz
-// nada (ainda não dá pra saber se já existe o card de hoje de forma
-// confiável), sem derrubar o resto do Kanban.
+// "acordar" sozinho um dia que a usuária não abrir o painel.
+//
+// IMPORTANTE — cada rotina tem NO MÁXIMO 1 card no Kanban, nunca um
+// por dia: a versão anterior desta função só CRIAVA um card novo
+// quando não achava um já marcado com a data de hoje, mas nunca
+// "reaproveitava"/resetava os cards de dias anteriores — então toda
+// rotina foi acumulando um card por dia (um em "A Fazer" sempre que a
+// usuária não movia no mesmo dia, outro em "Concluído" a cada dia que
+// movia), parecendo duplicação. Corrigido em 2026-10-05: agora, pra
+// cada rotina, existe só 1 linha no KANBAN. Se a última vez que ela foi
+// marcada (DATA_ROTINA) não é hoje, a linha é RESETADA pra "A Fazer"
+// (não importa se estava em Concluído, Em Andamento, ou ainda em "A
+// Fazer" de um dia anterior) e a data é atualizada pra hoje. Se já foi
+// marcada hoje, não mexe — fica onde a usuária colocou. Ver
+// consolidarCardsRotinaUnica() logo abaixo, que corrige de uma vez as
+// linhas duplicadas que esse bug antigo já tinha criado. ROTINA_ID/
+// DATA_ROTINA são colunas opcionais no KANBAN — sem elas, esta função
+// simplesmente não faz nada, sem derrubar o resto do Kanban.
 function gerarCardsRotinasDoDia() {
   var rotinas = listarRotinasAtivas();
   if (!rotinas.length) return;
@@ -959,40 +968,58 @@ function gerarCardsRotinasDoDia() {
     var colColuna = colunaObrigatoria(mapa, ABA_KANBAN, "COLUNA");
     var colOrdem = colunaObrigatoria(mapa, ABA_KANBAN, "ORDEM");
     var colCriado = mapa["CRIADO_EM"];
+    var colAtualizado = mapa["ATUALIZADO_EM"];
 
     var hoje = hojeFormatado();
     var dados = aba.getDataRange().getValues();
 
-    var jaTemHoje = {};
+    // Linha (1-based na planilha) da única linha existente de cada
+    // rotina, se houver.
+    var linhaPorRotina = {};
     var maiorOrdemAFazer = -1;
     for (var i = 1; i < dados.length; i++) {
       var rotinaIdLinha = (dados[i][colRotinaId - 1] || "").toString().trim();
-      var dataLinha = paraDataBR(dados[i][colDataRotina - 1]);
-      if (rotinaIdLinha && dataLinha === hoje) jaTemHoje[rotinaIdLinha] = true;
+      if (rotinaIdLinha) linhaPorRotina[rotinaIdLinha] = i + 1;
       if ((dados[i][colColuna - 1] || "").toString().trim() === KANBAN_COLUNAS[0]) {
         maiorOrdemAFazer = Math.max(maiorOrdemAFazer, Number(dados[i][colOrdem - 1]) || 0);
       }
     }
 
     rotinas.forEach(function (rotina) {
-      if (jaTemHoje[rotina.id]) return;
+      var numLinha = linhaPorRotina[rotina.id];
+
+      if (!numLinha) {
+        // Rotina nova, nunca gerou card — cria o primeiro, em "A Fazer".
+        maiorOrdemAFazer++;
+        var linha = new Array(aba.getLastColumn()).fill("");
+        linha[colId - 1] = Utilities.getUuid();
+        linha[colTitulo - 1] = rotina.texto;
+        linha[colColuna - 1] = KANBAN_COLUNAS[0];
+        linha[colOrdem - 1] = maiorOrdemAFazer;
+        linha[colRotinaId - 1] = rotina.id;
+        linha[colDataRotina - 1] = hoje;
+        if (colCriado) linha[colCriado - 1] = new Date();
+        aba.appendRow(linha);
+        // Força a célula de DATA_ROTINA a ficar como texto puro — sem
+        // isso, o Sheets converte "02/10/2026" sozinho pra Date na hora
+        // de gravar (mesmo escrito por appendRow, não só digitado à
+        // mão), o que quebraria a comparação da PRÓXIMA chamada antes
+        // mesmo de paraDataBR() entrar em ação.
+        aba.getRange(aba.getLastRow(), colDataRotina).setNumberFormat("@").setValue(hoje);
+        return;
+      }
+
+      var dataLinha = paraDataBR(dados[numLinha - 1][colDataRotina - 1]);
+      if (dataLinha === hoje) return; // já tratada hoje — não mexe, fica onde a usuária colocou
+
+      // Dia novo pra essa rotina — reseta pra "A Fazer", não importa
+      // onde estava (Concluído, Em Andamento, ou ainda em "A Fazer" de
+      // um dia que não foi mexido).
       maiorOrdemAFazer++;
-      var linha = new Array(aba.getLastColumn()).fill("");
-      linha[colId - 1] = Utilities.getUuid();
-      linha[colTitulo - 1] = rotina.texto;
-      linha[colColuna - 1] = KANBAN_COLUNAS[0];
-      linha[colOrdem - 1] = maiorOrdemAFazer;
-      linha[colRotinaId - 1] = rotina.id;
-      linha[colDataRotina - 1] = hoje;
-      if (colCriado) linha[colCriado - 1] = new Date();
-      aba.appendRow(linha);
-      // Força a célula de DATA_ROTINA a ficar como texto puro — sem
-      // isso, o Sheets converte "02/10/2026" sozinho pra Date na hora de
-      // gravar (mesmo escrito por appendRow, não só digitado à mão), o
-      // que quebraria a comparação da PRÓXIMA chamada antes mesmo de
-      // paraDataBR() entrar em ação (ela cobre o caso de já ter virado
-      // Date, mas aqui evitamos que vire, pra não depender só disso).
-      aba.getRange(aba.getLastRow(), colDataRotina).setNumberFormat("@").setValue(hoje);
+      aba.getRange(numLinha, colColuna).setValue(KANBAN_COLUNAS[0]);
+      aba.getRange(numLinha, colOrdem).setValue(maiorOrdemAFazer);
+      aba.getRange(numLinha, colDataRotina).setNumberFormat("@").setValue(hoje);
+      if (colAtualizado) aba.getRange(numLinha, colAtualizado).setValue(new Date());
     });
   } finally {
     lock.releaseLock();
@@ -1002,62 +1029,67 @@ function gerarCardsRotinasDoDia() {
 /**
  * EXECUTAR 1 VEZ SÓ, manualmente, pelo editor do Apps Script (selecionar
  * esta função no menu "Selecionar função" e clicar em ▶ Executar) —
- * remove os cards duplicados que um bug (já corrigido acima, em
- * gerarCardsRotinasDoDia) gerou: a comparação de data nunca batia por
- * causa da conversão automática do Sheets pra Date, então cada vez que
- * o Kanban era aberto no mesmo dia criava mais um card da mesma rotina,
- * em vez de reconhecer o de hoje já existente.
+ * corrige o acúmulo de cards que o comportamento antigo de
+ * gerarCardsRotinasDoDia() causou: ela criava uma linha NOVA toda vez
+ * que não achava uma de hoje, mas nunca reaproveitava/apagava as de
+ * dias anteriores, então cada rotina foi juntando um card por dia (em
+ * "A Fazer" todo dia que não era movida, e mais um em "Concluído" a
+ * cada dia que era) — a usuária via isso como "duplicação".
  *
- * Pra cada grupo de cards da MESMA rotina + MESMO dia, mantém só 1 —
- * preferindo um que já foi movido pra fora de "A Fazer" (representa
- * trabalho de verdade já feito nele, ex.: um que a usuária já arrastou
- * até Concluído) e, só se nenhum saiu de "A Fazer", o primeiro criado.
- * Não mexe em cards criados manualmente (sem ROTINA_ID). Depois de
- * rodar uma vez, pode ser ignorada — o bug que causava a duplicação já
- * não existe mais.
+ * Pra cada ROTINA_ID com mais de 1 linha, mantém só a de DATA_ROTINA
+ * mais recente e apaga as outras. Não mexe em cards criados manualmente
+ * (sem ROTINA_ID). Depois de rodar esta função, a abertura seguinte do
+ * Kanban (gerarCardsRotinasDoDia(), já corrigida) reseta sozinha pra "A
+ * Fazer" qualquer linha restante cuja data não seja hoje — não precisa
+ * fazer isso aqui também. Rodar de novo não tem problema (idempotente:
+ * sem linha duplicada, não apaga nada).
  */
-function limparCardsRotinaDuplicados() {
+function consolidarCardsRotinaUnica() {
   var aba = obterAbaKanban();
   var mapa = mapaColunas(aba);
   var colRotinaId = mapa["ROTINA_ID"];
   var colDataRotina = mapa["DATA_ROTINA"];
   if (!colRotinaId || !colDataRotina) {
-    Logger.log("Colunas ROTINA_ID/DATA_ROTINA não encontradas na aba KANBAN — nada a limpar.");
+    Logger.log("Colunas ROTINA_ID/DATA_ROTINA não encontradas na aba KANBAN — nada a consolidar.");
     return;
   }
-  var colColuna = colunaObrigatoria(mapa, ABA_KANBAN, "COLUNA");
 
   var dados = aba.getDataRange().getValues();
-  var grupos = {}; // chave "rotinaId|data" -> lista de { linha (1-based), coluna }
+  var porRotina = {}; // rotinaId -> lista de { linha (1-based), data }
   for (var i = 1; i < dados.length; i++) {
     var rotinaIdLinha = (dados[i][colRotinaId - 1] || "").toString().trim();
     if (!rotinaIdLinha) continue;
-    var dataLinha = paraDataBR(dados[i][colDataRotina - 1]);
-    var chave = rotinaIdLinha + "|" + dataLinha;
-    if (!grupos[chave]) grupos[chave] = [];
-    grupos[chave].push({ linha: i + 1, coluna: (dados[i][colColuna - 1] || "").toString().trim() });
+    if (!porRotina[rotinaIdLinha]) porRotina[rotinaIdLinha] = [];
+    porRotina[rotinaIdLinha].push({
+      linha: i + 1,
+      data: paraDataBR(dados[i][colDataRotina - 1]),
+    });
   }
 
   var linhasParaApagar = [];
-  for (var chaveGrupo in grupos) {
-    var ocorrencias = grupos[chaveGrupo];
-    if (ocorrencias.length <= 1) continue;
-
-    var manter = ocorrencias[0];
-    for (var k = 0; k < ocorrencias.length; k++) {
-      if (ocorrencias[k].coluna !== KANBAN_COLUNAS[0]) { manter = ocorrencias[k]; break; }
+  Object.keys(porRotina).forEach(function (rotinaId) {
+    var linhas = porRotina[rotinaId];
+    if (linhas.length <= 1) return;
+    linhas.sort(function (a, b) { return chaveOrdenavelDataBR_(b.data) - chaveOrdenavelDataBR_(a.data); });
+    for (var j = 1; j < linhas.length; j++) {
+      linhasParaApagar.push(linhas[j].linha);
     }
-    for (var m = 0; m < ocorrencias.length; m++) {
-      if (ocorrencias[m].linha !== manter.linha) linhasParaApagar.push(ocorrencias[m].linha);
-    }
-  }
+  });
 
   // De baixo pra cima — apagar de cima pra baixo bagunçaria os números
   // de linha dos itens seguintes da própria lista.
   linhasParaApagar.sort(function (a, b) { return b - a; });
   linhasParaApagar.forEach(function (linha) { aba.deleteRow(linha); });
 
-  Logger.log(linhasParaApagar.length + " card(s) duplicado(s) removido(s).");
+  Logger.log(linhasParaApagar.length + " card(s) duplicado(s) de rotina removido(s).");
+}
+
+// "dd/MM/yyyy" -> número yyyyMMdd, só pra poder comparar/ordenar datas
+// gravadas como texto. Data vazia/mal-formada conta como a mais antiga.
+function chaveOrdenavelDataBR_(dataBR) {
+  var partes = (dataBR || "").split("/");
+  if (partes.length !== 3) return 0;
+  return Number(partes[2] + partes[1] + partes[0]);
 }
 
 // ================= TELEGRAM VIA POLLING (não usa mais webhook) =================
