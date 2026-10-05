@@ -1,9 +1,9 @@
 # Manutenção (OS) — Thalita sem foto obrigatória + busca na lista de fechar
 
 **Data:** 2026-10-02
-**Status:** Implementado, aguardando teste em produção. **Correção no mesmo dia:** testado em produção, a
-usuária reportou que "Prestador de Serviço Terceirizado" também precisava da isenção ("ainda pede a foto,
-prestador 3º não controlo as fotos") — adicionado à mesma lista, ver seção no fim do documento.
+**Status:** Implementado e validado em produção (testado pela usuária em 02/10/2026 — incluindo a correção
+do mesmo dia que adicionou "Prestador de Serviço Terceirizado" à lista de isenção de foto, ver seção no
+fim do documento).
 
 ## Contexto
 
