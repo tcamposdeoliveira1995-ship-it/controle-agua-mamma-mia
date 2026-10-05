@@ -1346,13 +1346,69 @@ function verificarMensagensTelegram() {
 // ================= ROTEAMENTO DO WEB APP =================
 
 /**
- * GET — usado pelo painel. Sem parâmetro (?dados= ausente), devolve os
- * avisos — comportamento antigo, preservado pra não quebrar o Avisos.html
- * já implantado, que sempre buscou essa URL sem nenhum parâmetro.
- * ?dados=kanban devolve os cards do Kanban. ?dados=rotinas devolve o
- * checklist diário (rotinas ativas + quais já foram marcadas hoje).
+ * GET — rotas de TELA primeiro (HTML, abertas de dentro do Menu do
+ * Painel Qualidade, cada uma com ALLOWALL pra poder ficar no iframe —
+ * ver docs/superpowers/specs/2026-10-02-painel-qualidade-shell-iframe-design.md),
+ * senão rotas de DADO (JSON, usadas pelos fetch() de dentro de cada
+ * tela). CONSERTO 05/10/2026: esse doGet só tinha as rotas de dado —
+ * faltava a parte de tela (Menu/Insumos/Auditoria/Dedetizacao/Avisos/
+ * Pipa/Higienizacao/Kanban), o que derrubou o Menu inteiro assim que
+ * esse arquivo foi reimplantado hoje. As duas partes moram no MESMO
+ * doGet porque só existe 1 por projeto — ver comentário no topo do
+ * arquivo. Sem parâmetro nenhum (nem tela nem dados), mantém o
+ * comportamento antigo: devolve os avisos em JSON (Avisos.html sempre
+ * buscou essa URL assim).
  */
 function doGet(e) {
+  var tela = e.parameter.tela;
+  if (tela === "insumos") {
+    return HtmlService.createHtmlOutputFromFile("Insumos")
+      .setTitle("Insumos Críticos — Mamma Mia")
+      .addMetaTag("viewport", "width=device-width, initial-scale=1")
+      .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+  }
+  if (tela === "auditoria") {
+    return HtmlService.createHtmlOutputFromFile("Auditoria")
+      .setTitle("Auditoria — Mamma Mia")
+      .addMetaTag("viewport", "width=device-width, initial-scale=1")
+      .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+  }
+  if (tela === "dedetizacao") {
+    return HtmlService.createHtmlOutputFromFile("Dedetizacao")
+      .setTitle("Dedetização — Mamma Mia")
+      .addMetaTag("viewport", "width=device-width, initial-scale=1")
+      .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+  }
+  if (tela === "avisos") {
+    return HtmlService.createHtmlOutputFromFile("Avisos")
+      .setTitle("Avisos — Mamma Mia")
+      .addMetaTag("viewport", "width=device-width, initial-scale=1")
+      .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+  }
+  if (tela === "pipa") {
+    return HtmlService.createHtmlOutputFromFile("Pipa")
+      .setTitle("Caminhão Pipa — Mamma Mia")
+      .addMetaTag("viewport", "width=device-width, initial-scale=1")
+      .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+  }
+  if (tela === "higienizacao") {
+    return HtmlService.createHtmlOutputFromFile("Higienizacao")
+      .setTitle("Higienização de Motores — Mamma Mia")
+      .addMetaTag("viewport", "width=device-width, initial-scale=1")
+      .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+  }
+  if (tela === "kanban") {
+    return HtmlService.createHtmlOutputFromFile("Kanban")
+      .setTitle("Kanban de Atividades — Mamma Mia")
+      .addMetaTag("viewport", "width=device-width, initial-scale=1")
+      .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+  }
+  if (!tela && e.parameter.dados == null) {
+    return HtmlService.createHtmlOutputFromFile("Menu")
+      .setTitle("Painel Qualidade — Mamma Mia")
+      .addMetaTag("viewport", "width=device-width, initial-scale=1");
+  }
+
   try {
     if (e.parameter.dados === "kanban") return respostaJson(listarCards());
     if (e.parameter.dados === "rotinas") return respostaJson(listarRotinas());

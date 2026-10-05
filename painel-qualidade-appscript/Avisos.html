@@ -105,7 +105,7 @@
     // Mesma URL que o Mamma Mia Control já usava pra esse módulo — nenhuma
     // mudança no backend, só de onde a escrita acontece. Ver
     // docs/superpowers/specs/2026-09-23-painel-qualidade-avisos-design.md.
-    var AVISOS_EXEC_URL = 'https://script.google.com/macros/s/AKfycbzHvvPZzBDSB730gShVCl7CPQb23h37w8k8B-cY8n1RI-NkBJzp0eUP5m-rbtj3nGdwpw/exec';
+    var AVISOS_EXEC_URL = 'https://script.google.com/macros/s/AKfycbzAA1-03ZTdzf2c23tQi6uxuM7gHV-bqcBa8wuuwkrzNhzW5vVkEDC1Jbfu15ClFnSmtg/exec';
 
     var _avisos = [];
 
@@ -116,7 +116,11 @@
     }
 
     function carregarAvisos() {
-      fetch(AVISOS_EXEC_URL, { cache: 'no-store' })
+      // Precisa do "?dados=avisos" explícito — o link SEM nenhum
+      // parâmetro agora serve o Menu (HTML), não mais o JSON dos avisos
+      // por padrão (consertado em 05/10/2026, ver comentário no doGet
+      // do Code.gs do avisos-appscript).
+      fetch(AVISOS_EXEC_URL + '?dados=avisos', { cache: 'no-store' })
         .then(function(resposta) {
           if (!resposta.ok) throw new Error('HTTP ' + resposta.status);
           return resposta.json();
