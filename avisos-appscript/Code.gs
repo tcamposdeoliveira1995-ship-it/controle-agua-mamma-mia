@@ -748,17 +748,21 @@ function excluirCard(id) {
   }
 }
 
-// ================= ROTINAS (modelo das atividades diárias do Kanban) =================
-// ROTINAS: ID | TEXTO | HORARIO | ORDEM | ATIVA | CRIADO_EM — a lista
-// fixa de atividades recorrentes (ex.: "Leitura da Água", "Refeitório"),
+// ================= ROTINAS (modelo das atividades do Kanban) =================
+// ROTINAS: ID | TEXTO | HORARIO | ORDEM | ATIVA | CRIADO_EM | FREQUENCIA
+// | DIA_SEMANA | DIA_MES | REFERENCIA_QUINZENAL — a lista fixa de
+// atividades recorrentes (ex.: "Leitura da Água", "Refeitório"),
 // cadastrada pela própria usuária na tela, não por mim no código.
 // ATIVA=false em vez de apagar a linha (exclusão pela tela é "soft
 // delete") — preserva o vínculo dos cards já gerados no Kanban (campo
 // ROTINA_ID lá) que apontam pro ID dessa rotina, mesmo removida da
-// lista. Cada rotina ativa é só um MODELO — quem representa "feito
-// hoje" ou não é um card de verdade no Kanban (coluna A Fazer), gerado
-// sozinho todo dia por gerarCardsRotinasDoDia(), logo abaixo. Ver
-// docs/superpowers/specs/2026-10-01-painel-qualidade-rotinas-design.md.
+// lista. Cada rotina ativa é só um MODELO — quem representa "feita" ou
+// não é o card de verdade no Kanban, gerado/resetado sozinho por
+// gerarCardsRotinasDoDia(), logo abaixo. FREQUENCIA/DIA_SEMANA/DIA_MES/
+// REFERENCIA_QUINZENAL são colunas OPCIONAIS — sem elas, toda rotina é
+// DIARIA (comportamento de antes). Ver
+// docs/superpowers/specs/2026-10-01-painel-qualidade-rotinas-design.md
+// e docs/superpowers/specs/2026-10-05-painel-qualidade-rotinas-frequencia-design.md.
 
 var ABA_ROTINAS = "ROTINAS";
 
@@ -790,6 +794,65 @@ function paraDataBR(valorCelula) {
   return (valorCelula || "").toString().trim();
 }
 
+// ---- Cálculo de frequência (Diária/Semanal/Quinzenal/Mensal) ----
+// Ver docs/superpowers/specs/2026-10-05-painel-qualidade-rotinas-frequencia-design.md.
+
+function somenteData_(data) {
+  return new Date(data.getFullYear(), data.getMonth(), data.getDate());
+}
+
+function parseDataBR_(dataBR) {
+  var partes = (dataBR || "").split("/");
+  if (partes.length !== 3) return null;
+  return new Date(Number(partes[2]), Number(partes[1]) - 1, Number(partes[0]));
+}
+
+// Menor data >= apartirDe cujo dia da semana é diaSemana (0=domingo...6=sábado).
+function proximaDataComDiaSemana_(apartirDe, diaSemana) {
+  var d = somenteData_(apartirDe);
+  for (var i = 0; i < 7; i++) {
+    if (d.getDay() === diaSemana) return d;
+    d.setDate(d.getDate() + 1);
+  }
+  return d; // nunca deveria chegar aqui (7 dias cobre a semana toda)
+}
+
+// Menor data >= apartirDe cujo dia do mês é diaMes — se o mês não tiver
+// esse dia (ex.: 31 em abril), cai no último dia do mês.
+function proximaDataComDiaMes_(apartirDe, diaMes) {
+  var d = somenteData_(apartirDe);
+  for (var i = 0; i < 62; i++) {
+    var ultimoDiaDoMes = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
+    var diaEfetivo = Math.min(diaMes, ultimoDiaDoMes);
+    if (d.getDate() === diaEfetivo) return d;
+    d.setDate(d.getDate() + 1);
+  }
+  return d; // não deveria chegar aqui (62 dias cobre 2 meses cheios)
+}
+
+// Menor data >= apartirDe que seja a referência (1ª ocorrência,
+// calculada na criação da rotina) + um múltiplo de 14 dias — nunca pula
+// de 7 em 7, só de 14 em 14, a partir da âncora.
+function proximaDataQuinzenal_(apartirDe, referencia) {
+  var d = somenteData_(referencia);
+  var alvo = somenteData_(apartirDe);
+  while (d < alvo) {
+    d.setDate(d.getDate() + 14);
+  }
+  return d;
+}
+
+// Devolve a próxima data (>= apartirDe) em que a rotina deveria gerar/
+// resetar o card dela, conforme a frequência. DIARIA (ou frequência
+// vazia/desconhecida — compatível com rotina antiga, de antes dessa
+// coluna existir): toda data serve.
+function proximaOcorrenciaRotina_(rotina, apartirDe) {
+  if (rotina.frequencia === "SEMANAL") return proximaDataComDiaSemana_(apartirDe, rotina.diaSemana);
+  if (rotina.frequencia === "QUINZENAL") return proximaDataQuinzenal_(apartirDe, rotina.referenciaQuinzenal || apartirDe);
+  if (rotina.frequencia === "MENSAL") return proximaDataComDiaMes_(apartirDe, rotina.diaMes);
+  return somenteData_(apartirDe);
+}
+
 // Lista as rotinas ativas, já ordenadas (com horário definido primeiro,
 // da mais cedo pra mais tarde; sem horário, no fim, na ordem de
 // criação) — usada tanto por listarRotinas() (tela de cadastro) quanto
@@ -805,6 +868,13 @@ function listarRotinasAtivas() {
   // planilha (ver install-instructions do Code.gs do Painel Qualidade).
   // Sem ela, toda rotina entra sem horário, sem quebrar nada.
   var colHorario = mapa["HORARIO"];
+  // Opcionais também — frequência (ver proximaOcorrenciaRotina_ acima).
+  // Sem essas colunas, toda rotina é tratada como DIARIA (compatível com
+  // o que já existia antes dessa funcionalidade).
+  var colFrequencia = mapa["FREQUENCIA"];
+  var colDiaSemana = mapa["DIA_SEMANA"];
+  var colDiaMes = mapa["DIA_MES"];
+  var colReferenciaQuinzenal = mapa["REFERENCIA_QUINZENAL"];
 
   var dados = aba.getDataRange().getValues();
   var rotinas = [];
@@ -812,11 +882,20 @@ function listarRotinasAtivas() {
     var texto = (dados[i][colTexto - 1] || "").toString().trim();
     if (!texto) continue;
     if (dados[i][colAtiva - 1] === false) continue; // ATIVA só é false quando explicitamente desmarcada (excluída)
+
+    var valorDiaSemana = colDiaSemana ? dados[i][colDiaSemana - 1] : "";
+    var valorDiaMes = colDiaMes ? dados[i][colDiaMes - 1] : "";
+    var frequencia = colFrequencia ? (dados[i][colFrequencia - 1] || "").toString().trim().toUpperCase() : "";
+
     rotinas.push({
       id: (dados[i][colId - 1] || "").toString().trim(),
       texto: texto,
       horario: colHorario ? (dados[i][colHorario - 1] || "").toString().trim() : "",
       ordem: Number(dados[i][colOrdem - 1]) || 0,
+      frequencia: frequencia || "DIARIA",
+      diaSemana: (valorDiaSemana !== "" && valorDiaSemana != null) ? Number(valorDiaSemana) : null,
+      diaMes: (valorDiaMes !== "" && valorDiaMes != null) ? Number(valorDiaMes) : null,
+      referenciaQuinzenal: colReferenciaQuinzenal ? parseDataBR_(paraDataBR(dados[i][colReferenciaQuinzenal - 1])) : null,
     });
   }
   rotinas.sort(function (a, b) {
@@ -832,9 +911,13 @@ function listarRotinas() {
   return { ok: true, rotinas: listarRotinasAtivas() };
 }
 
-function criarRotina(texto, horario) {
+var FREQUENCIAS_VALIDAS = ["DIARIA", "SEMANAL", "QUINZENAL", "MENSAL"];
+
+function criarRotina(texto, horario, frequencia, diaSemana, diaMes) {
   texto = (texto || "").toString().trim();
   if (!texto) throw new Error("Digite o nome da rotina.");
+  frequencia = (frequencia || "DIARIA").toString().trim().toUpperCase();
+  if (FREQUENCIAS_VALIDAS.indexOf(frequencia) === -1) frequencia = "DIARIA";
 
   var lock = LockService.getScriptLock();
   lock.waitLock(30000);
@@ -847,6 +930,10 @@ function criarRotina(texto, horario) {
     var colAtiva = colunaObrigatoria(mapa, ABA_ROTINAS, "ATIVA");
     var colCriado = mapa["CRIADO_EM"];
     var colHorario = mapa["HORARIO"];
+    var colFrequencia = mapa["FREQUENCIA"];
+    var colDiaSemana = mapa["DIA_SEMANA"];
+    var colDiaMes = mapa["DIA_MES"];
+    var colReferenciaQuinzenal = mapa["REFERENCIA_QUINZENAL"];
 
     var dados = aba.getDataRange().getValues();
     var maiorOrdem = -1;
@@ -862,7 +949,25 @@ function criarRotina(texto, horario) {
     linha[colAtiva - 1] = true;
     if (colCriado) linha[colCriado - 1] = new Date();
     if (colHorario) linha[colHorario - 1] = (horario || "").toString().trim();
+    if (colFrequencia) linha[colFrequencia - 1] = frequencia;
+    if (colDiaSemana && (frequencia === "SEMANAL" || frequencia === "QUINZENAL")) {
+      linha[colDiaSemana - 1] = Number(diaSemana) || 0;
+    }
+    if (colDiaMes && frequencia === "MENSAL") {
+      linha[colDiaMes - 1] = Number(diaMes) || 1;
+    }
     aba.appendRow(linha);
+
+    // Quinzenal precisa de uma data-âncora (1ª ocorrência), calculada 1
+    // vez só na criação — a próxima data daquele dia da semana a partir
+    // de hoje — pra saber dali em diante quais semanas contam (pula de
+    // 14 em 14 dias a partir dela, nunca de 7 em 7).
+    if (colReferenciaQuinzenal && frequencia === "QUINZENAL") {
+      var referencia = proximaDataComDiaSemana_(new Date(), Number(diaSemana) || 0);
+      aba.getRange(aba.getLastRow(), colReferenciaQuinzenal)
+        .setNumberFormat("@")
+        .setValue(Utilities.formatDate(referencia, "GMT-3", "dd/MM/yyyy"));
+    }
 
     return { ok: true, id: id };
   } finally {
@@ -870,11 +975,13 @@ function criarRotina(texto, horario) {
   }
 }
 
-function editarRotina(id, texto, horario) {
+function editarRotina(id, texto, horario, frequencia, diaSemana, diaMes) {
   id = (id || "").toString().trim();
   texto = (texto || "").toString().trim();
   if (!id) throw new Error("Rotina não identificada.");
   if (!texto) throw new Error("Digite o nome da rotina.");
+  frequencia = (frequencia || "DIARIA").toString().trim().toUpperCase();
+  if (FREQUENCIAS_VALIDAS.indexOf(frequencia) === -1) frequencia = "DIARIA";
 
   var lock = LockService.getScriptLock();
   lock.waitLock(30000);
@@ -884,12 +991,40 @@ function editarRotina(id, texto, horario) {
     var colId = colunaObrigatoria(mapa, ABA_ROTINAS, "ID");
     var colTexto = colunaObrigatoria(mapa, ABA_ROTINAS, "TEXTO");
     var colHorario = mapa["HORARIO"];
+    var colFrequencia = mapa["FREQUENCIA"];
+    var colDiaSemana = mapa["DIA_SEMANA"];
+    var colDiaMes = mapa["DIA_MES"];
+    var colReferenciaQuinzenal = mapa["REFERENCIA_QUINZENAL"];
 
     var dados = aba.getDataRange().getValues();
     for (var i = 1; i < dados.length; i++) {
       if ((dados[i][colId - 1] || "").toString().trim() === id) {
-        aba.getRange(i + 1, colTexto).setValue(texto);
-        if (colHorario) aba.getRange(i + 1, colHorario).setValue((horario || "").toString().trim());
+        var linha = i + 1;
+        aba.getRange(linha, colTexto).setValue(texto);
+        if (colHorario) aba.getRange(linha, colHorario).setValue((horario || "").toString().trim());
+        if (colFrequencia) aba.getRange(linha, colFrequencia).setValue(frequencia);
+        if (colDiaSemana) {
+          aba.getRange(linha, colDiaSemana).setValue(
+            (frequencia === "SEMANAL" || frequencia === "QUINZENAL") ? (Number(diaSemana) || 0) : ""
+          );
+        }
+        if (colDiaMes) {
+          aba.getRange(linha, colDiaMes).setValue(frequencia === "MENSAL" ? (Number(diaMes) || 1) : "");
+        }
+        // Recalcula a âncora quinzenal sempre que salva como QUINZENAL
+        // (mesmo se já era antes) — mais simples do que tentar detectar
+        // se precisa ou não recalcular, e o efeito pra usuária é só a
+        // contagem de semana reiniciar a partir de hoje quando ela edita.
+        if (colReferenciaQuinzenal) {
+          if (frequencia === "QUINZENAL") {
+            var referencia = proximaDataComDiaSemana_(new Date(), Number(diaSemana) || 0);
+            aba.getRange(linha, colReferenciaQuinzenal)
+              .setNumberFormat("@")
+              .setValue(Utilities.formatDate(referencia, "GMT-3", "dd/MM/yyyy"));
+          } else {
+            aba.getRange(linha, colReferenciaQuinzenal).setValue("");
+          }
+        }
         return { ok: true };
       }
     }
@@ -971,6 +1106,7 @@ function gerarCardsRotinasDoDia() {
     var colAtualizado = mapa["ATUALIZADO_EM"];
 
     var hoje = hojeFormatado();
+    var hojeData = somenteData_(new Date());
     var dados = aba.getDataRange().getValues();
 
     // Linha (1-based na planilha) da única linha existente de cada
@@ -989,7 +1125,14 @@ function gerarCardsRotinasDoDia() {
       var numLinha = linhaPorRotina[rotina.id];
 
       if (!numLinha) {
-        // Rotina nova, nunca gerou card — cria o primeiro, em "A Fazer".
+        // Rotina nova, nunca gerou card — só cria se hoje já é (ou já
+        // passou) o dia da 1ª ocorrência dela. Uma rotina semanal/
+        // quinzenal/mensal cadastrada hoje pode só aparecer no Quadro
+        // dias depois, no dia certo (diária sempre cria na hora, já que
+        // toda data é dia de ocorrência pra ela).
+        var primeiraOcorrencia = proximaOcorrenciaRotina_(rotina, hojeData);
+        if (primeiraOcorrencia > hojeData) return;
+
         maiorOrdemAFazer++;
         var linha = new Array(aba.getLastColumn()).fill("");
         linha[colId - 1] = Utilities.getUuid();
@@ -1012,9 +1155,21 @@ function gerarCardsRotinasDoDia() {
       var dataLinha = paraDataBR(dados[numLinha - 1][colDataRotina - 1]);
       if (dataLinha === hoje) return; // já tratada hoje — não mexe, fica onde a usuária colocou
 
-      // Dia novo pra essa rotina — reseta pra "A Fazer", não importa
+      // Checa se hoje já é (ou passou) a próxima ocorrência esperada
+      // depois da última vez que essa rotina foi tratada — não só "hoje
+      // é exatamente o dia X", pra pegar o caso de a usuária abrir o
+      // Painel um ou mais dias depois do dia certo (rotina semanal cujo
+      // dia passou enquanto o Painel ficou fechado, por exemplo):
+      // resetar na primeira vez que abrir depois, em vez de só no
+      // próximo dia certo (que só viria na semana seguinte).
+      var ultimaData = dataLinha ? parseDataBR_(dataLinha) : hojeData;
+      var diaSeguinte = new Date(ultimaData.getFullYear(), ultimaData.getMonth(), ultimaData.getDate() + 1);
+      var proximaOcorrencia = proximaOcorrenciaRotina_(rotina, diaSeguinte);
+      if (proximaOcorrencia > hojeData) return; // ainda não chegou o dia de resetar
+
+      // Chegou o dia (ou passou) — reseta pra "A Fazer", não importa
       // onde estava (Concluído, Em Andamento, ou ainda em "A Fazer" de
-      // um dia que não foi mexido).
+      // um dia anterior que não foi mexido).
       maiorOrdemAFazer++;
       aba.getRange(numLinha, colColuna).setValue(KANBAN_COLUNAS[0]);
       aba.getRange(numLinha, colOrdem).setValue(maiorOrdemAFazer);
@@ -1232,8 +1387,8 @@ function doPost(e) {
     if (dados.acao === "editar_card") return respostaJson(editarCard(dados.id, dados.titulo, dados.descricao, dados.etiqueta));
     if (dados.acao === "mover_card") return respostaJson(moverCard(dados.id, dados.coluna, dados.ordemIds));
     if (dados.acao === "excluir_card") return respostaJson(excluirCard(dados.id));
-    if (dados.acao === "criar_rotina") return respostaJson(criarRotina(dados.texto, dados.horario));
-    if (dados.acao === "editar_rotina") return respostaJson(editarRotina(dados.id, dados.texto, dados.horario));
+    if (dados.acao === "criar_rotina") return respostaJson(criarRotina(dados.texto, dados.horario, dados.frequencia, dados.diaSemana, dados.diaMes));
+    if (dados.acao === "editar_rotina") return respostaJson(editarRotina(dados.id, dados.texto, dados.horario, dados.frequencia, dados.diaSemana, dados.diaMes));
     if (dados.acao === "excluir_rotina") return respostaJson(excluirRotina(dados.id));
     throw new Error("Ação inválida: " + dados.acao);
   } catch (erro) {

@@ -221,6 +221,28 @@
     .rotina-item:last-child { border-bottom: none; }
     .rotina-texto { flex: 1; font-size: 0.92rem; line-height: 1.35; }
     .rotina-horario { font-weight: 700; color: var(--gold); }
+    .rotina-frequencia { display: block; font-size: 0.74rem; color: var(--text-muted); margin-top: 0.15rem; }
+    .campo-dias-semana { display: flex; gap: 0.4rem; flex-wrap: wrap; }
+    .dia-semana-opcao {
+      padding: 0.4rem 0.6rem;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: #fff;
+      color: var(--text);
+      font-size: 0.8rem;
+      cursor: pointer;
+    }
+    .dia-semana-opcao.selecionada { background: var(--gold); border-color: var(--gold); color: #fff; font-weight: 700; }
+    .modal select {
+      width: 100%;
+      font-family: inherit;
+      font-size: 0.9rem;
+      padding: 0.55rem 0.65rem;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      background: #fff;
+    }
     .rotina-acoes { display: flex; gap: 0.5rem; }
     .rotina-btn { background: none; border: none; cursor: pointer; padding: 0; color: var(--text-muted); font-size: 0.88rem; }
     .rotina-btn:active { opacity: 0.6; }
@@ -278,6 +300,15 @@
     var _cards = [];
     var _rotinas = [];
     var _abaAtiva = 'quadro';
+
+    var DIAS_SEMANA = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
+
+    function textoFrequencia(rotina) {
+      if (rotina.frequencia === 'SEMANAL') return 'Semanal · ' + DIAS_SEMANA[rotina.diaSemana];
+      if (rotina.frequencia === 'QUINZENAL') return 'Quinzenal · ' + DIAS_SEMANA[rotina.diaSemana];
+      if (rotina.frequencia === 'MENSAL') return 'Mensal · dia ' + rotina.diaMes;
+      return 'Diária';
+    }
 
     function escaparHtml(texto) {
       var div = document.createElement('div');
@@ -412,6 +443,7 @@
           '<div class="rotina-texto">' +
             (rotina.horario ? '<span class="rotina-horario">' + escaparHtml(rotina.horario) + '</span> · ' : '') +
             escaparHtml(rotina.texto) +
+            '<span class="rotina-frequencia">' + textoFrequencia(rotina) + '</span>' +
           '</div>' +
           '<div class="rotina-acoes">' +
             '<button class="rotina-btn" data-acao="editar" title="Editar">✏️</button>' +
@@ -424,7 +456,7 @@
     function renderizarRotinas() {
       var container = document.getElementById('rotinas');
       container.innerHTML =
-        '<p class="rotinas-dica">Toda rotina cadastrada aqui vira um card 🔁 sozinho, todo dia, na coluna "A Fazer" do Quadro.</p>' +
+        '<p class="rotinas-dica">Toda rotina cadastrada aqui vira um card 🔁 sozinho na coluna "A Fazer" do Quadro, no dia certo dela (diária, semanal, quinzenal ou mensal).</p>' +
         '<div class="rotinas-lista">' +
           (_rotinas.length
             ? _rotinas.map(rotinaHtml).join('')
@@ -443,6 +475,10 @@
 
     function abrirModalRotina(id) {
       var rotina = id ? _rotinas.filter(function (r) { return r.id === id; })[0] : null;
+      var frequenciaInicial = rotina ? rotina.frequencia : 'DIARIA';
+      var diaSemanaInicial = rotina && rotina.diaSemana != null ? rotina.diaSemana : new Date().getDay();
+      var diaMesInicial = rotina && rotina.diaMes != null ? rotina.diaMes : new Date().getDate();
+
       var overlay = document.createElement('div');
       overlay.className = 'overlay';
       overlay.innerHTML =
@@ -452,6 +488,25 @@
           '<input type="text" id="campo-rotina-texto" maxlength="120" placeholder="Ex.: Leitura da Água">' +
           '<label>Horário (opcional)</label>' +
           '<input type="time" id="campo-rotina-horario">' +
+          '<label>Repete</label>' +
+          '<select id="campo-rotina-frequencia">' +
+            '<option value="DIARIA">Todo dia</option>' +
+            '<option value="SEMANAL">Toda semana, num dia fixo</option>' +
+            '<option value="QUINZENAL">A cada 2 semanas, num dia fixo</option>' +
+            '<option value="MENSAL">Todo mês, num dia fixo</option>' +
+          '</select>' +
+          '<div id="campo-dia-semana-wrap" style="display:none;">' +
+            '<label>Dia da semana</label>' +
+            '<div class="campo-dias-semana" id="campo-dias-semana">' +
+              DIAS_SEMANA.map(function (nome, indice) {
+                return '<button type="button" class="dia-semana-opcao" data-dia="' + indice + '">' + nome.slice(0, 3) + '</button>';
+              }).join('') +
+            '</div>' +
+          '</div>' +
+          '<div id="campo-dia-mes-wrap" style="display:none;">' +
+            '<label>Dia do mês</label>' +
+            '<input type="number" id="campo-rotina-dia-mes" min="1" max="31" step="1">' +
+          '</div>' +
           '<div class="modal-acoes">' +
             '<button class="btn-cancelar" id="btn-rotina-cancelar">Cancelar</button>' +
             '<button class="btn-salvar" id="btn-rotina-salvar">Salvar</button>' +
@@ -461,8 +516,38 @@
 
       var campoTexto = overlay.querySelector('#campo-rotina-texto');
       var campoHorario = overlay.querySelector('#campo-rotina-horario');
+      var campoFrequencia = overlay.querySelector('#campo-rotina-frequencia');
+      var wrapDiaSemana = overlay.querySelector('#campo-dia-semana-wrap');
+      var wrapDiaMes = overlay.querySelector('#campo-dia-mes-wrap');
+      var botoesDiaSemana = overlay.querySelectorAll('.dia-semana-opcao');
+      var campoDiaMes = overlay.querySelector('#campo-rotina-dia-mes');
+
       campoTexto.value = rotina ? rotina.texto : '';
       campoHorario.value = rotina ? (rotina.horario || '') : '';
+      campoFrequencia.value = frequenciaInicial;
+      campoDiaMes.value = diaMesInicial;
+
+      var diaSemanaSelecionado = diaSemanaInicial;
+      function marcarDiaSemanaSelecionado() {
+        botoesDiaSemana.forEach(function (b) {
+          b.classList.toggle('selecionada', Number(b.getAttribute('data-dia')) === diaSemanaSelecionado);
+        });
+      }
+      botoesDiaSemana.forEach(function (b) {
+        b.addEventListener('click', function () {
+          diaSemanaSelecionado = Number(b.getAttribute('data-dia'));
+          marcarDiaSemanaSelecionado();
+        });
+      });
+      marcarDiaSemanaSelecionado();
+
+      function atualizarCamposFrequencia() {
+        var freq = campoFrequencia.value;
+        wrapDiaSemana.style.display = (freq === 'SEMANAL' || freq === 'QUINZENAL') ? '' : 'none';
+        wrapDiaMes.style.display = (freq === 'MENSAL') ? '' : 'none';
+      }
+      campoFrequencia.addEventListener('change', atualizarCamposFrequencia);
+      atualizarCamposFrequencia();
 
       function fechar() { overlay.remove(); }
       overlay.addEventListener('click', function (ev) { if (ev.target === overlay) fechar(); });
@@ -473,12 +558,26 @@
         var texto = campoTexto.value.trim();
         if (!texto) { alert('Digite o nome da atividade.'); return; }
         var horario = campoHorario.value;
+        var frequencia = campoFrequencia.value;
+        var diaMes = Number(campoDiaMes.value) || 1;
+        if (frequencia === 'MENSAL' && (diaMes < 1 || diaMes > 31)) { alert('Dia do mês precisa ser entre 1 e 31.'); return; }
+
+        var corpo = {
+          acao: id ? 'editar_rotina' : 'criar_rotina',
+          texto: texto,
+          horario: horario,
+          frequencia: frequencia,
+          diaSemana: diaSemanaSelecionado,
+          diaMes: diaMes,
+        };
+        if (id) corpo.id = id;
+
         btnSalvar.disabled = true;
         btnSalvar.textContent = 'Salvando...';
         fetch(KANBAN_EXEC_URL, {
           method: 'POST',
           headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-          body: JSON.stringify(id ? { acao: 'editar_rotina', id: id, texto: texto, horario: horario } : { acao: 'criar_rotina', texto: texto, horario: horario }),
+          body: JSON.stringify(corpo),
         })
           .then(function (r) { return r.json(); })
           .then(function (resultado) {
