@@ -1,7 +1,9 @@
 # Manutenção (OS) — Thalita sem foto obrigatória + busca na lista de fechar
 
 **Data:** 2026-10-02
-**Status:** Implementado, aguardando teste em produção
+**Status:** Implementado, aguardando teste em produção. **Correção no mesmo dia:** testado em produção, a
+usuária reportou que "Prestador de Serviço Terceirizado" também precisava da isenção ("ainda pede a foto,
+prestador 3º não controlo as fotos") — adicionado à mesma lista, ver seção no fim do documento.
 
 ## Contexto
 
@@ -49,3 +51,16 @@ busca dentro da unidade já selecionada. Sem argumento novo no backend — filtr
    coluna A, cada um numa célula vazia.
 2. Colar `Code.completo.gs` e `Index.html` por cima dos existentes no projeto Apps Script de Manutenção e
    reimplantar.
+
+## Correção — "Prestador de Serviço Terceirizado" também isento (02/10/2026, mesmo dia)
+
+Testado em produção: a usuária foi fechar uma OS assinada por "PRESTADOR DE SERVIÇO TERCEIRIZADO" (opção
+já cadastrada na aba Manutenção) e a foto continuou obrigatória. Motivo: só "Thalita" estava na lista.
+Explicação dela — não tem controle sobre as fotos de quem é terceirizado, então também precisa poder
+fechar sem anexar.
+
+`ASSINANTES_SEM_FOTO_OBRIGATORIA` (`Code.completo.gs`) e `ASSINANTES_SEM_FOTO` (`Index.html`) passam a ter
+2 valores: `"THALITA"` e `"PRESTADOR DE SERVICO TERCEIRIZADO"` (sem cedilha no código-fonte — a
+normalização, que já tirava acento antes de comparar, cobre a diferença entre isso e o "SERVIÇO" com
+cedilha que aparece de verdade no dropdown). Mesmo mecanismo de antes, só a lista cresceu — nenhuma outra
+mudança de lógica.

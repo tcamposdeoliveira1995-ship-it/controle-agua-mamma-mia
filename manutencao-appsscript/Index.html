@@ -218,7 +218,7 @@
     // lógica de normalização (sem acento/maiúscula) do backend
     // (fotoDispensadaPara em Code.completo.gs), pra mostrar a dica certa
     // na tela antes mesmo de enviar.
-    var ASSINANTES_SEM_FOTO = ['THALITA'];
+    var ASSINANTES_SEM_FOTO = ['THALITA', 'PRESTADOR DE SERVICO TERCEIRIZADO'];
     function fotoDispensadaPara(nome) {
       var normalizado = (nome || '').toString().trim().normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase();
       return ASSINANTES_SEM_FOTO.indexOf(normalizado) !== -1;

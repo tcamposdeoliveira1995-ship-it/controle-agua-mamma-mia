@@ -1610,10 +1610,12 @@ function gerarPDFFechamentoOS(dados) {
 }
 
 // Quem assina a baixa sem precisar anexar foto — pedido explícito da
-// usuária (Thalita assina pela equipe, sem necessariamente ter tirado a
-// foto do reparo). Comparação sem acento/maiúscula pra não falhar por
-// diferença de digitação no cadastro de técnicos.
-var ASSINANTES_SEM_FOTO_OBRIGATORIA = ["THALITA"];
+// usuária: Thalita assina pela equipe, sem necessariamente ter tirado a
+// foto do reparo; prestador de serviço terceirizado porque a usuária
+// não controla as fotos de quem é terceirizado. Comparação sem acento/
+// maiúscula pra não falhar por diferença de digitação no cadastro de
+// técnicos.
+var ASSINANTES_SEM_FOTO_OBRIGATORIA = ["THALITA", "PRESTADOR DE SERVICO TERCEIRIZADO"];
 
 function fotoDispensadaPara(assinadoPor) {
   var normalizado = (assinadoPor || "")
