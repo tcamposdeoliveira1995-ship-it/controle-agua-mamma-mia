@@ -504,7 +504,7 @@ function refreshApp() {
 
   if (state.currentTab === 'compras') { carregarCompras(); if (typeof lucide !== 'undefined') lucide.createIcons(); return; }
 
-  // O ciclo "real" de hoje é sempre calculado pela data atual (regra: vira todo dia 7),
+  // O ciclo "real" de hoje é sempre calculado pela data atual (regra: vira todo dia 6),
   // não apenas pelas leituras já lançadas. Isso evita o painel ficar "preso" no ciclo
   // anterior quando ainda não há nenhuma leitura lançada no ciclo novo.
   const currentRealCycleKey = getCycleStats(state.readings, 'current').cycleKey;

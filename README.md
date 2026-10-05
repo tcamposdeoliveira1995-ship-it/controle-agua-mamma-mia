@@ -27,7 +27,7 @@ Para garantir o carregamento correto do sistema e dos gráficos interativos sem 
   - `A25LM0975884` - Jardim, Calçada & Limpeza
 - **Meta Individual**: 20 m³ por hidrômetro em cada ciclo.
 - **Meta Global**: 80 m³ combinados.
-- **Ciclo de Consumo**: Inicia-se sempre no **dia 07** e encerra-se no **dia 06 do mês seguinte** (ex: 07/Jun a 06/Jul).
+- **Ciclo de Consumo**: Inicia-se sempre no **dia 06** e encerra-se no **dia 05 do mês seguinte** (ex: 06/Jun a 05/Jul).
 
 ---
 
