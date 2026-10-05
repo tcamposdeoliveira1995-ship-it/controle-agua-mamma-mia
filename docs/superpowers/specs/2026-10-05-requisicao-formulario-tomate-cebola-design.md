@@ -1,7 +1,8 @@
 # Requisição de MP e Recheio — Tomate em KG + Cebola em pacotes fixos
 
 **Data:** 2026-10-05
-**Status:** Implementado, aguardando teste da usuária em produção.
+**Status:** Implementado e validado em produção (testado pela usuária em 05/10/2026 — ver seção no fim do
+documento).
 
 ## Contexto
 
@@ -90,3 +91,12 @@ envio).
    do botão ▶️ Executar) e rodar ela uma vez. Autorizar o acesso se pedir.
 5. Conferir no formulário publicado: a pergunta do Tomate deve aparecer como lista suspensa com 60, 90,
    120, 150 (KG); a pergunta da Cebola com 10, 20, 30, 40 (pacotes).
+
+## Validação em produção (05/10/2026, mesmo dia)
+
+Primeiro teste: usuária colou o arquivo mas não chegou a rodar `ajustarPerguntasTomateECebola()` no editor —
+só colar o código não muda nada no formulário, porque é uma função de uso único que precisa ser executada
+manualmente (passo 4 acima). O formulário publicado continuou mostrando "TOMATE IN NATURA (CX)" com as
+opções antigas (2, 4, 6, 8, 10). Depois de efetivamente selecionar e rodar a função no editor, o formulário
+passou a mostrar a pergunta do Tomate em KG (60/90/120/150) e a de Cebola em pacotes (10/20/30/40)
+corretamente — usuária confirmou ("ajustou, não tinha executado").
