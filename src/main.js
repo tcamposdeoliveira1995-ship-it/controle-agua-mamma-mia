@@ -14,6 +14,10 @@ import { renderTrendChart, renderComparisonChart } from './chart-setup.js';
 import { exportToJSON, exportToCSV, exportToExcel, exportToPDF, syncGoogleSheetsFuture } from './integration.js';
 
 import { initAuditoria } from './auditoria.js';
+import {
+  parseContasAguaCsv, agruparContasPorMes, mesCompetenciaDoCiclo,
+  contaDoRelogio, formatarReais
+} from './contas-agua.js';
 window.initAuditoria = initAuditoria;
 
 // --- URLs CSV ---
@@ -56,6 +60,11 @@ const COMPRAS_ITENS_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1v
 const AGUA_SPREADSHEET_ID = '1tixTJ74aaEo-EuCfTFl-efWOT7p-TIgN0su8NzX8aKw';
 const AGUA_GID = '198559971';
 const AGUA_GVIZ_URL = `https://docs.google.com/spreadsheets/d/${AGUA_SPREADSHEET_ID}/gviz/tq?tqx=out:json&gid=${AGUA_GID}`;
+// Aba VALOR CONTAS (gid 1338771596). CSV publicado, mesmo padrão do Pipa
+// (mesma planilha). Cabeçalho: MES, RELOGIO, VALOR, TOTAL_MES — também
+// aceita "TOTAL MES". Não entra no gviz das leituras.
+const CONTAS_AGUA_CSV_URL =
+  'https://docs.google.com/spreadsheets/d/e/2PACX-1vQuFNjTMhQ3Z1QzmEXW6scCk4UkMTYRLBV0z6QSczCDZO4AyjaneybI1Xwj0LWBdNHiYf95TB6JbDHz/pub?gid=1338771596&single=true&output=csv';
 
 // --- ESTADO GLOBAL ---
 let state = {
@@ -63,7 +72,9 @@ let state = {
   selectedCycleKey: '',
   currentTab: 'dashboard',
   filters: { meter: 'all' },
-  alertasCache: null
+  alertasCache: null,
+  contasAgua: null,
+  contasAguaErro: null
 };
 
 // --- DOM ---
@@ -292,6 +303,28 @@ async function sincronizarAguaComPlanilha() {
   } catch (err) {
     console.error('[AGUA] Falha ao sincronizar com a planilha:', err);
   }
+}
+
+// Valores em R$ da aba VALOR CONTAS. Independente da sincronização das
+// leituras: se o CSV falhar, o consumo continua sendo calculado.
+async function carregarContasAgua() {
+  try {
+    const response = await fetch(CONTAS_AGUA_CSV_URL, { cache: 'no-store' });
+    if (!response.ok) throw new Error('HTTP ' + response.status);
+    const csv = await response.text();
+    state.contasAgua = parseContasAguaCsv(csv);
+    state.contasAguaErro = null;
+  } catch (err) {
+    console.error('[AGUA] Falha ao ler VALOR CONTAS:', err);
+    state.contasAguaErro = (err && err.message) || 'erro';
+    if (!Array.isArray(state.contasAgua)) state.contasAgua = [];
+  }
+}
+
+function escaparHtml(texto) {
+  return String(texto ?? '').replace(/[&<>"']/g, ch => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+  }[ch]));
 }
 
 // ================= DATAS IMPORTANTES (DOCUMENTOS) =================
@@ -881,6 +914,7 @@ function renderDashboardTab(stats, prevStats) {
   } else { DOM.operationalAlertsPanel.style.display = 'none'; }
 
   renderIndividualMeterCards(stats);
+  renderContasAgua(stats.cycleKey);
   const processedReadings = calculateConsumptions(state.readings);
   renderTrendChart(DOM.trendChartCanvas, stats, processedReadings);
   renderComparisonChart(DOM.comparisonChartCanvas, stats, prevStats);
@@ -901,6 +935,16 @@ function renderIndividualMeterCards(stats) {
     let dailyDotClass = 'success', dailyStatusTitle = 'Abaixo da meta esperada';
     if (m.dailyGoalStatus === 'danger') { dailyDotClass = 'danger'; dailyStatusTitle = 'Acima da meta esperada'; }
     else if (m.dailyGoalStatus === 'warning') { dailyDotClass = 'warning'; dailyStatusTitle = 'Próximo da meta esperada'; }
+    const mesCiclo = mesCompetenciaDoCiclo(stats.cycleKey);
+    const conta = Array.isArray(state.contasAgua) ? contaDoRelogio(state.contasAgua, mesCiclo, id) : null;
+    const valorContaHtml = (Array.isArray(state.contasAgua) && state.contasAgua.length > 0)
+      ? `<div class="stat-item full-width" style="border-top: 1px dashed rgba(183,155,108,0.25); padding-top: 0.5rem; margin-top: 0.35rem;">
+          <div style="display: flex; justify-content: space-between; align-items: center; gap: 0.5rem;">
+            <span class="stat-label">Valor da conta${mesCiclo ? ` (${escaparHtml(mesCiclo)})` : ''}</span>
+            <span class="stat-val" style="font-weight: 700;">${conta && conta.valor != null ? formatarReais(conta.valor) : '—'}</span>
+          </div>
+        </div>`
+      : '';
     const card = document.createElement('div');
     card.className = 'hidrometro-card'; card.style = cardGlow;
     card.innerHTML = `
@@ -933,12 +977,78 @@ function renderIndividualMeterCards(stats) {
             <span class="stat-val" style="font-weight: 700; color: ${m.projection > m.limit ? 'var(--color-red)' : 'var(--text-primary)'};">${m.projection.toFixed(2)} m³</span>
           </div>
         </div>
+        ${valorContaHtml}
       </div>`;
     DOM.metersCardsContainer.appendChild(card);
   });
   DOM.metersCardsContainer.querySelectorAll('.btn-edit-alias').forEach(btn => {
     btn.addEventListener('click', (e) => { const id = e.currentTarget.getAttribute('data-id'); editHydrometerAlias(id); });
   });
+}
+
+function renderContasAgua(cycleKey) {
+  const el = document.getElementById('contas-agua-conteudo');
+  const sub = document.getElementById('contas-agua-competencia');
+  if (!el) return;
+
+  const mesCiclo = mesCompetenciaDoCiclo(cycleKey);
+  if (sub) sub.textContent = mesCiclo ? `Competência do ciclo: ${mesCiclo}` : '';
+
+  if (!Array.isArray(state.contasAgua)) {
+    el.innerHTML = '<p class="contas-agua-vazio">Carregando valor das contas…</p>';
+    return;
+  }
+  if (state.contasAguaErro && state.contasAgua.length === 0) {
+    el.innerHTML = '<p class="contas-agua-vazio">Não foi possível carregar o valor das contas.</p>';
+    return;
+  }
+  if (state.contasAgua.length === 0) {
+    el.innerHTML = '<p class="contas-agua-vazio">Nenhuma conta lançada.</p>';
+    return;
+  }
+
+  const settings = getAppSettings();
+  const ordem = Object.keys(settings.hydrometers);
+  const grupos = agruparContasPorMes(state.contasAgua);
+  const temMesCiclo = !!(mesCiclo && grupos.some(g => g.mes === mesCiclo));
+  const notaCiclo = mesCiclo && !temMesCiclo
+    ? `<p class="contas-agua-vazio">Nenhuma conta lançada para a competência ${escaparHtml(mesCiclo)} deste ciclo.</p>`
+    : '';
+  const avisoAtualizacao = state.contasAguaErro
+    ? '<p class="contas-agua-vazio">Não foi possível atualizar agora. Exibindo a última leitura.</p>'
+    : '';
+
+  el.innerHTML = avisoAtualizacao + notaCiclo + grupos.map(grupo => {
+    const itens = [...grupo.itens].sort((a, b) => {
+      const ia = ordem.findIndex(id => id.toUpperCase() === String(a.relogio).toUpperCase());
+      const ib = ordem.findIndex(id => id.toUpperCase() === String(b.relogio).toUpperCase());
+      const ra = ia === -1 ? 999 : ia;
+      const rb = ib === -1 ? 999 : ib;
+      if (ra !== rb) return ra - rb;
+      return String(a.relogio).localeCompare(String(b.relogio));
+    });
+    const linhas = itens.map(item => {
+      const hidro = Object.values(settings.hydrometers).find(h => h.id.toUpperCase() === String(item.relogio).toUpperCase());
+      const nome = hidro ? hidro.name : '';
+      return `<tr>
+        <td><span class="cell-meter"><span class="cell-meter-name">${escaparHtml(item.relogio)}</span>${nome ? `<span class="cell-meter-id">${escaparHtml(nome)}</span>` : ''}</span></td>
+        <td>${item.valor == null ? '—' : formatarReais(item.valor)}</td>
+      </tr>`;
+    }).join('');
+    const desteCiclo = mesCiclo && grupo.mes === mesCiclo;
+    return `<div class="contas-agua-mes">
+      <div class="contas-agua-mes-header">
+        <strong>${escaparHtml(grupo.mes)}${desteCiclo ? ' <span class="contas-agua-badge">deste ciclo</span>' : ''}</strong>
+        <span class="contas-agua-total">Total do mês: ${grupo.total == null ? '—' : formatarReais(grupo.total)}</span>
+      </div>
+      <div class="table-responsive">
+        <table>
+          <thead><tr><th>Relógio</th><th>Valor da conta</th></tr></thead>
+          <tbody>${linhas}</tbody>
+        </table>
+      </div>
+    </div>`;
+  }).join('');
 }
 
 // ================= ABA DIRETORIA =================
@@ -1142,6 +1252,7 @@ function switchTab(tabName) {
   refreshApp();
   if (tabName === 'dashboard') {
     sincronizarAguaComPlanilha().then(() => { if (state.currentTab === 'dashboard') refreshApp(); });
+    carregarContasAgua().then(() => { if (state.currentTab === 'dashboard') refreshApp(); });
   }
 }
 
