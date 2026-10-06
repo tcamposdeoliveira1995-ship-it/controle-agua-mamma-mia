@@ -4,7 +4,7 @@
  */
 
 // --- CONFIGURAÇÃO E CONFIGS ADMINISTRATIVAS ---
-const DEFAULT_SETTINGS = {
+export const DEFAULT_SETTINGS = {
   metaIndividual: 20,
   metaGlobal: 80,
   alertThreshold: 75,

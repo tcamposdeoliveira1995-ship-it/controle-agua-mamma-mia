@@ -41,6 +41,15 @@ Para garantir o carregamento correto do sistema e dos gráficos interativos sem 
 - **Exportação de Dados**: Gera um backup completo em arquivo `.json` das leituras para prevenção de perda de dados.
 - **Limpeza de Dados**: Botão de redefinição para reverter aos dados de demonstração (ou limpar tudo).
 
+## 📄 Barra DOCUMENTOS (vencimento de alvarás)
+
+- **Onde editar**: Painel Qualidade → **📄 Documentos** (Apps Script). O Control só exibe.
+- **Fonte**: aba `DOCUMENTOS` da planilha CONSUMO_AGUA_YUKA (gid `1657679401`), lida pelo CSV publicado em `src/documentos.js`. Colunas: `ID | UNIDADE | DOCUMENTO | VENCIMENTO | STATUS | OBS | ATUALIZADO_EM` (VENCIMENTO em texto `aaaa-mm-dd`; STATUS vazio, `ISENTO` ou `SEM_ENTRADA`). Qualquer documento novo na aba aparece na barra.
+- **Regras** (iguais às de antes): vencido → 🔴 vermelho; até 30 dias → laranja; mais de 30 dias → verde; sem data → ⚠️ SEM ENTRADA; isento → ✅ Isento de alvará. "Hoje" e a contagem de dias seguem o horário de Brasília (America/Sao_Paulo); datas aparecem em dd/mm/aaaa.
+- **Sem internet / planilha fora**: usa o último resultado salvo no navegador; se nunca carregou, volta às datas antigas das Configurações.
+- **Datas antigas do navegador**: se a planilha estiver sem data para um documento e este navegador tiver uma data salva antes (Configurações antigas), ela aparece com a dica "data só neste navegador — lance no Painel Qualidade".
+- Em **Configurações → Datas Importantes (Documentos)** os campos agora são só leitura.
+
 ---
 
 ## 📊 Formato de Importação CSV (Google Sheets)
