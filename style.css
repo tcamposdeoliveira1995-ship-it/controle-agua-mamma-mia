@@ -250,6 +250,17 @@ header {
 .doc-vencimento-chip.doc-vencimento-isento { border-color: var(--color-blue); background: rgba(183, 155, 108, 0.10); }
 .doc-vencimento-chip.doc-vencimento-isento .doc-vencimento-status { color: var(--color-blue); }
 .doc-vencimento-dica { font-size: 0.66rem; font-weight: 600; color: var(--text-muted); font-style: italic; }
+/* Bloco FORNECEDORES (aba FORNECEDORES_PUB) — mesmo visual dos chips de Documentos, recolhível. */
+.fornecedores-bar { margin: -0.6rem 0 1.25rem 0; }
+.fornecedores-bar[hidden] { display: none; }
+.forn-grupo > summary { cursor: pointer; list-style: none; user-select: none; width: fit-content; }
+.forn-grupo > summary::-webkit-details-marker { display: none; }
+.forn-grupo > summary::after { content: '▸'; font-size: 0.75rem; margin-left: 0.15rem; }
+.forn-grupo[open] > summary::after { content: '▾'; }
+.forn-grupo[open] > .doc-vencimento-grupo-chips { margin-top: 0.45rem; }
+.forn-chip { max-width: 280px; }
+.forn-empresa { font-size: 0.72rem; font-weight: 600; color: var(--text-muted); word-break: break-word; }
+.forn-oque { font-size: 0.82rem; word-break: break-word; }
 .tab-btn i { width: 16px; height: 16px; }
 
 .tab-panel { display: none; }
