@@ -4284,7 +4284,7 @@ async function carregarAvisos() {
   const container = document.getElementById('avisos-postits');
   if (!container) return;
   try {
-    const resposta = await fetch(AVISOS_EXEC_URL, { cache: 'no-store' });
+    const resposta = await fetch(AVISOS_EXEC_URL + '?dados=avisos', { cache: 'no-store' });
     if (!resposta.ok) throw new Error('HTTP ' + resposta.status);
     const resultado = await resposta.json();
     if (!resultado.ok) throw new Error(resultado.erro || 'Erro desconhecido');
