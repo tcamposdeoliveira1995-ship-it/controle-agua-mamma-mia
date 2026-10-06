@@ -23,6 +23,7 @@ import {
   buscarDocumentosPlanilha, documentosParaExibir, situacaoDocumento,
   hojeBrasiliaIso, formatarDataBr, DOCUMENTOS_LEGADOS, DICA_DATA_LOCAL
 } from './documentos.js';
+import { carregarFornecedores } from './fornecedores.js';
 window.initAuditoria = initAuditoria;
 
 // --- URLs CSV ---
@@ -202,6 +203,7 @@ document.addEventListener('DOMContentLoaded', () => {
   switchTab(state.currentTab);
   renderDocumentosVencimentoBar();
   carregarDocumentosPlanilha();
+  carregarFornecedores();
   renderArmadilhasBar();
   initEventListeners();
   carregarDedetizacaoRemoto();
