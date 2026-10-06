@@ -6,7 +6,8 @@
 import {
   initializeData, saveReadings, calculateConsumptions, getCycleStats,
   getAvailableCycles, compareCycles, parseCSV, formatDate,
-  getAppSettings, saveAppSettings, checkDuplicateDayReading
+  getAppSettings, saveAppSettings, checkDuplicateDayReading,
+  DEFAULT_SETTINGS
 } from './data.js';
 
 import { renderTrendChart, renderComparisonChart } from './chart-setup.js';
@@ -18,6 +19,10 @@ import {
   parseContasAguaCsv, agruparContasPorMes, mesCompetenciaDoCiclo,
   contaDoRelogio, formatarReais
 } from './contas-agua.js';
+import {
+  buscarDocumentosPlanilha, documentosParaExibir, situacaoDocumento,
+  hojeBrasiliaIso, formatarDataBr, DOCUMENTOS_LEGADOS, DICA_DATA_LOCAL
+} from './documentos.js';
 window.initAuditoria = initAuditoria;
 
 // --- URLs CSV ---
@@ -74,7 +79,9 @@ let state = {
   filters: { meter: 'all' },
   alertasCache: null,
   contasAgua: null,
-  contasAguaErro: null
+  contasAguaErro: null,
+  // Aba DOCUMENTOS (CSV publicado). null = ainda não carregou nesta sessão.
+  documentosPlanilha: null
 };
 
 // --- DOM ---
@@ -194,6 +201,7 @@ document.addEventListener('DOMContentLoaded', () => {
   resetReadingFormDate();
   switchTab(state.currentTab);
   renderDocumentosVencimentoBar();
+  carregarDocumentosPlanilha();
   renderArmadilhasBar();
   initEventListeners();
   carregarDedetizacaoRemoto();
@@ -329,58 +337,48 @@ function escaparHtml(texto) {
 
 // ================= DATAS IMPORTANTES (DOCUMENTOS) =================
 
+// Fonte: aba DOCUMENTOS (editada no Painel Qualidade → 📄 Documentos).
+// Falha no CSV → último cache bom → settings antigos do navegador/padrões.
+function documentosAtuais() {
+  const settings = getAppSettings();
+  return documentosParaExibir(
+    state.documentosPlanilha,
+    settings.documentosVencimento || {},
+    DEFAULT_SETTINGS.documentosVencimento || {}
+  );
+}
+
+async function carregarDocumentosPlanilha() {
+  try {
+    state.documentosPlanilha = await buscarDocumentosPlanilha();
+  } catch (err) {
+    console.error('[DOCUMENTOS] Falha ao ler aba DOCUMENTOS — usando cache/local:', err);
+  }
+  renderDocumentosVencimentoBar();
+  preencherDatasDocumentosConfig();
+}
+
 function renderDocumentosVencimentoBar() {
   const container = document.getElementById('documentos-vencimento-bar');
   if (!container) return;
 
-  const settings = getAppSettings();
-  const doc = settings.documentosVencimento || {};
-  const itens = [
-    { label: 'TC - Vigilância', valor: doc.tcVigilancia },
-    { label: 'TC - AVCB', valor: doc.tcAvcb },
-    { label: 'YUKA - Vigilância', valor: doc.yukaVigilancia },
-    { label: 'YUKA - AVCB', valor: doc.yukaAvcb },
-    // CD é isento de alvará da vigilância sanitária — fixo no código, não depende do que está salvo.
-    { label: 'CD - Vigilância', valor: doc.cdVigilancia, isento: true },
-    { label: 'CD - AVCB', valor: doc.cdAvcb },
-    { label: 'CD - VRE (CLI)', valor: doc.cdVre }
-  ];
-
-  const hoje = new Date();
-  hoje.setHours(0, 0, 0, 0);
+  const { itens } = documentosAtuais();
+  // "Hoje" no horário de Brasília (America/Sao_Paulo), não no fuso do aparelho.
+  const hojeIso = hojeBrasiliaIso();
 
   const chipsDocumentos = itens.map(item => {
-    if (item.isento) {
-      return `<div class="doc-vencimento-chip doc-vencimento-isento">
-        <span class="doc-vencimento-label">${item.label}</span>
-        <span class="doc-vencimento-status">✅ Isento de alvará</span>
-      </div>`;
-    }
-    if (!item.valor) {
-      return `<div class="doc-vencimento-chip doc-vencimento-alerta">
-        <span class="doc-vencimento-label">${item.label}</span>
-        <span class="doc-vencimento-status">⚠️ SEM ENTRADA</span>
-      </div>`;
-    }
-    const [ano, mes, dia] = item.valor.split('-').map(Number);
-    const dataVenc = new Date(ano, mes - 1, dia);
-    const diffDias = Math.ceil((dataVenc - hoje) / (1000 * 60 * 60 * 24));
-
-    let statusHtml, chipClass;
-    if (diffDias < 0) {
-      const diasAtraso = Math.abs(diffDias);
-      statusHtml = `🔴 Vencido há ${diasAtraso} dia${diasAtraso === 1 ? '' : 's'}`;
-      chipClass = 'doc-vencimento-alerta';
-    } else if (diffDias <= 30) {
-      statusHtml = `Faltam ${diffDias} dia${diffDias === 1 ? '' : 's'}`;
-      chipClass = 'doc-vencimento-atencao';
-    } else {
-      statusHtml = `Faltam ${diffDias} dias`;
-      chipClass = 'doc-vencimento-ok';
-    }
-    return `<div class="doc-vencimento-chip ${chipClass}">
-      <span class="doc-vencimento-label">${item.label}</span>
-      <span class="doc-vencimento-status">${statusHtml}</span>
+    const { chipClass, statusHtml } = situacaoDocumento(item, hojeIso);
+    const dicas = [];
+    if (item.vencimento) dicas.push(`Vence em ${formatarDataBr(item.vencimento)}`);
+    if (item.somenteLocal) dicas.push(DICA_DATA_LOCAL);
+    if (item.obs) dicas.push(item.obs);
+    const titulo = dicas.length ? ` title="${escaparHtml(dicas.join(' — '))}"` : '';
+    const dicaLocal = item.somenteLocal
+      ? `<span class="doc-vencimento-dica">📍 ${escaparHtml(DICA_DATA_LOCAL)}</span>`
+      : '';
+    return `<div class="doc-vencimento-chip ${chipClass}"${titulo}>
+      <span class="doc-vencimento-label">${escaparHtml(item.label)}</span>
+      <span class="doc-vencimento-status">${statusHtml}</span>${dicaLocal}
     </div>`;
   }).join('');
 
@@ -397,6 +395,34 @@ function renderDocumentosVencimentoBar() {
     </div>`;
 
   if (typeof lucide !== 'undefined') lucide.createIcons();
+}
+
+// Aba Configurações: "Datas Importantes (Documentos)" só leitura, em dd/mm/aaaa.
+const DOM_DOC_CONFIG_IDS = {
+  tcVigilancia: 'admin-doc-tc-vigilancia',
+  tcAvcb: 'admin-doc-tc-avcb',
+  yukaVigilancia: 'admin-doc-yuka-vigilancia',
+  yukaAvcb: 'admin-doc-yuka-avcb',
+  cdVigilancia: 'admin-doc-cd-vigilancia',
+  cdAvcb: 'admin-doc-cd-avcb',
+  cdVre: 'admin-doc-cd-vre'
+};
+
+function preencherDatasDocumentosConfig() {
+  const { itens } = documentosAtuais();
+  const porId = new Map(itens.map(i => [i.id, i]));
+  DOCUMENTOS_LEGADOS.forEach(base => {
+    const input = document.getElementById(DOM_DOC_CONFIG_IDS[base.id]);
+    if (!input) return;
+    const item = porId.get(base.id);
+    let texto = '';
+    if (item) {
+      if (item.isento) texto = 'Isento';
+      else if (item.vencimento) texto = formatarDataBr(item.vencimento) + (item.somenteLocal ? ' (só neste navegador)' : '');
+      else texto = 'Sem entrada';
+    }
+    input.value = texto;
+  });
 }
 
 // ================= MÓDULO DEDETIZAÇÃO =================
@@ -1136,14 +1162,7 @@ function renderConfiguracoesTab() {
   if (DOM.adminPerdasLimite) DOM.adminPerdasLimite.value = settings.alertPerdasLimite;
   if (DOM.adminChecklistHoras) DOM.adminChecklistHoras.value = settings.alertChecklistHoras;
 
-  const doc = settings.documentosVencimento || {};
-  if (DOM.adminDocTcVigilancia) DOM.adminDocTcVigilancia.value = doc.tcVigilancia || '';
-  if (DOM.adminDocTcAvcb) DOM.adminDocTcAvcb.value = doc.tcAvcb || '';
-  if (DOM.adminDocYukaVigilancia) DOM.adminDocYukaVigilancia.value = doc.yukaVigilancia || '';
-  if (DOM.adminDocYukaAvcb) DOM.adminDocYukaAvcb.value = doc.yukaAvcb || '';
-  if (DOM.adminDocCdVigilancia) DOM.adminDocCdVigilancia.value = doc.cdVigilancia || '';
-  if (DOM.adminDocCdAvcb) DOM.adminDocCdAvcb.value = doc.cdAvcb || '';
-  if (DOM.adminDocCdVre) DOM.adminDocCdVre.value = doc.cdVre || '';
+  preencherDatasDocumentosConfig();
 
   DOM.adminMetersList.innerHTML = '';
   Object.keys(settings.hydrometers).forEach(id => {
@@ -1402,18 +1421,10 @@ function submitAdminSettings() {
   settings.alertOsDiasAberta = alertOsDiasAberta; settings.alertOsDiasAguardando = alertOsDiasAguardando;
   settings.alertPerdasLimite = alertPerdasLimite; settings.alertChecklistHoras = alertChecklistHoras;
 
-  settings.documentosVencimento = {
-    tcVigilancia: DOM.adminDocTcVigilancia?.value || null,
-    tcAvcb: DOM.adminDocTcAvcb?.value || null,
-    yukaVigilancia: DOM.adminDocYukaVigilancia?.value || null,
-    yukaAvcb: DOM.adminDocYukaAvcb?.value || null,
-    // CD é isento de alvará da vigilância sanitária: campo fica sempre bloqueado/sem data,
-    // a flag é fixada aqui (não vem de input) para não depender do que já está salvo no navegador.
-    cdVigilancia: null,
-    cdVigilanciaIsento: true,
-    cdAvcb: DOM.adminDocCdAvcb?.value || null,
-    cdVre: DOM.adminDocCdVre?.value || null
-  };
+  // Datas Importantes (Documentos) agora são editadas no Painel Qualidade →
+  // 📄 Documentos. Os campos aqui são só leitura: settings.documentosVencimento
+  // fica como está (as datas antigas deste navegador continuam servindo de
+  // reserva quando a planilha estiver sem data).
 
   const aliasInputs = DOM.adminMetersList.querySelectorAll('.admin-meter-alias-input');
   aliasInputs.forEach(input => { const id = input.getAttribute('data-id'); const aliasValue = input.value.trim().toUpperCase(); if (aliasValue && settings.hydrometers[id]) settings.hydrometers[id].alias = aliasValue; });
