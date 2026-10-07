@@ -1,26 +1,34 @@
 /**
- * Bloco FORNECEDORES — leitura da aba FORNECEDORES_PUB (planilha CONSUMO_AGUA_YUKA).
+ * Bloco FORNECEDORES — lista de fornecedores com CONTATO, vinda do Painel Qualidade.
  *
  * Fonte da verdade: Painel Qualidade → 📇 Contatos Fornecedores (Apps Script).
- * Os dados completos (com CONTATO) ficam numa planilha PRIVADA, nunca publicada.
- * Depois de cada salvar/excluir o Apps Script reescreve a aba FORNECEDORES_PUB
- * (gid 823031070) só com NOME | EMPRESA | O_QUE_FORNECE | ULTIMO_PEDIDO, em
- * ordem alfabética. Aqui só lemos esse CSV publicado (mesmo documento 2PACX-…
- * de DOCUMENTOS / VALOR CONTAS).
+ * Os dados completos ficam na planilha PRIVADA PQ_FORNECEDORES (nunca publicada).
  *
- * PRIVACIDADE: o contato (telefone/e-mail) do fornecedor é dado de terceiro e
- * NUNCA aparece no Control. O parser só lê as 4 colunas acima — mesmo que uma
- * coluna CONTATO apareça por engano no CSV, ela é ignorada (nem vai pro cache).
+ * 1. Principal: GET no hub do Painel Qualidade (mesma implantação de
+ *    AVISOS_EXEC_URL em main.js) → ?dados=fornecedores_contato, JSON
+ *    { ok, fornecedores: [{ nome, empresa, contato, oQueFornece, ultimoPedido }] }.
+ *    Aprovado pela Tita em 07/10/2026: "Control busca o contato do Painel, sem
+ *    planilha publicada". O contato NUNCA vai para planilha publicada.
+ * 2. Reserva (se o Painel falhar): CSV publicado da aba FORNECEDORES_PUB
+ *    (gid 823031070), que só tem NOME | EMPRESA | O_QUE_FORNECE | ULTIMO_PEDIDO.
+ *    O contato do último cache bom é mantido (casando nome + empresa).
+ * 3. Sem nenhum dos dois: último cache bom; sem cache, o bloco fica escondido.
  *
- * Datas: ULTIMO_PEDIDO é texto yyyy-MM-dd (aceita dd/mm/aaaa digitado à mão);
- * na tela sempre dd/mm/aaaa; vazio = "—".
+ * Datas: o Painel manda ultimoPedido em dd/mm/aaaa; o CSV em yyyy-MM-dd.
+ * Internamente tudo vira yyyy-MM-dd; na tela sempre dd/mm/aaaa; vazio = "—".
+ * Todo texto é escapado antes de ir para o HTML.
  */
 import { parseCsvDocumentos, normalizarVencimento } from './documentos.js';
 
 export const FORNECEDORES_PUB_GID = 823031070;
 export const FORNECEDORES_CSV_URL =
   `https://docs.google.com/spreadsheets/d/e/2PACX-1vQuFNjTMhQ3Z1QzmEXW6scCk4UkMTYRLBV0z6QSczCDZO4AyjaneybI1Xwj0LWBdNHiYf95TB6JbDHz/pub?gid=${FORNECEDORES_PUB_GID}&single=true&output=csv`;
-export const FORNECEDORES_CACHE_KEY = 'mamma_mia_fornecedores_cache_v1';
+// Mesma implantação do hub usada por AVISOS_EXEC_URL (src/main.js).
+export const PAINEL_QUALIDADE_EXEC_URL =
+  'https://script.google.com/macros/s/AKfycbw8SVtHjELPLVXkY6QGlSFpP-7P-53hjBg2wxMLoYL1a10Kt_Ce8qn1HhQnUmzz3kTW_Q/exec';
+export const FORNECEDORES_CONTATO_URL = PAINEL_QUALIDADE_EXEC_URL + '?dados=fornecedores_contato';
+export const FORNECEDORES_CACHE_KEY = 'mamma_mia_fornecedores_cache_v2';
+const FORNECEDORES_CACHE_KEY_ANTIGA = 'mamma_mia_fornecedores_cache_v1';
 const FORNECEDORES_ABERTO_KEY = 'mamma_mia_fornecedores_aberto_v1';
 
 function chaveCabecalho(texto) {
@@ -47,7 +55,7 @@ export function ordenarFornecedores(lista) {
     compararTexto(a.nome, b.nome) || compararTexto(a.empresa, b.empresa));
 }
 
-// Só os 4 campos públicos — lista branca (CONTATO nunca entra).
+// CSV publicado: só os 4 campos públicos — lista branca (CONTATO do CSV nunca entra).
 function soPublico(f) {
   return {
     nome: String(f.nome || '').trim(),
@@ -55,6 +63,37 @@ function soPublico(f) {
     oQueFornece: String(f.oQueFornece || '').trim(),
     ultimoPedido: normalizarVencimento(f.ultimoPedido) || ''
   };
+}
+
+// Painel / cache: lista branca dos 5 campos (inclui contato).
+function soCampos(f) {
+  return { ...soPublico(f || {}), contato: String((f && f.contato) || '').trim() };
+}
+
+// JSON do ?dados=fornecedores_contato → lista ordenada. Resposta sem ok:true → erro.
+export function parseFornecedoresContato(resultado) {
+  if (!resultado || resultado.ok !== true || !Array.isArray(resultado.fornecedores)) {
+    throw new Error((resultado && resultado.erro) || 'Resposta do Painel em formato inesperado');
+  }
+  const itens = resultado.fornecedores.map(soCampos).filter(f => f.nome || f.empresa);
+  return ordenarFornecedores(itens);
+}
+
+const chaveFornecedor = f => chaveOrdem(f.nome) + '|' + chaveOrdem(f.empresa);
+
+// Reserva sem contato: reaproveita o contato do último cache bom (mesmo nome + empresa).
+export function mesclarContatos(itensSemContato, itensComContato) {
+  const contatos = new Map((itensComContato || []).filter(f => f.contato).map(f => [chaveFornecedor(f), f.contato]));
+  return (itensSemContato || []).map(f => ({ ...soCampos(f), contato: contatos.get(chaveFornecedor(f)) || '' }));
+}
+
+// Contato que é claramente só um telefone → número para link tel: (senão null).
+export function telefoneParaLink(contato) {
+  const s = String(contato || '').trim();
+  if (!/^\+?[\d\s().-]+$/.test(s)) return null;
+  const digitos = s.replace(/\D/g, '');
+  if (digitos.length < 8 || digitos.length > 13) return null;
+  return (s.startsWith('+') ? '+' : '') + digitos;
 }
 
 export function parseFornecedoresCsv(csv) {
@@ -88,27 +127,52 @@ export function parseFornecedoresCsv(csv) {
 export function lerCacheFornecedores() {
   try {
     const bruto = JSON.parse(localStorage.getItem(FORNECEDORES_CACHE_KEY));
-    if (bruto && Array.isArray(bruto.itens)) return { ...bruto, itens: ordenarFornecedores(bruto.itens.map(soPublico)) };
+    if (bruto && Array.isArray(bruto.itens)) return { ...bruto, itens: ordenarFornecedores(bruto.itens.map(soCampos)) };
   } catch (e) { /* cache corrompido: ignora */ }
   return null;
 }
 
-function salvarCacheFornecedores(itens) {
+function salvarCacheFornecedores(itens, fonte) {
   try {
-    localStorage.setItem(FORNECEDORES_CACHE_KEY, JSON.stringify({ itens: itens.map(soPublico), salvoEm: new Date().toISOString() }));
+    localStorage.setItem(FORNECEDORES_CACHE_KEY, JSON.stringify({ itens: itens.map(soCampos), fonte, salvoEm: new Date().toISOString() }));
+    localStorage.removeItem(FORNECEDORES_CACHE_KEY_ANTIGA);
   } catch (e) { /* sem espaço: segue sem cache */ }
 }
 
-// Busca o CSV publicado. Sucesso → grava cache. Falha → lança (quem chama usa o cache).
+// Só o CSV publicado (sem contato). Falha → lança.
 export async function buscarFornecedoresPlanilha(fetchFn = fetch) {
   const resposta = await fetchFn(FORNECEDORES_CSV_URL, { cache: 'no-store' });
   if (!resposta.ok) throw new Error('HTTP ' + resposta.status);
-  const itens = parseFornecedoresCsv(await resposta.text());
-  salvarCacheFornecedores(itens);
-  return itens;
+  return parseFornecedoresCsv(await resposta.text());
 }
 
-// 1. planilha (memória) → 2. último cache bom → 3. nada (bloco escondido).
+// Painel Qualidade (com contato). Falha → lança.
+export async function buscarFornecedoresPainel(fetchFn = fetch) {
+  const resposta = await fetchFn(FORNECEDORES_CONTATO_URL, { cache: 'no-store' });
+  if (!resposta.ok) throw new Error('HTTP ' + resposta.status);
+  const texto = await resposta.text();
+  let resultado;
+  try { resultado = JSON.parse(texto); } catch (e) { throw new Error('Resposta do Painel não é JSON'); }
+  return parseFornecedoresContato(resultado);
+}
+
+// 1. Painel (com contato) → 2. CSV publicado (contato do cache, se houver). Sucesso → grava cache.
+// Os dois falharam → lança (quem chama usa o cache).
+export async function buscarFornecedores(fetchFn = fetch) {
+  try {
+    const itens = await buscarFornecedoresPainel(fetchFn);
+    salvarCacheFornecedores(itens, 'painel');
+    return itens;
+  } catch (errPainel) {
+    console.warn('[FORNECEDORES] Painel Qualidade indisponível — usando FORNECEDORES_PUB (sem contato):', errPainel);
+    const cache = lerCacheFornecedores();
+    const itens = ordenarFornecedores(mesclarContatos(await buscarFornecedoresPlanilha(fetchFn), cache ? cache.itens : []));
+    salvarCacheFornecedores(itens, 'planilha');
+    return itens;
+  }
+}
+
+// 1. lista buscada agora (memória) → 2. último cache bom → 3. nada (bloco escondido).
 export function fornecedoresParaExibir(itensPlanilha) {
   if (Array.isArray(itensPlanilha)) return { fonte: 'planilha', itens: ordenarFornecedores(itensPlanilha) };
   const cache = lerCacheFornecedores();
@@ -122,14 +186,22 @@ function escapar(texto) {
   }[ch]));
 }
 
+function htmlContato(contato) {
+  const texto = String(contato || '').trim();
+  if (!texto) return '—';
+  const tel = telefoneParaLink(texto);
+  return tel ? `<a href="tel:${escapar(tel)}">${escapar(texto)}</a>` : escapar(texto);
+}
+
 export function htmlFornecedores(itens, aberto) {
   const chips = itens.map(f => {
     const pedido = formatarUltimoPedido(f.ultimoPedido);
-    const dica = [f.nome, f.empresa, f.oQueFornece, `Último pedido: ${pedido}`].filter(Boolean).join(' — ');
+    const dica = [f.nome, f.empresa, f.oQueFornece, f.contato ? `Contato: ${f.contato}` : '', `Último pedido: ${pedido}`].filter(Boolean).join(' — ');
     return `<div class="doc-vencimento-chip forn-chip" title="${escapar(dica)}">
       <span class="doc-vencimento-label">${escapar(f.nome || f.empresa)}</span>
       ${f.empresa && f.nome ? `<span class="forn-empresa">${escapar(f.empresa)}</span>` : ''}
       <span class="doc-vencimento-status forn-oque">${escapar(f.oQueFornece || '—')}</span>
+      <span class="forn-contato">Contato: ${htmlContato(f.contato)}</span>
       <span class="doc-vencimento-dica forn-pedido">Último pedido: ${escapar(pedido)}</span>
     </div>`;
   }).join('');
@@ -165,9 +237,9 @@ export function renderFornecedores(container = document.getElementById('forneced
 export async function carregarFornecedores() {
   renderFornecedores(); // mostra o cache na hora
   try {
-    itensMemoria = await buscarFornecedoresPlanilha();
+    itensMemoria = await buscarFornecedores();
   } catch (err) {
-    console.error('[FORNECEDORES] Falha ao ler aba FORNECEDORES_PUB — usando cache:', err);
+    console.error('[FORNECEDORES] Falha no Painel e na aba FORNECEDORES_PUB — usando cache:', err);
   }
   renderFornecedores();
 }

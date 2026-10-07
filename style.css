@@ -261,6 +261,8 @@ header {
 .forn-chip { max-width: 280px; }
 .forn-empresa { font-size: 0.72rem; font-weight: 600; color: var(--text-muted); word-break: break-word; }
 .forn-oque { font-size: 0.82rem; word-break: break-word; }
+.forn-contato { font-size: 0.78rem; font-weight: 600; word-break: break-word; }
+.forn-contato a { color: inherit; text-decoration: underline; }
 .tab-btn i { width: 16px; height: 16px; }
 
 .tab-panel { display: none; }
